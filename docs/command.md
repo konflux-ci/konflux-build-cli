@@ -94,7 +94,7 @@ MyCommandParamsConfig = map[string]common.Parameter{
 	"url": { // Name field should be equal to the key
 		Name:       "url",
 		ShortName:  "u",
-		EnvVarName: "URL",
+		EnvVarName: "KBC_MYCOMMAND_URL",
 		TypeKind:   reflect.String,
 		Usage:      "URL to process",
 		Required:   true,
@@ -108,18 +108,31 @@ MyCommandParamsConfig = map[string]common.Parameter{
 	"array": {
 		Name:         "array",
 		ShortName:    "a",
-		EnvVarName:   "ARRAY",
+		EnvVarName:   "KBC_MYCOMMAND_ARRAY",
 		TypeKind:     reflect.Array,
 		DefaultValue: "item1 item2",
 		Usage:        "List of items to process",
 	},
-	"verbose": {
-		Name:         "verbose",
-		ShortName:    "v",
-		EnvVarName:   "VERBOSE",
+	"some-flag": {
+		Name:         "some-flag",
+		ShortName:    "s",
+		EnvVarName:   "KBC_MYCOMMAND_SOME_FLAG",
 		TypeKind:     reflect.Bool,
-		Usage:        "Activates verbose mode",
+		Usage:        "Activates some beta feature",
 		DefaultValue: "false",
+	},
+	// Optional result parameters define file path to which write each result.
+	"result-location": {
+		Name:       "result-location",
+		EnvVarName: "KBC_MYCOMMAND_RESULT_LOCATION",
+		TypeKind:   reflect.String,
+		Usage:      "Location result file path",
+	},
+	"result-hash": {
+		Name:       "result-hash",
+		EnvVarName: "KBC_MYCOMMAND_RESULT_HASH",
+		TypeKind:   reflect.String,
+		Usage:      "Hash result file path",
 	},
 }
 
@@ -127,17 +140,12 @@ MyCommandParamsConfig = map[string]common.Parameter{
 // paramName tag value must equal to the parameter name in ParamsConfig.
 type MyCommandParams struct {
 	Url       string   `paramName:"url"`
-	Counter   string   `paramName:"count"`
+	Counter   int      `paramName:"count"`
 	ItemArray []string `paramName:"array"`
-	Verbose   bool     `paramName:"verbose"`
-}
+	SomeFlag  bool     `paramName:"some-flag"`
 
-// MyCommandResultFilesPath holds the path to the file where each result must be written.
-// env tag defines environment variable to read result file path from.
-// If a result environment variable is not set, it fails with an error.
-type MyCommandResultFilesPath struct {
-	Location string `env:"RESULT_LOCATION"`
-	Hash     string `env:"RESULT_HASH"`
+	ResultLocation string `paramName:"result-location"`
+	ResultHash     string `paramName:"result-hash"`
 }
 
 type MyCommandCliWrappers struct {
@@ -146,9 +154,8 @@ type MyCommandCliWrappers struct {
 
 type MyCommand struct {
 	Params        *MyCommandParams
-	Results       *MyCommandResultFilesPath
-	ResultsWriter common.ResultsWriterInterface
 	CliWrappers   MyCommandCliWrappers
+	ResultsWriter common.ResultsWriterInterface
 }
 
 func NewMyCommand(cmd *cobra.Command) (*MyCommand, error) {
@@ -160,41 +167,36 @@ func NewMyCommand(cmd *cobra.Command) (*MyCommand, error) {
 	}
 	myCommand.Params = params
 
-	results := &MyCommandResultFilesPath{}
-	if err := common.ReadResultFilesPath(results); err != nil {
-		return nil, err
-	}
-	myCommand.Results = results
-	myCommand.ResultsWriter = common.NewResultsWriter(myCommand.Params.Verbose)
-
 	if err := myCommand.initCliWrappers(); err != nil {
 		return nil, err
 	}
+
+	myCommand.ResultsWriter = common.NewResultsWriter()
 
 	return myCommand, nil
 }
 
 func (c *MyCommand) initCliWrappers() error {
-	executor := cliWrappers.NewCliExecutor(c.Params.Verbose)
+	executor := cliWrappers.NewCliExecutor()
 
-	someCli, err := cliWrappers.NewSomeCli(executor, c.Params.Verbose)
+	someCli, err := cliWrappers.NewSomeCli(executor)
 	if err != nil {
 		return err
 	}
 	c.CliWrappers.SomeCli = someCli
+
 	return nil
 }
 
 func (c *MyCommand) Run() error {
-	if c.Params.Verbose {
-		l.Logger.Infof("[param] Resource URL: %s", c.Params.Url)
-		l.Logger.Infof("[param] Counter: %s", c.Params.Counter)
-		if len(c.Params.ItemArray) > 0 {
-			l.Logger.Infof("[param] Items: %s", strings.Join(c.Params.ItemArray, ", "))
-		}
+	l.Logger.Infof("[param] Resource URL: %s", c.Params.Url)
+	l.Logger.Infof("[param] Counter: %s", c.Params.Counter)
+	if len(c.Params.ItemArray) > 0 {
+		l.Logger.Infof("[param] Items: %s", strings.Join(c.Params.ItemArray, ", "))
 	}
 
 	if err := c.validateParams(); err != nil {
+		l.Logger.Errorf("error validating parameters: %s", err.Error())
 		return err
 	}
 
@@ -202,16 +204,16 @@ func (c *MyCommand) Run() error {
 
 	location, err := c.CliWrappers.SomeCli.DoSomething(c.Params.Url)
 	if err != nil {
-		return fmt.Errorf("failed: %w", err)
+		l.Logger.Errorf("some-cli failed: %s", err.Error())
+		return fmt.Errorf("some-cli failed: %w", err)
 	}
 
-	if err := c.ResultsWriter.WriteResultString(location, c.Results.Location); err != nil {
-		return err
+	if err := c.ResultsWriter.WriteResultString(location, c.Params.ResultLocation); err != nil {
+		l.Logger.Errorf("writing result to %s file failed: %s", c.Params.ResultLocation, err.Error())
+		return fmt.Errorf("writing result to %s file failed: %w", c.Params.ResultLocation, err)
 	}
 
-	if c.Params.Verbose {
-		l.Logger.Infof("[result] Location: %s", location)
-	}
+	l.Logger.Infof("[result] Location: %s", location)
 
 	return nil
 }
@@ -231,6 +233,9 @@ func init() {
 	...
 }
 ```
+
+Note, it's a good practice to add a common prefix to parameters environment variable, if any.
+The exception might be commonly used environment variables like `HTTP_PROXY`.
 
 ## `pkg/cliwrappers` package
 
@@ -253,10 +258,9 @@ var _ GitCliInterface = &GitCli{}
 
 type GitCli struct {
 	Executor CliExecutorInterface
-	Verbose  bool
 }
 
-func NewGitCli(executor CliExecutorInterface, verbose bool) (*GitCli, error) {
+func NewGitCli(executor CliExecutorInterface) (*GitCli, error) {
 	gitCliAvailable, err := CheckCliToolAvailable("git")
 	if err != nil {
 		return nil, err
@@ -267,7 +271,6 @@ func NewGitCli(executor CliExecutorInterface, verbose bool) (*GitCli, error) {
 
 	return &GitCli{
 		Executor: executor,
-		Verbose:  verbose,
 	}, nil
 }
 
@@ -307,9 +310,7 @@ func (g *GitCli) Clone(args *GitCloneArgs) (*GitCloneResult, error) {
 		gitArgs = append(gitArgs, args.ExtraArgs...)
 	}
 
-	if g.Verbose {
-		l.Logger.Errorf("[command]:\ngit %s",  strings.Join(gitArgs, " "))
-	}
+	l.Logger.Infof("[command]:\ngit %s",  strings.Join(gitArgs, " "))
 
 	stdout, stderr, exitCode, err := g.Executor.Execute("git", gitArgs...)
 	if err != nil {
@@ -318,9 +319,7 @@ func (g *GitCli) Clone(args *GitCloneArgs) (*GitCloneResult, error) {
 		return "", fmt.Errorf("git clone failed with exit code %d: %v", exitCode, err)
 	}
 
-	if g.Verbose {
-		l.Logger.Info("[stdout]:\n" + stdout)
-	}
+	l.Logger.Info("[stdout]:\n" + stdout)
 
 	...
 }

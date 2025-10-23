@@ -114,8 +114,6 @@ func TestExpandArrayParameters(t *testing.T) {
 		argv := []string{"subcmd", "--param", "val", "--array-param", "--other-flag"}
 		result := ExpandArrayParameters(argv)
 
-		// Bug: when an array parameter has no values, it gets removed but
-		// the subsequent flag also gets skipped due to incorrect loop logic
 		expected := []string{"subcmd", "--param", "val", "--other-flag"}
 		g.Expect(result).To(Equal(expected))
 	})
@@ -157,6 +155,23 @@ func TestExpandArrayParameters(t *testing.T) {
 		expected := []string{"subcmd", "--array-param", "val1", "--array-param", "val2", "--normal", "value", "--multi", "m1", "--multi", "m2", "--other-flag"}
 		g.Expect(result).To(Equal(expected))
 	})
+
+	// TODO improve array parameters expansion.
+	// Note, that:
+	// - persistant flags could have a value unless the flag is of boolen type.
+	// - subcommands can also have persistant flags that could be passed even before the subcommand itself.
+	// - the root command has list of only own persistant flags.
+	// t.Run("should handle array parameters when global flag is passed before subcommand", func(t *testing.T) {
+	// 	g := NewWithT(t)
+
+	// 	setupTestCommands()
+
+	// 	argv := []string{"--loglevel", "info", "subcmd", "--normal", "value", "--array-param", "val1", "val2", "--other-flag"}
+	// 	result := ExpandArrayParameters(argv)
+
+	// 	expected := []string{"--loglevel", "info", "subcmd", "--normal", "value", "--array-param", "val1", "--array-param", "val2", "--other-flag"}
+	// 	g.Expect(result).To(Equal(expected))
+	// })
 }
 
 func TestRecordArrayParamForCommand(t *testing.T) {

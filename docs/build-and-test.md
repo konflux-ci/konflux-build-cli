@@ -18,32 +18,36 @@ go build -gcflags "all=-N -l" -o konflux-build-cli main.go
 
 Build the CLI and setup the command environment.
 
-Parameters can be passed via CLI arguments or envinonment variables, CLI arguments take precedence.
+Parameters can be passed via CLI arguments or environment variables, CLI arguments take precedence.
 
 ```bash
-export RESULT_SHA="/tmp/my-command-result-sha"
-./konflux-build-cli my-command --image-url quay.io/namespace/image:tag --digest sha256:abcde1234 --tags tag1 tag2
+./konflux-build-cli my-command --image-url quay.io/namespace/image:tag --digest sha256:abcde1234 --tags tag1 tag2 --result-sha=/tmp/my-command-result-sha
 ```
 
 Alternatively, it's possible to provide data via environment variables:
 
 ```bash
 # my-command-env.sh
-export IMAGE_URL=quay.io/namespace/image:tag
-export DIGEST=sha256:abcde1234
-export TAGS='tag1 tag2'
-export VERBOSE=true
+export KBC_MYCOMMAND_IMAGE_URL=quay.io/namespace/image:tag
+export KBC_MYCOMMAND_DIGEST=sha256:abcde1234
+export KBC_MYCOMMAND_TAGS='tag1 tag2'
+export KBC_MYCOMMAND_SOME_FLAG=true
 
-export RESULTS_DIR="/tmp/my-command-results"
+export KBC_MYCOMMAND_RESULTS_DIR="/tmp/my-command-results"
 mkdir -p "$RESULTS_DIR"
-export RESULT_SHA="${PRESULTS_DIR}/RESULT_SHA"
+export KBC_MYCOMMAND_RESULT_SHA="${RESULTS_DIR}/RESULT_SHA"
 ```
 ```bash
 . my-command-env.sh
 ./konflux-build-cli my-command
 ```
 
-Note, that running some commands on host might cause some issues, since the command might work with home directory, etc.
+or mix approaches:
+
+```bash
+export KBC_MYCOMMAND_RESULT_FILE_SHA=/tmp/my-command-result-sha
+./konflux-build-cli my-command --image-url quay.io/namespace/image:tag --digest sha256:abcde1234 --tags tag1 tag2
+```
 
 ## How to run unit tests
 

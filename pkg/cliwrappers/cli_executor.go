@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
 	"os/exec"
 	"strings"
 	"syscall"
@@ -23,12 +22,10 @@ type CliExecutorInterface interface {
 
 var _ CliExecutorInterface = &CliExecutor{}
 
-type CliExecutor struct {
-	Verbose bool
-}
+type CliExecutor struct{}
 
-func NewCliExecutor(verbose bool) *CliExecutor {
-	return &CliExecutor{Verbose: verbose}
+func NewCliExecutor() *CliExecutor {
+	return &CliExecutor{}
 }
 
 // Execute runs specified command with given arguments.
@@ -49,9 +46,7 @@ func (e *CliExecutor) ExecuteInDir(wordir, command string, args ...string) (stri
 	cmd.Stdout = &stdoutBuf
 	cmd.Stderr = &stderrBuf
 
-	if e.Verbose {
-		l.Logger.Infof("Executing command: %s %s", command, strings.Join(args, " "))
-	}
+	l.Logger.Infof("Executing command: %s %s", command, strings.Join(args, " "))
 
 	err := cmd.Run()
 
@@ -66,10 +61,10 @@ func (e *CliExecutor) ExecuteWithOutput(command string, args ...string) (string,
 
 // ExecuteInDirWithOutput runs specified command with args in given directory while printing stdout and stderr in real time.
 // Returns stdout, stderr, exit code, error
-func (e *CliExecutor) ExecuteInDirWithOutput(wordir, command string, args ...string) (stdout, stderr string, exitCode int, err error) {
+func (e *CliExecutor) ExecuteInDirWithOutput(workdir, command string, args ...string) (stdout, stderr string, exitCode int, err error) {
 	cmd := exec.Command(command, args...)
-	if wordir != "" {
-		cmd.Dir = wordir
+	if workdir != "" {
+		cmd.Dir = workdir
 	}
 
 	stdoutPipe, err := cmd.StdoutPipe()
@@ -81,9 +76,7 @@ func (e *CliExecutor) ExecuteInDirWithOutput(wordir, command string, args ...str
 		return "", "", -1, fmt.Errorf("failed to get stderr: %w", err)
 	}
 
-	if e.Verbose {
-		l.Logger.Infof("Executing command: %s %s", command, strings.Join(args, " "))
-	}
+	l.Logger.Infof("Executing command: %s %s", command, strings.Join(args, " "))
 
 	if err := cmd.Start(); err != nil {
 		return "", "", -1, fmt.Errorf("failed to start command: %w", err)
@@ -91,22 +84,22 @@ func (e *CliExecutor) ExecuteInDirWithOutput(wordir, command string, args ...str
 
 	var stdoutBuf, stderrBuf bytes.Buffer
 
-	readStream := func(r io.Reader, w io.Writer, buf *bytes.Buffer) {
+	readStream := func(linePrefix string, r io.Reader, buf *bytes.Buffer) {
 		scanner := bufio.NewScanner(r)
 		for scanner.Scan() {
 			line := scanner.Text()
-			fmt.Fprintln(w, line)
+			l.Logger.Info(linePrefix + line)
 			buf.WriteString(line + "\n")
 		}
 	}
 
 	done := make(chan struct{}, 2)
 	go func() {
-		readStream(stdoutPipe, os.Stdout, &stdoutBuf)
+		readStream(command+" [stdout] ", stdoutPipe, &stdoutBuf)
 		done <- struct{}{}
 	}()
 	go func() {
-		readStream(stderrPipe, os.Stderr, &stderrBuf)
+		readStream(command+" [stderr] ", stderrPipe, &stderrBuf)
 		done <- struct{}{}
 	}()
 
@@ -133,13 +126,11 @@ func getExitCodeFromError(cmdErr error) int {
 }
 
 func CheckCliToolAvailable(cliTool string) (bool, error) {
-	cmd := exec.Command("sh", "-c", "command -v "+cliTool)
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		return false, err
-	}
-	if strings.TrimSpace(string(output)) == "" {
-		return false, nil
+	if _, err := exec.LookPath(cliTool); err != nil {
+		if errors.Is(err, exec.ErrNotFound) {
+			return false, nil
+		}
+		return false, fmt.Errorf("failed to determine availability of '%s': %w", cliTool, err)
 	}
 	return true, nil
 }

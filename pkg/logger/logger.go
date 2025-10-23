@@ -9,7 +9,7 @@ import (
 var Logger = logrus.New()
 
 func InitLogger(logLevel string) error {
-	Logger.SetOutput(os.Stdout)
+	Logger.SetOutput(os.Stderr)
 
 	level, err := logrus.ParseLevel(logLevel)
 	if err != nil {

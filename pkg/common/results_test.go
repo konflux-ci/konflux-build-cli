@@ -8,100 +8,27 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-func TestReadResultFilesPath(t *testing.T) {
-
-	t.Run("should populate struct fields from environment variables", func(t *testing.T) {
-		g := NewWithT(t)
-
-		type TestStruct struct {
-			OutputPath string `env:"OUTPUT_PATH"`
-			LogPath    string `env:"LOG_PATH"`
-			ResultPath string `env:"RESULT_PATH"`
-		}
-
-		os.Setenv("OUTPUT_PATH", "/tmp/output")
-		os.Setenv("LOG_PATH", "/tmp/log")
-		os.Setenv("RESULT_PATH", "/tmp/result")
-		defer func() {
-			os.Unsetenv("OUTPUT_PATH")
-			os.Unsetenv("LOG_PATH")
-			os.Unsetenv("RESULT_PATH")
-		}()
-
-		testStruct := &TestStruct{}
-		err := ReadResultFilesPath(testStruct)
-
-		g.Expect(err).ToNot(HaveOccurred())
-		g.Expect(testStruct.OutputPath).To(Equal("/tmp/output"))
-		g.Expect(testStruct.LogPath).To(Equal("/tmp/log"))
-		g.Expect(testStruct.ResultPath).To(Equal("/tmp/result"))
-	})
-
-	t.Run("should return error when environment variable is not set", func(t *testing.T) {
-		g := NewWithT(t)
-
-		type TestStruct struct {
-			OutputPath string `env:"MISSING_ENV_VAR"`
-		}
-
-		testStruct := &TestStruct{}
-		err := ReadResultFilesPath(testStruct)
-
-		g.Expect(err).To(HaveOccurred())
-		g.Expect(err.Error()).To(ContainSubstring("environment variable 'MISSING_ENV_VAR' for 'OutputPath' result is not set"))
-	})
-
-	t.Run("should panic when field is not string type", func(t *testing.T) {
-		g := NewWithT(t)
-
-		type TestStruct struct {
-			OutputPath int `env:"OUTPUT_PATH"`
-		}
-
-		testStruct := &TestStruct{}
-
-		g.Expect(func() {
-			ReadResultFilesPath(testStruct)
-		}).To(Panic())
-	})
-
-	t.Run("should panic when env tag is not set", func(t *testing.T) {
-		g := NewWithT(t)
-
-		type TestStruct struct {
-			OutputPath string
-		}
-
-		testStruct := &TestStruct{}
-
-		g.Expect(func() {
-			ReadResultFilesPath(testStruct)
-		}).To(Panic())
-	})
-}
-
 func TestNewResultsWriter(t *testing.T) {
-
-	t.Run("should create ResultsWriter with verbose true", func(t *testing.T) {
+	t.Run("should create ResultsWriter", func(t *testing.T) {
 		g := NewWithT(t)
 
-		writer := NewResultsWriter(true)
+		writer := NewResultsWriter()
 
 		g.Expect(writer).ToNot(BeNil())
-		g.Expect(writer.Verbose).To(BeTrue())
-	})
-
-	t.Run("should create ResultsWriter with verbose false", func(t *testing.T) {
-		g := NewWithT(t)
-
-		writer := NewResultsWriter(false)
-
-		g.Expect(writer).ToNot(BeNil())
-		g.Expect(writer.Verbose).To(BeFalse())
 	})
 }
 
 func TestResultsWriter_WriteResultString(t *testing.T) {
+	t.Run("should skip writing result to file if path is empty", func(t *testing.T) {
+		g := NewWithT(t)
+
+		testContent := "test result content"
+
+		writer := NewResultsWriter()
+		err := writer.WriteResultString(testContent, "")
+
+		g.Expect(err).ToNot(HaveOccurred())
+	})
 
 	t.Run("should write result to file successfully", func(t *testing.T) {
 		g := NewWithT(t)
@@ -110,7 +37,7 @@ func TestResultsWriter_WriteResultString(t *testing.T) {
 		filePath := filepath.Join(tmpDir, "test_result.txt")
 		testContent := "test result content"
 
-		writer := NewResultsWriter(false)
+		writer := NewResultsWriter()
 		err := writer.WriteResultString(testContent, filePath)
 
 		g.Expect(err).ToNot(HaveOccurred())
@@ -127,7 +54,7 @@ func TestResultsWriter_WriteResultString(t *testing.T) {
 		invalidPath := "/invalid/path/that/does/not/exist/result.txt"
 		testContent := "test content"
 
-		writer := NewResultsWriter(false)
+		writer := NewResultsWriter()
 		err := writer.WriteResultString(testContent, invalidPath)
 
 		g.Expect(err).To(HaveOccurred())
@@ -141,7 +68,7 @@ func TestResultsWriter_WriteResultString(t *testing.T) {
 		filePath := filepath.Join(tmpDir, "test_permissions.txt")
 		testContent := "test content"
 
-		writer := NewResultsWriter(false)
+		writer := NewResultsWriter()
 		err := writer.WriteResultString(testContent, filePath)
 
 		g.Expect(err).ToNot(HaveOccurred())

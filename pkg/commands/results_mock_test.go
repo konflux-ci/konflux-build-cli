@@ -7,8 +7,6 @@ import (
 var _ common.ResultsWriterInterface = &MockResultsWriter{}
 
 type MockResultsWriter struct {
-	Verbose bool
-
 	WriteResultStringFunc func(result, path string) error
 
 	// Result file path => result data
