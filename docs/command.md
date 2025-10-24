@@ -313,13 +313,13 @@ func (g *GitCli) Clone(args *GitCloneArgs) (*GitCloneResult, error) {
 	l.Logger.Infof("[command]:\ngit %s",  strings.Join(gitArgs, " "))
 
 	stdout, stderr, exitCode, err := g.Executor.Execute("git", gitArgs...)
+
+	l.Logger.Info("git [stdout]:\n" + stdout)
+	l.Logger.Info("git [stderr]:\n" + stderr)
+
 	if err != nil {
-		l.Logger.Errorf("[stdout]:\n%s", stdout)
-		l.Logger.Errorf("[stderr]:\n%s", stderr)
 		return "", fmt.Errorf("git clone failed with exit code %d: %v", exitCode, err)
 	}
-
-	l.Logger.Info("[stdout]:\n" + stdout)
 
 	...
 }

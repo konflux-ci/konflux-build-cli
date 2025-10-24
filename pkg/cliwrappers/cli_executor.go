@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"os/exec"
-	"strings"
 	"syscall"
 
 	l "github.com/konflux-ci/konflux-build-cli/pkg/logger"
@@ -46,8 +45,6 @@ func (e *CliExecutor) ExecuteInDir(wordir, command string, args ...string) (stri
 	cmd.Stdout = &stdoutBuf
 	cmd.Stderr = &stderrBuf
 
-	l.Logger.Infof("Executing command: %s %s", command, strings.Join(args, " "))
-
 	err := cmd.Run()
 
 	return stdoutBuf.String(), stderrBuf.String(), getExitCodeFromError(err), err
@@ -75,8 +72,6 @@ func (e *CliExecutor) ExecuteInDirWithOutput(workdir, command string, args ...st
 	if err != nil {
 		return "", "", -1, fmt.Errorf("failed to get stderr: %w", err)
 	}
-
-	l.Logger.Infof("Executing command: %s %s", command, strings.Join(args, " "))
 
 	if err := cmd.Start(); err != nil {
 		return "", "", -1, fmt.Errorf("failed to start command: %w", err)
