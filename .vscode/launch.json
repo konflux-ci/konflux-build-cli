@@ -1,0 +1,14 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Debug CLI",
+            "type": "go",
+            "request": "launch",
+            "mode": "auto",
+            "program": "main.go",
+            "args": []
+            // "args": ["image", "apply-tags", "--image", "quay.io/username/image", "--digest", "sha256:0acffdabda074fb9ab4b9fc38c049db903d2199b0a8be64ee0f1ca5a4fb74667", "--tags", "tag1", "tag2", "--tags-from-image-label", "konflux.additional-tags", "--loglevel", "debug"]
+        },
+    ]
+}
