@@ -222,14 +222,14 @@ func Test_isImageBaseValid(t *testing.T) {
 	c := &ApplyTags{}
 	for _, image := range validImages {
 		t.Run("valid image", func(t *testing.T) {
-			if !c.isImageBaseValid(image) {
+			if !c.isImageNameValid(image) {
 				t.Errorf("%s expected to be valid", image)
 			}
 		})
 	}
 	for _, image := range invalidImages {
 		t.Run("invalid image", func(t *testing.T) {
-			if c.isImageBaseValid(image) {
+			if c.isImageNameValid(image) {
 				t.Errorf("%s expected to be invalid", image)
 			}
 		})
@@ -955,11 +955,11 @@ func Test_NewApplyTags(t *testing.T) {
 
 	t.Run("should create ApplyTags instance", func(t *testing.T) {
 		cmd := &cobra.Command{}
-		cmd.Flags().String("image", "", "image")
+		cmd.Flags().String("image-url", "", "image")
 		cmd.Flags().String("digest", "", "digest")
 		cmd.Flags().StringArray("tags", nil, "tags")
 		parseErr := cmd.Flags().Parse([]string{
-			"--image", "image",
+			"--image-url", "image",
 			"--digest", "sha256:abcdef1234",
 			"--tags", "tag",
 		})

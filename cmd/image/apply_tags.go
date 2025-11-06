@@ -12,11 +12,13 @@ var ApplyTagsCmd = &cobra.Command{
 	Use:   "apply-tags",
 	Short: "Creates more tags for the provided image",
 	Long: `Creates more tags for the provided image.
+
 It might be useful when, for example, the build produces hash based tag, but 'latest' or some other tags needed.
 
 Tags can be defined in two ways:
  - via tags parameter
  - via image label in the base image (see --tags-from-image-label parameter)
+Both ways can be used together.
 `,
 	Run: func(cmd *cobra.Command, args []string) {
 		l.Logger.Debug("Starting apply-tags")

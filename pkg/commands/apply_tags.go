@@ -15,12 +15,12 @@ import (
 )
 
 var ApplyTagsParamsConfig = map[string]common.Parameter{
-	"image": {
-		Name:       "image",
+	"image-url": {
+		Name:       "image-url",
 		ShortName:  "i",
-		EnvVarName: "KBC_APPLY_TAGS_IMAGE",
+		EnvVarName: "KBC_APPLY_TAGS_IMAGE_URL",
 		TypeKind:   reflect.String,
-		Usage:      "Image name to add tags to",
+		Usage:      "Image name to add tags to. Tag and digest are ignored. Required.",
 		Required:   true,
 	},
 	"digest": {
@@ -28,7 +28,7 @@ var ApplyTagsParamsConfig = map[string]common.Parameter{
 		ShortName:  "d",
 		EnvVarName: "KBC_APPLY_TAGS_IMAGE_DIGEST",
 		TypeKind:   reflect.String,
-		Usage:      "Image digest to add tags to",
+		Usage:      "Image digest to add tags to. Required.",
 		Required:   true,
 	},
 	"tags": {
@@ -50,7 +50,7 @@ var ApplyTagsParamsConfig = map[string]common.Parameter{
 }
 
 type ApplyTagsParams struct {
-	ImageUrl      string   `paramName:"image"`
+	ImageUrl      string   `paramName:"image-url"`
 	Digest        string   `paramName:"digest"`
 	NewTags       []string `paramName:"tags"`
 	LabelWithTags string   `paramName:"tags-from-image-label"`
@@ -157,7 +157,7 @@ func (c *ApplyTags) Run() error {
 }
 
 func (c *ApplyTags) logParams() {
-	l.Logger.Infof("[param] Image repository: %s", c.Params.ImageUrl)
+	l.Logger.Infof("[param] Image URL: %s", c.Params.ImageUrl)
 	l.Logger.Infof("[param] Image digest: %s", c.Params.Digest)
 	if len(c.Params.NewTags) > 0 {
 		l.Logger.Infof("[param] Tags: %s", strings.Join(c.Params.NewTags, ", "))
@@ -226,7 +226,7 @@ func (c *ApplyTags) normalizeImageName(imageURL string) string {
 
 func (c *ApplyTags) validateParams() error {
 	// Validate imageName instead of Params.ImageUrl to avoid calling normalizeImageName second time.
-	if !c.isImageBaseValid(c.imageName) {
+	if !c.isImageNameValid(c.imageName) {
 		return fmt.Errorf("image '%s' is invalid", c.imageName)
 	}
 
@@ -247,35 +247,35 @@ func (c *ApplyTags) validateParams() error {
 	return nil
 }
 
-// isImageBaseValid validates image name without tag and digest.
+// isImageNameValid validates image name without tag and digest.
 // Image name can contain lowercase letters and digits plus separators: dash, period, underscore, slash.
 // Image name cannot start or end with a separator.
 // Image name max length is 128 characters.
 // It's not allowed to have double separator and triple underscore.
-func (c *ApplyTags) isImageBaseValid(baseImage string) bool {
-	if baseImage == "" {
+func (c *ApplyTags) isImageNameValid(imageName string) bool {
+	if imageName == "" {
 		return false
 	}
-	if len(baseImage) > 128 {
+	if len(imageName) > 128 {
 		return false
 	}
-	if strings.Contains(baseImage, "___") ||
-		strings.Contains(baseImage, "//") ||
-		strings.Contains(baseImage, "..") ||
-		strings.Contains(baseImage, "--") ||
-		strings.Contains(baseImage, "_.") ||
-		strings.Contains(baseImage, "._") ||
-		strings.Contains(baseImage, "-.") ||
-		strings.Contains(baseImage, ".-") ||
-		strings.Contains(baseImage, "-_") ||
-		strings.Contains(baseImage, "_-") {
+	if strings.Contains(imageName, "___") ||
+		strings.Contains(imageName, "//") ||
+		strings.Contains(imageName, "..") ||
+		strings.Contains(imageName, "--") ||
+		strings.Contains(imageName, "_.") ||
+		strings.Contains(imageName, "._") ||
+		strings.Contains(imageName, "-.") ||
+		strings.Contains(imageName, ".-") ||
+		strings.Contains(imageName, "-_") ||
+		strings.Contains(imageName, "_-") {
 		return false
 	}
 
 	imagePartPattern := "^[a-z0-9](?:[a-z0-9_.-]*[a-z0-9])?$"
 	imagePartRegex := regexp.MustCompile(imagePartPattern)
 
-	parts := strings.Split(baseImage, "/")
+	parts := strings.Split(imageName, "/")
 	if len(parts) == 1 {
 		return imagePartRegex.MatchString(parts[0])
 	}
