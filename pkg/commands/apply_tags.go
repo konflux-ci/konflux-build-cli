@@ -192,15 +192,15 @@ func (c *ApplyTags) retrieveTagsFromImageLabel(labelName string) ([]string, erro
 
 func (c *ApplyTags) applyTags(tags []string) error {
 	args := &cliWrappers.SkopeoCopyArgs{
-		BaseImage:  c.imageByDigest,
-		MultiArch:  cliWrappers.SkopeoCopyArgMultiArchIndexOnly,
-		RetryTimes: 3,
+		SourceImage: c.imageByDigest,
+		MultiArch:   cliWrappers.SkopeoCopyArgMultiArchIndexOnly,
+		RetryTimes:  3,
 	}
 
 	for _, tag := range tags {
 		l.Logger.Debugf("Creating tag: %s", tag)
 
-		args.TargetImage = c.imageName + ":" + tag
+		args.DestinationImage = c.imageName + ":" + tag
 		if err := c.CliWrappers.SkopeoCli.Copy(args); err != nil {
 			l.Logger.Errorf("failed to push '%s' tag: %s", tag, err.Error())
 			return err

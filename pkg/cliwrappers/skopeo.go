@@ -42,19 +42,19 @@ const (
 )
 
 type SkopeoCopyArgs struct {
-	BaseImage   string
-	TargetImage string
-	MultiArch   SkopeoCopyArgMultiArch
-	RetryTimes  int
-	ExtraArgs   []string
+	SourceImage      string
+	DestinationImage string
+	MultiArch        SkopeoCopyArgMultiArch
+	RetryTimes       int
+	ExtraArgs        []string
 }
 
 func (s *SkopeoCli) Copy(args *SkopeoCopyArgs) error {
-	if args.BaseImage == "" {
-		return errors.New("image to copy from must be set")
+	if args.SourceImage == "" {
+		return errors.New("source image is empty, image to copy from must be set")
 	}
-	if args.TargetImage == "" {
-		return errors.New("image to copy to must be set")
+	if args.DestinationImage == "" {
+		return errors.New("destination image is empty, image to copy to must be set")
 	}
 
 	scopeoArgs := []string{"copy"}
@@ -71,7 +71,7 @@ func (s *SkopeoCli) Copy(args *SkopeoCopyArgs) error {
 	}
 
 	dockerPrefix := "docker://"
-	scopeoArgs = append(scopeoArgs, dockerPrefix+args.BaseImage, dockerPrefix+args.TargetImage)
+	scopeoArgs = append(scopeoArgs, dockerPrefix+args.SourceImage, dockerPrefix+args.DestinationImage)
 
 	l.Logger.Debugf("Running command:\nskopeo %s", strings.Join(scopeoArgs, " "))
 	stdout, stderr, _, err := s.Executor.Execute("skopeo", scopeoArgs...)

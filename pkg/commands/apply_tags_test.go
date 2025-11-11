@@ -622,8 +622,8 @@ func Test_applyTags(t *testing.T) {
 		isScopeoCopyCalled := false
 		mockSkopeoCli.CopyFunc = func(args *cliwrappers.SkopeoCopyArgs) error {
 			isScopeoCopyCalled = true
-			g.Expect(args.BaseImage).To(Equal(imageRef))
-			g.Expect(args.TargetImage).To(Equal(imageName + ":" + tagName))
+			g.Expect(args.SourceImage).To(Equal(imageRef))
+			g.Expect(args.DestinationImage).To(Equal(imageName + ":" + tagName))
 			return nil
 		}
 
@@ -636,8 +636,8 @@ func Test_applyTags(t *testing.T) {
 		tags := []string{"tag1", "tag2", "tag3"}
 		scopeoCopyCalledTimes := 0
 		mockSkopeoCli.CopyFunc = func(args *cliwrappers.SkopeoCopyArgs) error {
-			g.Expect(args.BaseImage).To(Equal(imageRef))
-			g.Expect(args.TargetImage).To(Equal(imageName + ":" + tags[scopeoCopyCalledTimes]))
+			g.Expect(args.SourceImage).To(Equal(imageRef))
+			g.Expect(args.DestinationImage).To(Equal(imageName + ":" + tags[scopeoCopyCalledTimes]))
 			scopeoCopyCalledTimes++
 			return nil
 		}
@@ -702,15 +702,15 @@ func Test_Run(t *testing.T) {
 		c.Params.NewTags = []string{}
 		c.Params.LabelWithTags = ""
 
-		isCreateResultJson := false
+		isCreateResultJsonCalled := false
 		_mockResultsWriter.CreateResultJsonFunc = func(result any) (string, error) {
-			isCreateResultJson = true
+			isCreateResultJsonCalled = true
 			return "", nil
 		}
 
 		err := c.Run()
 		g.Expect(err).ToNot(HaveOccurred())
-		g.Expect(isCreateResultJson).To(BeTrue())
+		g.Expect(isCreateResultJsonCalled).To(BeTrue())
 	})
 
 	t.Run("should successfully run apply-tags with tags parameter", func(t *testing.T) {
@@ -721,13 +721,13 @@ func Test_Run(t *testing.T) {
 
 		scopeoCopyCalledTimes := 0
 		_mockSkopeoCli.CopyFunc = func(args *cliwrappers.SkopeoCopyArgs) error {
-			g.Expect(args.TargetImage).To(HaveSuffix(tags[scopeoCopyCalledTimes]))
+			g.Expect(args.DestinationImage).To(HaveSuffix(tags[scopeoCopyCalledTimes]))
 			scopeoCopyCalledTimes++
 			return nil
 		}
-		isCreateResultJson := false
+		isCreateResultJsonCalled := false
 		_mockResultsWriter.CreateResultJsonFunc = func(result any) (string, error) {
-			isCreateResultJson = true
+			isCreateResultJsonCalled = true
 			applyTagsResults, ok := result.(ApplyTagsResults)
 			g.Expect(ok).To(BeTrue())
 			g.Expect(applyTagsResults.Tags).To(Equal([]string{"tag1", "tag2"}))
@@ -737,7 +737,7 @@ func Test_Run(t *testing.T) {
 		err := c.Run()
 		g.Expect(err).ToNot(HaveOccurred())
 		g.Expect(scopeoCopyCalledTimes).To(Equal(len(tags)))
-		g.Expect(isCreateResultJson).To(BeTrue())
+		g.Expect(isCreateResultJsonCalled).To(BeTrue())
 	})
 
 	t.Run("should successfully run apply-tags with tags from label only", func(t *testing.T) {
@@ -756,13 +756,13 @@ func Test_Run(t *testing.T) {
 		}
 		scopeoCopyCalledTimes := 0
 		_mockSkopeoCli.CopyFunc = func(args *cliwrappers.SkopeoCopyArgs) error {
-			g.Expect(args.TargetImage).To(HaveSuffix("tag"))
+			g.Expect(args.DestinationImage).To(HaveSuffix("tag"))
 			scopeoCopyCalledTimes++
 			return nil
 		}
-		isCreateResultJson := false
+		isCreateResultJsonCalled := false
 		_mockResultsWriter.CreateResultJsonFunc = func(result any) (string, error) {
-			isCreateResultJson = true
+			isCreateResultJsonCalled = true
 			applyTagsResults, ok := result.(ApplyTagsResults)
 			g.Expect(ok).To(BeTrue())
 			g.Expect(applyTagsResults.Tags).To(Equal([]string{"l1tag", "l2tag"}))
@@ -773,7 +773,7 @@ func Test_Run(t *testing.T) {
 		g.Expect(err).ToNot(HaveOccurred())
 		g.Expect(isScopeoInspectCalled).To(BeTrue())
 		g.Expect(scopeoCopyCalledTimes).To(Equal(2))
-		g.Expect(isCreateResultJson).To(BeTrue())
+		g.Expect(isCreateResultJsonCalled).To(BeTrue())
 	})
 
 	t.Run("should successfully run apply-tags with tags from param and label", func(t *testing.T) {
@@ -793,13 +793,13 @@ func Test_Run(t *testing.T) {
 		}
 		scopeoCopyCalledTimes := 0
 		_mockSkopeoCli.CopyFunc = func(args *cliwrappers.SkopeoCopyArgs) error {
-			g.Expect(args.TargetImage).To(HaveSuffix("tag"))
+			g.Expect(args.DestinationImage).To(HaveSuffix("tag"))
 			scopeoCopyCalledTimes++
 			return nil
 		}
-		isCreateResultJson := false
+		isCreateResultJsonCalled := false
 		_mockResultsWriter.CreateResultJsonFunc = func(result any) (string, error) {
-			isCreateResultJson = true
+			isCreateResultJsonCalled = true
 			applyTagsResults, ok := result.(ApplyTagsResults)
 			g.Expect(ok).To(BeTrue())
 			g.Expect(applyTagsResults.Tags).To(Equal([]string{"param-1-tag", "param-2-tag", "label-1-tag", "label-2-tag"}))
@@ -810,7 +810,7 @@ func Test_Run(t *testing.T) {
 		g.Expect(err).ToNot(HaveOccurred())
 		g.Expect(isScopeoInspectCalled).To(BeTrue())
 		g.Expect(scopeoCopyCalledTimes).To(Equal(4))
-		g.Expect(isCreateResultJson).To(BeTrue())
+		g.Expect(isCreateResultJsonCalled).To(BeTrue())
 	})
 
 	t.Run("should successfully run apply-tags with tags from param when label is set but empty", func(t *testing.T) {
@@ -829,13 +829,13 @@ func Test_Run(t *testing.T) {
 		}
 		scopeoCopyCalledTimes := 0
 		_mockSkopeoCli.CopyFunc = func(args *cliwrappers.SkopeoCopyArgs) error {
-			g.Expect(args.TargetImage).To(HaveSuffix("tag"))
+			g.Expect(args.DestinationImage).To(HaveSuffix("tag"))
 			scopeoCopyCalledTimes++
 			return nil
 		}
-		isCreateResultJson := false
+		isCreateResultJsonCalled := false
 		_mockResultsWriter.CreateResultJsonFunc = func(result any) (string, error) {
-			isCreateResultJson = true
+			isCreateResultJsonCalled = true
 			applyTagsResults, ok := result.(ApplyTagsResults)
 			g.Expect(ok).To(BeTrue())
 			g.Expect(applyTagsResults.Tags).To(Equal([]string{"param-1-tag", "param-2-tag"}))
@@ -846,7 +846,7 @@ func Test_Run(t *testing.T) {
 		g.Expect(err).ToNot(HaveOccurred())
 		g.Expect(isScopeoInspectCalled).To(BeTrue())
 		g.Expect(scopeoCopyCalledTimes).To(Equal(2))
-		g.Expect(isCreateResultJson).To(BeTrue())
+		g.Expect(isCreateResultJsonCalled).To(BeTrue())
 	})
 
 	t.Run("should error if creation of a tag failed", func(t *testing.T) {
@@ -939,14 +939,14 @@ func Test_Run(t *testing.T) {
 		beforeEach()
 		c.Params.NewTags = []string{"tag"}
 
-		isCreateResultJson := false
+		isCreateResultJsonCalled := false
 		_mockResultsWriter.CreateResultJsonFunc = func(result any) (string, error) {
-			isCreateResultJson = true
+			isCreateResultJsonCalled = true
 			return "", errors.New("failed to create json from result")
 		}
 		err := c.Run()
 		g.Expect(err).To(HaveOccurred())
-		g.Expect(isCreateResultJson).To(BeTrue())
+		g.Expect(isCreateResultJsonCalled).To(BeTrue())
 	})
 }
 

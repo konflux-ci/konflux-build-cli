@@ -28,8 +28,8 @@ func setupSkopeoCli() (*cliwrappers.SkopeoCli, *mockExecutor) {
 func TestSkopeoCli_Copy(t *testing.T) {
 	g := NewWithT(t)
 
-	const baseImage = "quay.io/org/namespace/base-image@sha256:4d6addf62a90e392ff6d3f470259eb5667eab5b9a8e03d20b41d0ab910f92170"
-	const targetImage = "registry.io:1234/namespace/target-image:tag"
+	const sourceImage = "quay.io/org/namespace/base-image@sha256:4d6addf62a90e392ff6d3f470259eb5667eab5b9a8e03d20b41d0ab910f92170"
+	const destinationImage = "registry.io:1234/namespace/target-image:tag"
 	const multiArch = cliwrappers.SkopeoCopyArgMultiArchIndexOnly
 	const retryTimes = 5
 
@@ -43,8 +43,8 @@ func TestSkopeoCli_Copy(t *testing.T) {
 		}
 
 		copyArgs := &cliwrappers.SkopeoCopyArgs{
-			BaseImage:   baseImage,
-			TargetImage: targetImage,
+			SourceImage:      sourceImage,
+			DestinationImage: destinationImage,
 		}
 
 		err := skopeoCli.Copy(copyArgs)
@@ -52,8 +52,8 @@ func TestSkopeoCli_Copy(t *testing.T) {
 		g.Expect(err).ToNot(HaveOccurred())
 		g.Expect(capturedArgs).To(HaveLen(3))
 		g.Expect(capturedArgs[0]).To(Equal("copy"))
-		g.Expect(capturedArgs[1]).To(Equal("docker://" + baseImage))
-		g.Expect(capturedArgs[2]).To(Equal("docker://" + targetImage))
+		g.Expect(capturedArgs[1]).To(Equal("docker://" + sourceImage))
+		g.Expect(capturedArgs[2]).To(Equal("docker://" + destinationImage))
 	})
 
 	t.Run("should copy tag with all supported options", func(t *testing.T) {
@@ -66,10 +66,10 @@ func TestSkopeoCli_Copy(t *testing.T) {
 		}
 
 		copyArgs := &cliwrappers.SkopeoCopyArgs{
-			BaseImage:   baseImage,
-			TargetImage: targetImage,
-			MultiArch:   multiArch,
-			RetryTimes:  retryTimes,
+			SourceImage:      sourceImage,
+			DestinationImage: destinationImage,
+			MultiArch:        multiArch,
+			RetryTimes:       retryTimes,
 		}
 
 		err := skopeoCli.Copy(copyArgs)
@@ -77,8 +77,8 @@ func TestSkopeoCli_Copy(t *testing.T) {
 		g.Expect(err).ToNot(HaveOccurred())
 		g.Expect(capturedArgs).To(HaveLen(7))
 		g.Expect(capturedArgs[0]).To(Equal("copy"))
-		g.Expect(capturedArgs[len(capturedArgs)-2]).To(Equal("docker://" + baseImage))
-		g.Expect(capturedArgs[len(capturedArgs)-1]).To(Equal("docker://" + targetImage))
+		g.Expect(capturedArgs[len(capturedArgs)-2]).To(Equal("docker://" + sourceImage))
+		g.Expect(capturedArgs[len(capturedArgs)-1]).To(Equal("docker://" + destinationImage))
 		expectArgAndValue(g, capturedArgs, "--multi-arch", string(multiArch))
 		expectArgAndValue(g, capturedArgs, "--retry-times", strconv.Itoa(retryTimes))
 	})
@@ -93,11 +93,11 @@ func TestSkopeoCli_Copy(t *testing.T) {
 		}
 
 		copyArgs := &cliwrappers.SkopeoCopyArgs{
-			BaseImage:   baseImage,
-			TargetImage: targetImage,
-			MultiArch:   multiArch,
-			RetryTimes:  retryTimes,
-			ExtraArgs:   []string{"--some-arg", "somevalue", "--someflag"},
+			SourceImage:      sourceImage,
+			DestinationImage: destinationImage,
+			MultiArch:        multiArch,
+			RetryTimes:       retryTimes,
+			ExtraArgs:        []string{"--some-arg", "somevalue", "--someflag"},
 		}
 
 		err := skopeoCli.Copy(copyArgs)
@@ -105,8 +105,8 @@ func TestSkopeoCli_Copy(t *testing.T) {
 		g.Expect(err).ToNot(HaveOccurred())
 		g.Expect(capturedArgs).To(HaveLen(10))
 		g.Expect(capturedArgs[0]).To(Equal("copy"))
-		g.Expect(capturedArgs[len(capturedArgs)-2]).To(Equal("docker://" + baseImage))
-		g.Expect(capturedArgs[len(capturedArgs)-1]).To(Equal("docker://" + targetImage))
+		g.Expect(capturedArgs[len(capturedArgs)-2]).To(Equal("docker://" + sourceImage))
+		g.Expect(capturedArgs[len(capturedArgs)-1]).To(Equal("docker://" + destinationImage))
 		expectArgAndValue(g, capturedArgs, "--multi-arch", string(multiArch))
 		expectArgAndValue(g, capturedArgs, "--retry-times", strconv.Itoa(retryTimes))
 		expectArgAndValue(g, capturedArgs, "--some-arg", "somevalue")
@@ -122,8 +122,8 @@ func TestSkopeoCli_Copy(t *testing.T) {
 		}
 
 		copyArgs := &cliwrappers.SkopeoCopyArgs{
-			BaseImage:   "base",
-			TargetImage: "target",
+			SourceImage:      "base",
+			DestinationImage: "target",
 		}
 
 		err := skopeoCli.Copy(copyArgs)
@@ -135,8 +135,8 @@ func TestSkopeoCli_Copy(t *testing.T) {
 	t.Run("should error if base image is empty", func(t *testing.T) {
 		skopeoCli, _ := setupSkopeoCli()
 		copyArgs := &cliwrappers.SkopeoCopyArgs{
-			BaseImage:   "",
-			TargetImage: "target",
+			SourceImage:      "",
+			DestinationImage: "target",
 		}
 		err := skopeoCli.Copy(copyArgs)
 		g.Expect(err).To(HaveOccurred())
@@ -145,8 +145,8 @@ func TestSkopeoCli_Copy(t *testing.T) {
 	t.Run("should error if target image is empty", func(t *testing.T) {
 		skopeoCli, _ := setupSkopeoCli()
 		copyArgs := &cliwrappers.SkopeoCopyArgs{
-			BaseImage:   "base",
-			TargetImage: "",
+			SourceImage:      "base",
+			DestinationImage: "",
 		}
 		err := skopeoCli.Copy(copyArgs)
 		g.Expect(err).To(HaveOccurred())
