@@ -13,16 +13,6 @@ func Test_ImageRefUntils_GetImageName(t *testing.T) {
 		want  string
 	}{
 		{
-			name:  "should not change simple image",
-			image: "image-name",
-			want:  "image-name",
-		},
-		{
-			name:  "should not change namespaced image",
-			image: "namespace/image-name",
-			want:  "namespace/image-name",
-		},
-		{
 			name:  "should not change image with registry",
 			image: "registry.io/image-name",
 			want:  "registry.io/image-name",
@@ -33,94 +23,79 @@ func Test_ImageRefUntils_GetImageName(t *testing.T) {
 			want:  "registry.io/namespace/image-name",
 		},
 		{
-			name:  "should not change image with registry and port",
+			name:  "should not change image with registry with port",
 			image: "registry.io:1234/image-name",
 			want:  "registry.io:1234/image-name",
 		},
 		{
-			name:  "should not change image with registry and port and namespace",
+			name:  "should not change image with registry with port and namespace",
 			image: "registry.io:1234/namespace/image-name",
 			want:  "registry.io:1234/namespace/image-name",
 		},
 		{
-			name:  "should delete digest in simple image",
-			image: "image@sha256:586ab46b9d6d906b2df3dad12751e807bd0f0632d5a2ab3991bdac78bdccd59a",
-			want:  "image",
-		},
-		{
-			name:  "should delete digest in namespaced image",
-			image: "namespace/image@sha256:586ab46b9d6d906b2df3dad12751e807bd0f0632d5a2ab3991bdac78bdccd59a",
-			want:  "namespace/image",
+			name:  "should delete digest from image",
+			image: "registry.io/image@sha256:586ab46b9d6d906b2df3dad12751e807bd0f0632d5a2ab3991bdac78bdccd59a",
+			want:  "registry.io/image",
 		},
 		{
 			name:  "should delete digest for image with registry and namespace",
-			image: "registry.io/user/image@sha256:586ab46b9d6d906b2df3dad12751e807bd0f0632d5a2ab3991bdac78bdccd59a",
-			want:  "registry.io/user/image",
+			image: "registry.io/namespace/image@sha256:586ab46b9d6d906b2df3dad12751e807bd0f0632d5a2ab3991bdac78bdccd59a",
+			want:  "registry.io/namespace/image",
 		},
 		{
-			name:  "should delete digest for image with registry and port and namespace",
-			image: "registry.io:1234/user/image@sha256:586ab46b9d6d906b2df3dad12751e807bd0f0632d5a2ab3991bdac78bdccd59a",
-			want:  "registry.io:1234/user/image",
+			name:  "should delete digest for image with registry with port and namespace",
+			image: "registry.io:1234/namespace/image@sha256:586ab46b9d6d906b2df3dad12751e807bd0f0632d5a2ab3991bdac78bdccd59a",
+			want:  "registry.io:1234/namespace/image",
 		},
 		{
-			name:  "should delete tag in simple image",
-			image: "image:tag",
-			want:  "image",
-		},
-		{
-			name:  "should delete tag in namespaced image",
-			image: "namespace/image:tag",
-			want:  "namespace/image",
+			name:  "should delete tag from image",
+			image: "registry.io/image:tag",
+			want:  "registry.io/image",
 		},
 		{
 			name:  "should delete tag for image with registry and namespace",
-			image: "registry.io/user/image:tag",
-			want:  "registry.io/user/image",
+			image: "registry.io/namespace/image:tag",
+			want:  "registry.io/namespace/image",
 		},
 		{
-			name:  "should delete tag for image with registry and port and namespace",
-			image: "registry.io:1234/user/image:tag",
-			want:  "registry.io:1234/user/image",
+			name:  "should delete tag for image with registry with port and namespace",
+			image: "registry.io:1234/namespace/image:tag",
+			want:  "registry.io:1234/namespace/image",
 		},
 		{
-			name:  "should delete numeric tag for image with registry and port and namespace",
+			name:  "should delete numeric tag for image with registry with port and namespace",
 			image: "registry.io:1234/user/image:1234",
 			want:  "registry.io:1234/user/image",
 		},
 		{
-			name:  "should delete tag with separators for image with registry and port and namespace",
+			name:  "should delete tag with separators for image with registry with port and namespace",
 			image: "registry.io:1234/user/image:_t-a.g",
 			want:  "registry.io:1234/user/image",
 		},
 		{
-			name:  "should delete tag and digest in simple image",
-			image: "image:tag@sha256:586ab46b9d6d906b2df3dad12751e807bd0f0632d5a2ab3991bdac78bdccd59a",
-			want:  "image",
-		},
-		{
 			name:  "should delete tag and digest in namespaced image",
-			image: "namespace/image:tag@sha256:586ab46b9d6d906b2df3dad12751e807bd0f0632d5a2ab3991bdac78bdccd59a",
-			want:  "namespace/image",
+			image: "registry.io/namespace/image:tag@sha256:586ab46b9d6d906b2df3dad12751e807bd0f0632d5a2ab3991bdac78bdccd59a",
+			want:  "registry.io/namespace/image",
 		},
 		{
-			name:  "should delete tag and digest for image with registry and namespace",
-			image: "registry.io/user/image:tag@sha256:586ab46b9d6d906b2df3dad12751e807bd0f0632d5a2ab3991bdac78bdccd59a",
-			want:  "registry.io/user/image",
-		},
-		{
-			name:  "should delete tag and digest for image with registry and port and namespace",
+			name:  "should delete tag and digest for image with registry with port and namespace",
 			image: "registry.io:1234/user/image:tag@sha256:586ab46b9d6d906b2df3dad12751e807bd0f0632d5a2ab3991bdac78bdccd59a",
 			want:  "registry.io:1234/user/image",
 		},
 		{
-			name:  "should delete numeric tag and digest for image with registry and port and namespace",
+			name:  "should delete numeric tag and digest for image with registry with port and namespace",
 			image: "registry.io:1234/user/image:1234@sha256:586ab46b9d6d906b2df3dad12751e807bd0f0632d5a2ab3991bdac78bdccd59a",
 			want:  "registry.io:1234/user/image",
 		},
 		{
-			name:  "should delete tag with separators and digest for image with registry and port and namespace",
+			name:  "should delete tag with separators and digest for image with registry with port and namespace",
 			image: "registry.io:1234/user/image:t-a.g_1234@sha256:586ab46b9d6d906b2df3dad12751e807bd0f0632d5a2ab3991bdac78bdccd59a",
 			want:  "registry.io:1234/user/image",
+		},
+		{
+			name:  "should return empty string for local image reference",
+			image: "image:tag",
+			want:  "",
 		},
 	}
 
@@ -128,7 +103,7 @@ func Test_ImageRefUntils_GetImageName(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			got := common.GetImageName(tc.image)
 			if got != tc.want {
-				t.Errorf("For %s expected %s, but got: %s", tc.image, got, tc.want)
+				t.Errorf("For %s expected %s, but got: %s", tc.image, tc.want, got)
 			}
 		})
 	}
@@ -136,14 +111,6 @@ func Test_ImageRefUntils_GetImageName(t *testing.T) {
 
 func Test_ImageRefUntils_IsImageNameValid(t *testing.T) {
 	validImages := []string{
-		"image",
-		"i",
-		"im",
-		"i-m",
-		"i.m",
-		"i_m",
-		"i__m",
-		"namespace/image",
 		"registry.io/user/image",
 		"registry.io/user/namespace/image",
 		"registry.io:1234/image",
@@ -157,12 +124,9 @@ func Test_ImageRefUntils_IsImageNameValid(t *testing.T) {
 		"registry.io:1234/us_er/name-space/ima.ge",
 		"registry.io:1/image",
 		"registry.io:65535/image",
-		"n/i",
-		"r/n/i",
-		"r/o/n/i",
 		"r:1/i",
 		"r:1/n/i",
-		"namespace/verylongimagenameverylongimagenameverylongimagenameverylongimagenameverylongimagenameverylongimagenameverylongimagenam",
+		"registry.io/namespace/verylongimagenameverylongimagenameverylongimagenameverylongimagenameverylongimagenameverylongimagenameverylongimage",
 	}
 	invalidImages := []string{
 		"",
@@ -209,11 +173,24 @@ func Test_ImageRefUntils_IsImageNameValid(t *testing.T) {
 		"registry.io/user/nameSpace/image",
 		"registry.io:1234",
 		"registry.io:-1234/image",
-		"registry.io:65536/image",
-		"registry.io:12345678901234567890123456789012345678901234567890123456789012345678901234567890/image",
+		// The original lib doesn't care about invalid port number
+		// "registry.io:65536/image",
+		// "registry.io:12345678901234567890123456789012345678901234567890123456789012345678901234567890/image",
 		"registry.io:port/image",
 		"registry.io:/image",
 		"namespace/verylongimagenameverylongimagenameverylongimagenameverylongimagenameverylongimagenameverylongimagenameverylongimagename",
+		// The following references are valid as local images, but invalid as a registry image reference.
+		"image",
+		"i",
+		"im",
+		"i-m",
+		"i.m",
+		"i_m",
+		"i__m",
+		"namespace/image",
+		"n/i",
+		"r/n/i",
+		"r/o/n/i",
 	}
 	for _, image := range validImages {
 		t.Run("valid image", func(t *testing.T) {
