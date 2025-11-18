@@ -68,7 +68,6 @@ type ApplyTags struct {
 	CliWrappers   ApplyTagsCliWrappers
 	Results       ApplyTagsResults
 	ResultsWriter common.ResultsWriterInterface
-	ImageRefUtils common.ImageRefUtilsInterface
 
 	imageName     string
 	imageByDigest string
@@ -89,8 +88,6 @@ func NewApplyTags(cmd *cobra.Command) (*ApplyTags, error) {
 
 	applyTags.ResultsWriter = common.NewResultsWriter()
 
-	applyTags.ImageRefUtils = common.NewImageRefUtils()
-
 	return applyTags, nil
 }
 
@@ -109,7 +106,7 @@ func (c *ApplyTags) initCliWrappers() error {
 func (c *ApplyTags) Run() error {
 	c.logParams()
 
-	c.imageName = c.ImageRefUtils.GetImageName(c.Params.ImageUrl)
+	c.imageName = common.GetImageName(c.Params.ImageUrl)
 	if err := c.validateParams(); err != nil {
 		return err
 	}
@@ -125,7 +122,7 @@ func (c *ApplyTags) Run() error {
 			return err
 		}
 		for _, tag := range tagsFromLabel {
-			if !c.ImageRefUtils.IsImageTagValid(tag) {
+			if !common.IsImageTagValid(tag) {
 				return fmt.Errorf("tag from label '%s' is invalid", tag)
 			}
 		}
@@ -216,16 +213,16 @@ func (c *ApplyTags) applyTags(tags []string) error {
 
 func (c *ApplyTags) validateParams() error {
 	// Validate imageName instead of Params.ImageUrl to avoid calling normalizeImageName second time.
-	if !c.ImageRefUtils.IsImageNameValid(c.imageName) {
+	if !common.IsImageNameValid(c.imageName) {
 		return fmt.Errorf("image '%s' is invalid", c.imageName)
 	}
 
-	if !c.ImageRefUtils.IsImageDigestValid(c.Params.Digest) {
+	if !common.IsImageDigestValid(c.Params.Digest) {
 		return fmt.Errorf("image digest '%s' is invalid", c.Params.Digest)
 	}
 
 	for _, tag := range c.Params.NewTags {
-		if !c.ImageRefUtils.IsImageTagValid(tag) {
+		if !common.IsImageTagValid(tag) {
 			return fmt.Errorf("tag '%s' is invalid", tag)
 		}
 	}

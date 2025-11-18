@@ -124,10 +124,9 @@ func Test_ImageRefUntils_GetImageName(t *testing.T) {
 		},
 	}
 
-	iru := common.NewImageRefUtils()
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			got := iru.GetImageName(tc.image)
+			got := common.GetImageName(tc.image)
 			if got != tc.want {
 				t.Errorf("For %s expected %s, but got: %s", tc.image, got, tc.want)
 			}
@@ -216,17 +215,16 @@ func Test_ImageRefUntils_IsImageNameValid(t *testing.T) {
 		"registry.io:/image",
 		"namespace/verylongimagenameverylongimagenameverylongimagenameverylongimagenameverylongimagenameverylongimagenameverylongimagename",
 	}
-	iru := common.NewImageRefUtils()
 	for _, image := range validImages {
 		t.Run("valid image", func(t *testing.T) {
-			if !iru.IsImageNameValid(image) {
+			if !common.IsImageNameValid(image) {
 				t.Errorf("%s expected to be valid", image)
 			}
 		})
 	}
 	for _, image := range invalidImages {
 		t.Run("invalid image", func(t *testing.T) {
-			if iru.IsImageNameValid(image) {
+			if common.IsImageNameValid(image) {
 				t.Errorf("%s expected to be invalid", image)
 			}
 		})
@@ -248,17 +246,16 @@ func Test_ImageRefUntils_IsImageDigestValid(t *testing.T) {
 		"sha256:5f2332b1661b2d0967f2652dfe906ef4893438d298290cd090a1358653af1d5",
 		"sha256:5f2332b1661b2d0967f2652dfe906ef4893438d298290cd090a1358653af1d55e",
 	}
-	iru := common.NewImageRefUtils()
 	for _, digest := range validDigests {
 		t.Run("valid digest", func(t *testing.T) {
-			if !iru.IsImageDigestValid(digest) {
+			if !common.IsImageDigestValid(digest) {
 				t.Errorf("%s expected to be valid", digest)
 			}
 		})
 	}
 	for _, digest := range invalidDigests {
 		t.Run("invalid digest", func(t *testing.T) {
-			if iru.IsImageDigestValid(digest) {
+			if common.IsImageDigestValid(digest) {
 				t.Errorf("%s expected to be invalid", digest)
 			}
 		})
@@ -297,17 +294,16 @@ func Test_ImageRefUntils_IsImageTagValid(t *testing.T) {
 		"t ag",
 		"verylongtagverylongtagverylongtagverylongtagverylongtagverylongtagverylongtagverylongtagverylongtagverylongtagverylongtagverylongtag",
 	}
-	iru := common.NewImageRefUtils()
 	for _, tag := range validTags {
 		t.Run("valid tag", func(t *testing.T) {
-			if !iru.IsImageTagValid(tag) {
+			if !common.IsImageTagValid(tag) {
 				t.Errorf("%s expected to be valid", tag)
 			}
 		})
 	}
 	for _, tag := range invalidTags {
 		t.Run("invalid tag", func(t *testing.T) {
-			if iru.IsImageTagValid(tag) {
+			if common.IsImageTagValid(tag) {
 				t.Errorf("%s expected to be invalid", tag)
 			}
 		})

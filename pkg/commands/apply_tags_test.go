@@ -165,11 +165,10 @@ func Test_validateParams(t *testing.T) {
 		},
 	}
 	c := &ApplyTags{}
-	c.ImageRefUtils = common.NewImageRefUtils()
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			c.Params = &tc.params
-			c.imageName = c.ImageRefUtils.GetImageName(c.Params.ImageUrl)
+			c.imageName = common.GetImageName(c.Params.ImageUrl)
 
 			err := c.validateParams()
 
@@ -389,7 +388,6 @@ func Test_Run(t *testing.T) {
 				LabelWithTags: "",
 			},
 			ResultsWriter: _mockResultsWriter,
-			ImageRefUtils: common.NewImageRefUtils(),
 		}
 	}
 

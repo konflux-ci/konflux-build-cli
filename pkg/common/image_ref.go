@@ -6,26 +6,11 @@ import (
 	"strings"
 )
 
-type ImageRefUtilsInterface interface {
-	GetImageName(imageURL string) string
-	IsImageNameValid(imageName string) bool
-	IsImageTagValid(tagName string) bool
-	IsImageDigestValid(digest string) bool
-}
-
-var _ ImageRefUtilsInterface = &ImageRefUntils{}
-
-type ImageRefUntils struct{}
-
-func NewImageRefUtils() *ImageRefUntils {
-	return &ImageRefUntils{}
-}
-
 var imageDigestSuffixRegex = regexp.MustCompile(`@sha256:[a-fA-F0-9]{64}$`)
 var imageTagSuffixRegex = regexp.MustCompile(`:[a-zA-Z0-9_][a-zA-Z0-9_.-]{0,127}$`)
 
 // GetImageName trims tag and/or digest from given image reference.
-func (i *ImageRefUntils) GetImageName(imageURL string) string {
+func GetImageName(imageURL string) string {
 	imageWithoutDigest := imageDigestSuffixRegex.ReplaceAllString(imageURL, "")
 	image := imageTagSuffixRegex.ReplaceAllString(imageWithoutDigest, "")
 	return image
@@ -39,7 +24,7 @@ var imageRegistryAddressAndPortRegex = regexp.MustCompile(`^([a-z0-9](?:[a-z0-9_
 // Image name cannot start or end with a separator.
 // Image name max length is 128 characters.
 // It's not allowed to have double separator and triple underscore.
-func (i *ImageRefUntils) IsImageNameValid(imageName string) bool {
+func IsImageNameValid(imageName string) bool {
 	if imageName == "" {
 		return false
 	}
@@ -102,12 +87,12 @@ var imageTagRegex = regexp.MustCompile("^[a-zA-Z0-9_][a-zA-Z0-9_.-]{0,127}$")
 // Image tag can contain letters and digits plus underscore, period, dash.
 // Image tag cannot start with period or dash.
 // Image tag max length is 128 characters.
-func (i *ImageRefUntils) IsImageTagValid(tagName string) bool {
+func IsImageTagValid(tagName string) bool {
 	return imageTagRegex.MatchString(tagName)
 }
 
 var imageDigestRegex = regexp.MustCompile(`^sha256:[a-f0-9]{64}$`)
 
-func (i *ImageRefUntils) IsImageDigestValid(digest string) bool {
+func IsImageDigestValid(digest string) bool {
 	return imageDigestRegex.MatchString(digest)
 }
