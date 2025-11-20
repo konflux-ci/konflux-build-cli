@@ -22,6 +22,7 @@ func expectArgAndValue(g *WithT, args []string, argName string, argValue string)
 func setupSkopeoCli() (*cliwrappers.SkopeoCli, *mockExecutor) {
 	executor := &mockExecutor{}
 	skopeoCli := &cliwrappers.SkopeoCli{Executor: executor}
+	cliwrappers.DisableRetryer = true
 	return skopeoCli, executor
 }
 

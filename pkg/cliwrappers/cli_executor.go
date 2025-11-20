@@ -12,6 +12,8 @@ import (
 	l "github.com/konflux-ci/konflux-build-cli/pkg/logger"
 )
 
+var executorLog = l.Logger.WithField("logger", "CliExecutor")
+
 type CliExecutorInterface interface {
 	Execute(command string, args ...string) (stdout, stderr string, exitCode int, err error)
 	ExecuteInDir(wordir, command string, args ...string) (stdout, stderr string, exitCode int, err error)
@@ -83,7 +85,7 @@ func (e *CliExecutor) ExecuteInDirWithOutput(workdir, command string, args ...st
 		scanner := bufio.NewScanner(r)
 		for scanner.Scan() {
 			line := scanner.Text()
-			l.Logger.Info(linePrefix + line)
+			executorLog.Info(linePrefix + line)
 			buf.WriteString(line + "\n")
 		}
 	}
