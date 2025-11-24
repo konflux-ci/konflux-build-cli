@@ -79,7 +79,7 @@ func (s *SkopeoCli) Copy(args *SkopeoCopyArgs) error {
 
 	retryer := NewRetryer(func() (string, string, int, error) {
 		return s.Executor.Execute("skopeo", scopeoArgs...)
-	}).WithImageRegistryPreset().WithStopString("unauthorized")
+	}).WithImageRegistryPreset().StopIfOutputContains("unauthorized")
 
 	stdout, stderr, _, err := retryer.Run()
 	if err != nil {
@@ -135,7 +135,7 @@ func (s *SkopeoCli) Inspect(args *SkopeoInspectArgs) (string, error) {
 
 	retryer := NewRetryer(func() (string, string, int, error) {
 		return s.Executor.Execute("skopeo", scopeoArgs...)
-	}).WithImageRegistryPreset().WithStopString("unauthorized")
+	}).WithImageRegistryPreset().StopIfOutputContains("unauthorized")
 
 	stdout, stderr, _, err := retryer.Run()
 	if err != nil {
