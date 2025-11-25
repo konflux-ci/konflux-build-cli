@@ -8,6 +8,8 @@ import (
 	l "github.com/konflux-ci/konflux-build-cli/pkg/logger"
 )
 
+var skopeoLog = l.Logger.WithField("logger", "ScopeoCli")
+
 type SkopeoCliInterface interface {
 	Copy(args *SkopeoCopyArgs) error
 	Inspect(args *SkopeoInspectArgs) (string, error)
@@ -73,17 +75,22 @@ func (s *SkopeoCli) Copy(args *SkopeoCopyArgs) error {
 	dockerPrefix := "docker://"
 	scopeoArgs = append(scopeoArgs, dockerPrefix+args.SourceImage, dockerPrefix+args.DestinationImage)
 
-	l.Logger.Debugf("Running command:\nskopeo %s", strings.Join(scopeoArgs, " "))
-	stdout, stderr, _, err := s.Executor.Execute("skopeo", scopeoArgs...)
+	skopeoLog.Debugf("Running command:\nskopeo %s", strings.Join(scopeoArgs, " "))
+
+	retryer := NewRetryer(func() (string, string, int, error) {
+		return s.Executor.Execute("skopeo", scopeoArgs...)
+	}).WithImageRegistryPreset().StopIfOutputContains("unauthorized")
+
+	stdout, stderr, _, err := retryer.Run()
 	if err != nil {
-		l.Logger.Errorf("skopeo copy failed: %s", err.Error())
-		l.Logger.Infof("[stdout]:\n%s", stdout)
-		l.Logger.Infof("[stderr]:\n%s", stderr)
+		skopeoLog.Errorf("skopeo copy failed: %s", err.Error())
+		skopeoLog.Infof("[stdout]:\n%s", stdout)
+		skopeoLog.Infof("[stderr]:\n%s", stderr)
 		return err
 	}
 
-	l.Logger.Debug("[stdout]:\n" + stdout)
-	l.Logger.Debug("[stderr]:\n" + stderr)
+	skopeoLog.Debug("[stdout]:\n" + stdout)
+	skopeoLog.Debug("[stderr]:\n" + stderr)
 
 	return nil
 }
@@ -124,17 +131,22 @@ func (s *SkopeoCli) Inspect(args *SkopeoInspectArgs) (string, error) {
 	dockerPrefix := "docker://"
 	scopeoArgs = append(scopeoArgs, dockerPrefix+args.ImageRef)
 
-	l.Logger.Debugf("Running command:\nskopeo %s", strings.Join(scopeoArgs, " "))
-	stdout, stderr, _, err := s.Executor.Execute("skopeo", scopeoArgs...)
+	skopeoLog.Debugf("Running command:\nskopeo %s", strings.Join(scopeoArgs, " "))
+
+	retryer := NewRetryer(func() (string, string, int, error) {
+		return s.Executor.Execute("skopeo", scopeoArgs...)
+	}).WithImageRegistryPreset().StopIfOutputContains("unauthorized")
+
+	stdout, stderr, _, err := retryer.Run()
 	if err != nil {
-		l.Logger.Errorf("skopeo inspect failed: %s", err.Error())
-		l.Logger.Infof("[stdout]:\n%s", stdout)
-		l.Logger.Infof("[stderr]:\n%s", stderr)
+		skopeoLog.Errorf("skopeo inspect failed: %s", err.Error())
+		skopeoLog.Infof("[stdout]:\n%s", stdout)
+		skopeoLog.Infof("[stderr]:\n%s", stderr)
 		return "", err
 	}
 
-	l.Logger.Debug("[stdout]:\n" + stdout)
-	l.Logger.Debug("[stderr]:\n" + stderr)
+	skopeoLog.Debug("[stdout]:\n" + stdout)
+	skopeoLog.Debug("[stderr]:\n" + stderr)
 
 	return stdout, nil
 }
