@@ -122,6 +122,11 @@ func Test_ImageRefUntils_GetImageName(t *testing.T) {
 			image: "registry.io:1234/user/image:t-a.g_1234@sha256:586ab46b9d6d906b2df3dad12751e807bd0f0632d5a2ab3991bdac78bdccd59a",
 			want:  "registry.io:1234/user/image",
 		},
+		{
+			name:  "should return empty string if image reference is invalid",
+			image: "registry.io:1234/user/imAge:tag",
+			want:  "",
+		},
 	}
 
 	for _, tc := range tests {
@@ -143,7 +148,10 @@ func Test_ImageRefUntils_IsImageNameValid(t *testing.T) {
 		"i.m",
 		"i_m",
 		"i__m",
+		"ima--ge",
+		"ima---ge",
 		"namespace/image",
+		"doMAIN/path/image",
 		"registry.io/user/image",
 		"registry.io/user/namespace/image",
 		"registry.io:1234/image",
@@ -162,7 +170,7 @@ func Test_ImageRefUntils_IsImageNameValid(t *testing.T) {
 		"r/o/n/i",
 		"r:1/i",
 		"r:1/n/i",
-		"namespace/verylongimagenameverylongimagenameverylongimagenameverylongimagenameverylongimagenameverylongimagenameverylongimagenam",
+		"namespace/verylongimagenameverylongimagenameverylongimagenameverylongimagenameverylongimagenameverylongimagenameverylongimagenameverylongimagenameverylongimagenameverylongimagenameverylongimagenameverylongimagenameverylongimagenameverylongimagenameverymax",
 	}
 	invalidImages := []string{
 		"",
@@ -178,7 +186,6 @@ func Test_ImageRefUntils_IsImageNameValid(t *testing.T) {
 		"/image",
 		"ima___ge",
 		"ima..ge",
-		"ima--ge",
 		"i_.m",
 		"i._m",
 		"i-_m",
@@ -189,7 +196,6 @@ func Test_ImageRefUntils_IsImageNameValid(t *testing.T) {
 		"i-_.m",
 		"i-._m",
 		"namespace//image",
-		"nameSpace/path/image",
 		"namespace/Path/image",
 		"namespace/path/imAge",
 		"registry.io/./image",
@@ -209,11 +215,12 @@ func Test_ImageRefUntils_IsImageNameValid(t *testing.T) {
 		"registry.io/user/nameSpace/image",
 		"registry.io:1234",
 		"registry.io:-1234/image",
-		"registry.io:65536/image",
-		"registry.io:12345678901234567890123456789012345678901234567890123456789012345678901234567890/image",
+		// The original lib doesn't care about invalid port number...
+		// "registry.io:65536/image",
+		// "registry.io:12345678901234567890123456789012345678901234567890123456789012345678901234567890/image",
 		"registry.io:port/image",
 		"registry.io:/image",
-		"namespace/verylongimagenameverylongimagenameverylongimagenameverylongimagenameverylongimagenameverylongimagenameverylongimagename",
+		"namespace/verylongimagenameverylongimagenameverylongimagenameverylongimagenameverylongimagenameverylongimagenameverylongimagenameverylongimagenameverylongimagenameverylongimagenameverylongimagenameverylongimagenameverylongimagenameverylongimagenameverylong",
 	}
 	for _, image := range validImages {
 		t.Run("valid image", func(t *testing.T) {

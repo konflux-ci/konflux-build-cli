@@ -1,98 +1,37 @@
 package common
 
 import (
-	"regexp"
-	"strconv"
-	"strings"
+	"github.com/containers/image/v5/docker/reference"
+	go_digest "github.com/opencontainers/go-digest"
 )
 
-var imageDigestSuffixRegex = regexp.MustCompile(`@sha256:[a-fA-F0-9]{64}$`)
-var imageTagSuffixRegex = regexp.MustCompile(`:[a-zA-Z0-9_][a-zA-Z0-9_.-]{0,127}$`)
-
-// GetImageName trims tag and/or digest from given image reference.
+// GetImageName trims tag and/or digest from given image reference using containers/image library.
 func GetImageName(imageURL string) string {
-	imageWithoutDigest := imageDigestSuffixRegex.ReplaceAllString(imageURL, "")
-	image := imageTagSuffixRegex.ReplaceAllString(imageWithoutDigest, "")
-	return image
+	ref, err := reference.Parse(imageURL)
+	named, ok := ref.(reference.Named)
+	if err != nil || !ok {
+		// If parsing fails or the reference doesn't include a name,
+		// return empty string for backwards compatibility.
+		return ""
+	}
+	return named.Name()
 }
 
-var imagePartRegex = regexp.MustCompile("^[a-z0-9](?:[a-z0-9_.-]*[a-z0-9])?$")
-var imageRegistryAddressAndPortRegex = regexp.MustCompile(`^([a-z0-9](?:[a-z0-9_.-]*[a-z0-9])?)(?::(\d+))?$`)
-
-// isImageNameValid validates image name without tag and digest.
-// Image name can contain lowercase letters and digits plus separators: dash, period, underscore, slash.
-// Image name cannot start or end with a separator.
-// Image name max length is 128 characters.
-// It's not allowed to have double separator and triple underscore.
+// IsImageNameValid validates image name using containers/image library.
 func IsImageNameValid(imageName string) bool {
-	if imageName == "" {
-		return false
-	}
-	if len(imageName) > 128 {
-		return false
-	}
-	if strings.Contains(imageName, "___") ||
-		strings.Contains(imageName, "//") ||
-		strings.Contains(imageName, "..") ||
-		strings.Contains(imageName, "--") ||
-		strings.Contains(imageName, "_.") ||
-		strings.Contains(imageName, "._") ||
-		strings.Contains(imageName, "-.") ||
-		strings.Contains(imageName, ".-") ||
-		strings.Contains(imageName, "-_") ||
-		strings.Contains(imageName, "_-") {
-		return false
-	}
-
-	parts := strings.Split(imageName, "/")
-	if len(parts) == 1 {
-		return imagePartRegex.MatchString(parts[0])
-	}
-	// Multiple path parts.
-	// Handle the first part differently, since it might have a port.
-	match := imageRegistryAddressAndPortRegex.FindStringSubmatch(parts[0])
-	if len(match) == 0 {
-		return false
-	}
-	if len(match) > 1 {
-		registryAddress := match[1]
-		if !imagePartRegex.MatchString(registryAddress) {
-			// It should never happen if both regexs are correct.
-			// Still keeping the check to catch regex editing mistakes.
-			return false
-		}
-	}
-	if len(match) > 2 && match[2] != "" {
-		portString := match[2]
-		if port, err := strconv.Atoi(portString); err == nil {
-			if port < 0 || port > 65535 {
-				return false
-			}
-		} else {
-			return false
-		}
-	}
-	// Validate the rest of the path parts the usual way.
-	for _, part := range parts[1:] {
-		if !imagePartRegex.MatchString(part) {
-			return false
-		}
-	}
-	return true
+	return imageName != "" && GetImageName(imageName) == imageName
 }
 
-var imageTagRegex = regexp.MustCompile("^[a-zA-Z0-9_][a-zA-Z0-9_.-]{0,127}$")
-
-// isTagValid validates image tag.
-// Image tag can contain letters and digits plus underscore, period, dash.
-// Image tag cannot start with period or dash.
-// Image tag max length is 128 characters.
 func IsImageTagValid(tagName string) bool {
-	return imageTagRegex.MatchString(tagName)
+	// Create a minimal named reference to test tag validation against
+	namedRef, _ := reference.ParseNamed("registry.io/test")
+	// Try to create a tagged reference - if it succeeds, the tag is valid
+	_, err := reference.WithTag(namedRef, tagName)
+	return err == nil
 }
-
-var imageDigestRegex = regexp.MustCompile(`^sha256:[a-f0-9]{64}$`)
 
 func IsImageDigestValid(digest string) bool {
-	return imageDigestRegex.MatchString(digest)
+	// Use the go-digest library (which is used by containers/image) to parse and validate.
+	_, err := go_digest.Parse(digest)
+	return err == nil
 }
