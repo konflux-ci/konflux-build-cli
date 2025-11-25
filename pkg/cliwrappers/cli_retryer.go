@@ -16,7 +16,7 @@ var DisableRetryer bool = false
 // Retryer runs given command until it succeeds or a stop condition is met.
 // After the first failure, it waits BaseDelay before next attempt.
 // After each next failure, the dalay is multiplied by DelayFactor,
-// but cannot be greather than MaxDelay if it is specified.
+// but cannot be greather than MaxDelay if MaxDelay is positive.
 // Stop conditions:
 // - MaxAttempts is reached
 // - The command exited with a stop exit code
@@ -25,7 +25,7 @@ type Retryer struct {
 	BaseDelay   time.Duration
 	DelayFactor float64
 	MaxAttempts int
-	MaxDelay    *time.Duration
+	MaxDelay    time.Duration
 
 	cliCall func() (stdout string, stderr string, errCode int, err error)
 
@@ -79,8 +79,8 @@ func (r *Retryer) Run() (stdout string, stderr string, errCode int, err error) {
 		retryerLog.Debugf("Attempt %d failed, output:\n[stdout]:\n%s\n[stderr]:\n%s\nWaiting %v before next retry", attempt, stdout, stderr, delay)
 		time.Sleep(delay)
 		delay = time.Duration(float64(delay) * r.DelayFactor)
-		if r.MaxDelay != nil && delay > *r.MaxDelay {
-			delay = *r.MaxDelay
+		if r.MaxDelay > 0 && delay > r.MaxDelay {
+			delay = r.MaxDelay
 		}
 	}
 
@@ -117,8 +117,7 @@ func (r *Retryer) WithMaxAttempts(maxAttempts int) *Retryer {
 // WithMaxDelay sets maximum delay to wait between attempts.
 // If not set, no limit is appled.
 func (r *Retryer) WithMaxDelay(maxDelay time.Duration) *Retryer {
-	maxDelayCopy := maxDelay
-	r.MaxDelay = &maxDelayCopy
+	r.MaxDelay = maxDelay
 	return r
 }
 
@@ -157,7 +156,6 @@ func (r *Retryer) WithImageRegistryPreset() *Retryer {
 	r.BaseDelay = 1 * time.Second
 	r.DelayFactor = 2
 	r.MaxAttempts = 10
-	maxDelay := 4 * time.Minute
-	r.MaxDelay = &maxDelay
+	r.MaxDelay = 4 * time.Minute
 	return r
 }

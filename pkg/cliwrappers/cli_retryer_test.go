@@ -49,7 +49,7 @@ func TestRetryer_Config(t *testing.T) {
 		g.Expect(retryer.BaseDelay).To(Equal(baseDelay))
 		g.Expect(retryer.DelayFactor).To(Equal(delayFactor))
 		g.Expect(retryer.MaxAttempts).To(Equal(maxAttempts))
-		g.Expect(*retryer.MaxDelay).To(Equal(maxDelay))
+		g.Expect(retryer.MaxDelay).To(Equal(maxDelay))
 	})
 
 	t.Run("should be able to set constant interval", func(t *testing.T) {
