@@ -23,7 +23,7 @@ import (
 const (
 	zotRegistryImage         = "ghcr.io/project-zot/zot-minimal:v2.1.11"
 	zotRegistryContainerName = "zot-registry"
-	zotRegistryPort          = "5000"
+	zotRegistryDefaultPort   = "5000"
 	zotRegistryUser          = "zotuser"
 	zotRegistryPassword      = "zotpassword"
 
@@ -48,6 +48,7 @@ type ZotRegistry struct {
 	container *TestRunnerContainer
 	logger    *logrus.Entry
 
+	zotRegistryPort       string
 	dataDirPath           string
 	zotConfigPath         string
 	zotHtpasswdPath       string
@@ -65,10 +66,16 @@ func NewZotRegistry() ImageRegistry {
 		log.Fatal(err)
 	}
 
+	zotRegistryPort := os.Getenv("ZOT_REGISTRY_PORT")
+	if zotRegistryPort == "" {
+		zotRegistryPort = zotRegistryDefaultPort
+	}
+
 	return &ZotRegistry{
 		container: NewTestRunnerContainer(zotRegistryContainerName, zotRegistryImage),
 		logger:    l.Logger.WithField("logger", "zot"),
 
+		zotRegistryPort:       zotRegistryPort,
 		dataDirPath:           zotConfigDataDirAbsolutePath,
 		zotConfigPath:         path.Join(zotConfigDataDirAbsolutePath, zotConfigFileName),
 		zotHtpasswdPath:       path.Join(zotConfigDataDirAbsolutePath, "htpasswd"),
@@ -82,7 +89,7 @@ func NewZotRegistry() ImageRegistry {
 }
 
 func (z *ZotRegistry) GetRegistryDomain() string {
-	return "localhost:" + zotRegistryPort
+	return "localhost:" + z.zotRegistryPort
 }
 
 func (z *ZotRegistry) GetTestNamespace() string {
@@ -92,7 +99,7 @@ func (z *ZotRegistry) GetTestNamespace() string {
 func (z *ZotRegistry) Start() error {
 	z.container.ReplaceEntrypoint = false
 
-	z.container.AddPort(zotRegistryPort, zotRegistryPort)
+	z.container.AddPort(z.zotRegistryPort, z.zotRegistryPort)
 
 	z.container.AddVolume(z.zotConfigPath, "/etc/zot/config.json")
 	z.container.AddVolume(z.zotHtpasswdPath, "/etc/zot/htpasswd")
@@ -105,6 +112,9 @@ func (z *ZotRegistry) Start() error {
 	_ = os.RemoveAll(zotRegistryStorageHostDir)
 	if zotRegistryStorageVolume {
 		z.container.AddVolume(z.zotRegistryStorageDir, zotDataPathInContainer)
+		if err := EnsureDirectory(z.zotRegistryStorageDir); err != nil {
+			return err
+		}
 	}
 
 	isAlreadyRunning, err := z.container.ContainerExists(true)
@@ -217,7 +227,9 @@ func (z *ZotRegistry) Prepare() error {
 
 	os.Setenv("DOCKER_CONFIG", z.dataDirPath)
 
-	EnsureDirectory(zotConfigDataDir)
+	if err := EnsureDirectory(zotConfigDataDir); err != nil {
+		return err
+	}
 
 	if !FileExists(z.zotHtpasswdPath) {
 		if err := z.createHtpasswdFile(executor); err != nil {
@@ -244,7 +256,7 @@ func (z *ZotRegistry) Prepare() error {
 	}
 
 	// Generate docker config json
-	registryHosts := []string{z.GetRegistryDomain(), "localhost:" + zotRegistryPort}
+	registryHosts := []string{z.GetRegistryDomain(), "localhost:" + z.zotRegistryPort}
 	dockerConfigJson, err := GenerateDockerAuthContentWithAliases(registryHosts, zotRegistryUser, zotRegistryPassword)
 	if err != nil {
 		z.logger.Errorf("failed to generate dockerconfigjson: %s", err.Error())
@@ -325,7 +337,7 @@ func (z *ZotRegistry) createZotConfig(zotConfigFilePath string) error {
 	}
 }
 `,
-		zotRegistryPort,
+		z.zotRegistryPort,
 		zotCertPathInContainer, zotKeyPathInContainer)
 
 	if err := os.WriteFile(zotConfigFilePath, config, 0644); err != nil {

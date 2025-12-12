@@ -38,9 +38,14 @@ Available integration tests settings:
  - `LocalRegistry`: whether to use local conteinerazed registry or quay.io.
    See [image registry for integration tests](#image-registry-for-integration-tests) section for more details.
 
+Also, there are the following environment variables:
+- `KBC_TEST_CONTAINER_TOOL` defines which container engine to use if both `docker` and `podman` installed.
+- `ZOT_REGISTRY_PORT` changes the port Zot registry is run on.
+  Note, after changing the port, it's required to edit or regenerate `zot-config.json`.
+
 ## Integration test structure for a command
 
-Intagration tests for each CLI sub command should have a [common run function](#common-run-function-for-a-command).
+Integration tests for each CLI sub command should have a [common run function](#common-run-function-for-a-command).
 It's used to setup and run the test container the same way for all [test cases](#integration-test-cases-for-a-command).
 It takes command arguments data and should return the command results, if any.
 Actually it represents the CLI sub command run in CI.
@@ -283,7 +288,7 @@ To change the registry, use `LocalRegistry` [test option](#integration-tests-set
 ### Using local Zot registry for integration tests
 
 Using local Zot registry doesn't require any manual configuration.
-However, in order to do autimatic registry configuration, the following tools should have to be available in the system:
+However, in order to do automatic registry configuration, the following tools have to be available in the system:
 - `htpasswd`
 - `openssl`
 

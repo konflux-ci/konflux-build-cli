@@ -81,4 +81,4 @@ To run all integration tests execute:
 go test ./integration_tests
 ```
 
-See [integration tests](integration-tests.md) doc for information on the integration tests creration and structure.
+See [integration tests](/docs/integration-tests.md) doc for information on the integration tests creration and structure.

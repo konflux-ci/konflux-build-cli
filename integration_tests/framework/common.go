@@ -97,13 +97,14 @@ func FileExists(filepath string) bool {
 	return !stat.IsDir()
 }
 
-func EnsureDirectory(dirPath string) {
+func EnsureDirectory(dirPath string) error {
 	_, err := os.Stat(dirPath)
 	if os.IsNotExist(err) {
 		if err := os.MkdirAll(dirPath, 0755); err != nil {
-			panic("failed to create directory: " + dirPath)
+			return err
 		}
 	}
+	return nil
 }
 
 // CreateTempDir creates a directory in OS temp dir with given prefix
