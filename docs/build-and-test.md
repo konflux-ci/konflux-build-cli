@@ -65,3 +65,20 @@ or for all tests in single package:
 ```bash
 go test ./pkg/commands
 ```
+
+## How to run integration tests
+
+Integration tests are located under `integration_tests` directory.
+Running integration tests follows the same pattern as [unit tests](#how-to-run-unit-tests).
+
+To run specific test from terminal execute:
+```bash
+go test -run ^TestMyCommand$ ./integration_tests
+```
+
+To run all integration tests execute:
+```bash
+go test ./integration_tests
+```
+
+See [integration tests](integration-tests.md) doc for information on the integration tests creration and structure.
