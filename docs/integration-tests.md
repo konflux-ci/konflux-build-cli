@@ -1,5 +1,16 @@
 # Integration tests
 
+## Prerequisites to run integration tests
+
+- `golang` should be installed.
+- `docker` or `podman` installed.
+- In case of using `docker`, on some Linux systems, one might need to increase open files and watchers limit within container.
+  Open `/etc/sysctl.conf` for edit and add / edit the line:
+  `fs.inotify.max_user_instances=1024`.
+  Then, apply changes by `sudo sysctl -p` or reboot.
+
+See [integration tests settings](#integration-tests-settings) for more details
+
 ## How to run integration tests
 
 Integration tests are located under `integration_tests` directory.
@@ -23,6 +34,8 @@ Available integration tests settings:
  - `Debug`: whether to run the CLI within container in debug mode.
    Useful to troubleshoot single test.
    Note, when debug mode is activated, the CLI won't run until a debugger connects to it (port `2345`).
+   To use the debug mode, [Delve](https://github.com/go-delve/delve/tree/master/Documentation/installation) should be installed.
+   The `dlv` binary should be in `$GOPATH/bin/` or `~/go/bin/` if `GOPATH` environment variable is not defined.
    Example debug configuration for VSCode:
    ```json
     {
