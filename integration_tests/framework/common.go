@@ -43,10 +43,10 @@ func init() {
 	// Detect container tool to use
 	if ct := os.Getenv("KBC_TEST_CONTAINER_TOOL"); ct != "" {
 		containerTool = ct
-	} else if dockerInstalled, _ := cliWrappers.CheckCliToolAvailable("docker"); dockerInstalled {
-		containerTool = "docker"
 	} else if podmanInstalled, _ := cliWrappers.CheckCliToolAvailable("podman"); podmanInstalled {
 		containerTool = "podman"
+	} else if dockerInstalled, _ := cliWrappers.CheckCliToolAvailable("docker"); dockerInstalled {
+		containerTool = "docker"
 	} else {
 		l.Logger.Fatal("no container engine found")
 	}
