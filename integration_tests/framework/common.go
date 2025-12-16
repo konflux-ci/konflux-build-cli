@@ -50,6 +50,11 @@ func init() {
 	} else {
 		l.Logger.Fatal("no container engine found")
 	}
+
+	// Compile the CLI only once for all tests
+	if err := CompileKonfluxCli(); err != nil {
+		l.Logger.Fatal(err)
+	}
 }
 
 func NewImageRegistry() ImageRegistry {
@@ -232,11 +237,30 @@ var digestRegex = regexp.MustCompile(`sha256:[a-f0-9]{64}`)
 // PushImage pushes given image into registry and returns its digest.
 func PushImage(imageRef string) (string, error) {
 	executor := cliWrappers.NewCliExecutor()
-	stdout, stderr, _, err := executor.Execute(containerTool, "push", imageRef)
-	if err != nil {
-		fmt.Printf("failed to push test image: %s\n[stdout]:\n%s\n[stderr]:\n%s\n", err.Error(), stdout, stderr)
-		return "", err
-	}
 
-	return digestRegex.FindString(stdout + "\n" + stderr), nil
+	switch containerTool {
+	case "docker":
+		stdout, stderr, _, err := executor.Execute("docker", "push", imageRef)
+		if err != nil {
+			fmt.Printf("failed to push test image: %s\n[stdout]:\n%s\n[stderr]:\n%s\n", err.Error(), stdout, stderr)
+			return "", err
+		}
+		return digestRegex.FindString(stdout + "\n" + stderr), nil
+
+	case "podman":
+		const digestfilePath = "/tmp/digestfile"
+		stdout, stderr, _, err := executor.Execute("podman", "push", "--digestfile", digestfilePath, imageRef)
+		if err != nil {
+			fmt.Printf("failed to push test image: %s\n[stdout]:\n%s\n[stderr]:\n%s\n", err.Error(), stdout, stderr)
+			return "", err
+		}
+		defer os.Remove(digestfilePath)
+
+		digest, err := os.ReadFile(digestfilePath)
+		if err != nil {
+			return "", fmt.Errorf("failed to read digest file: %s", err.Error())
+		}
+		return string(digest), nil
+	}
+	return "", fmt.Errorf("unknow container tool %s", containerTool)
 }

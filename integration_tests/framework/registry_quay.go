@@ -6,11 +6,17 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"path"
 	"strings"
+
+	l "github.com/konflux-ci/konflux-build-cli/pkg/logger"
+	"github.com/sirupsen/logrus"
 )
 
 const (
 	QuayExpiresAfterLabelName = "quay.expires-after"
+
+	quayDockerConfigDir = "/tmp/kbc-docker-config"
 )
 
 var _ ImageRegistry = &QuayRegistry{}
@@ -19,6 +25,8 @@ type QuayRegistry struct {
 	namespace string
 	login     string
 	password  string
+
+	logger *logrus.Entry
 }
 
 func NewQuayRegistry() ImageRegistry {
@@ -26,6 +34,8 @@ func NewQuayRegistry() ImageRegistry {
 }
 
 func (q *QuayRegistry) Prepare() error {
+	q.logger = l.Logger.WithField("logger", "quay-registry")
+
 	if login, err := q.getEnvVar("QUAY_ROBOT_NAME"); err != nil {
 		return err
 	} else {
@@ -41,6 +51,11 @@ func (q *QuayRegistry) Prepare() error {
 	} else {
 		q.namespace = namespace
 	}
+
+	if err := q.configureDockerAuth(); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -52,11 +67,35 @@ func (q *QuayRegistry) getEnvVar(envVarName string) (string, error) {
 	return value, nil
 }
 
+func (q *QuayRegistry) configureDockerAuth() error {
+	if err := EnsureDirectory(quayDockerConfigDir); err != nil {
+		return err
+	}
+
+	dockerConfigJsonPath := path.Join(quayDockerConfigDir, "config.json")
+	if !FileExists(dockerConfigJsonPath) {
+		// Generate docker config json
+		dockerConfigJson, err := GenerateDockerAuthContent(q.GetRegistryDomain(), q.login, q.password)
+		if err != nil {
+			q.logger.Errorf("failed to generate dockerconfigjson: %s", err.Error())
+			return err
+		}
+		if err := os.WriteFile(dockerConfigJsonPath, dockerConfigJson, 0644); err != nil {
+			q.logger.Errorf("failed to save dockerconfigjson: %s", err.Error())
+			return err
+		}
+	}
+
+	os.Setenv("DOCKER_CONFIG", quayDockerConfigDir)
+	return nil
+}
+
 func (q *QuayRegistry) Start() error {
 	return nil
 }
 
 func (q *QuayRegistry) Stop() error {
+	os.RemoveAll(quayDockerConfigDir)
 	return nil
 }
 

@@ -10,9 +10,9 @@ type ImageRegistry interface {
 	IsLocal() bool
 	// Ensures all resources are ready to use the registry.
 	Prepare() error
-	// Starts local registry
+	// Starts local registry.
 	Start() error
-	// Stops local registry
+	// Stops local registry.
 	Stop() error
 	// Returns usename and password / token to access test namespace, see GetTestNamespace.
 	GetCredentials() (string, string)

@@ -101,17 +101,17 @@ func (z *ZotRegistry) Start() error {
 
 	z.container.AddPort(z.zotRegistryPort, z.zotRegistryPort)
 
-	z.container.AddVolume(z.zotConfigPath, "/etc/zot/config.json")
-	z.container.AddVolume(z.zotHtpasswdPath, "/etc/zot/htpasswd")
-	z.container.AddVolume(z.zotKeyPath, zotKeyPathInContainer)
-	z.container.AddVolume(z.zotCertPath, zotCertPathInContainer)
+	z.container.AddVolumeWithOptions(z.zotConfigPath, "/etc/zot/config.json", "z")
+	z.container.AddVolumeWithOptions(z.zotHtpasswdPath, "/etc/zot/htpasswd", "z")
+	z.container.AddVolumeWithOptions(z.zotKeyPath, zotKeyPathInContainer, "z")
+	z.container.AddVolumeWithOptions(z.zotCertPath, zotCertPathInContainer, "z")
 
 	// Try to clean up the registry data.
 	// It might fail due to permissions issue if the folder content was created from within a container,
 	// but it doesn't matter because each new run uses different sub folder for storage.
 	_ = os.RemoveAll(zotRegistryStorageHostDir)
 	if zotRegistryStorageVolume {
-		z.container.AddVolume(z.zotRegistryStorageDir, zotDataPathInContainer)
+		z.container.AddVolumeWithOptions(z.zotRegistryStorageDir, zotDataPathInContainer, "z")
 		if err := EnsureDirectory(z.zotRegistryStorageDir); err != nil {
 			return err
 		}
@@ -121,13 +121,51 @@ func (z *ZotRegistry) Start() error {
 	if err != nil {
 		return err
 	}
-	if !isAlreadyRunning {
-		if err := z.container.Start(); err != nil {
-			return err
+	if isAlreadyRunning {
+		z.container.Delete()
+	}
+
+	if err := z.container.Start(); err != nil {
+		return err
+	}
+
+	return z.WaitReady()
+}
+
+func (z *ZotRegistry) WaitReady() error {
+	url := fmt.Sprintf("https://%s/v2/", z.GetRegistryDomain())
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return err
+	}
+	username, password := z.GetCredentials()
+	req.SetBasicAuth(username, password)
+
+	client, err := z.createHttpClient()
+	if err != nil {
+		return err
+	}
+
+	const maxTries = 15
+	for i := range maxTries {
+		resp, err := client.Do(req)
+		if err == nil {
+			resp.Body.Close()
+
+			if resp.StatusCode == http.StatusOK {
+				z.logger.Info("Zot registry is ready")
+				return nil
+			}
+		} else {
+			z.logger.Infof("waiting Zot registry ready: %s", err.Error())
+		}
+
+		if i < maxTries {
+			time.Sleep(1 * time.Second)
 		}
 	}
 
-	return nil
+	return fmt.Errorf("failed to ping registry after %d retries", maxTries)
 }
 
 func (z *ZotRegistry) Stop() error {
@@ -172,23 +210,11 @@ func (z *ZotRegistry) CheckTagExistance(imageName, tag string) (bool, error) {
 	username, password := z.GetCredentials()
 	req.SetBasicAuth(username, password)
 
-	caCert, err := os.ReadFile(z.rootCertPath)
+	client, err := z.createHttpClient()
 	if err != nil {
 		return false, err
 	}
-	caCertPool := x509.NewCertPool()
-	if !caCertPool.AppendCertsFromPEM(caCert) {
-		return false, err
-	}
-	tlsConfig := &tls.Config{
-		RootCAs: caCertPool,
-	}
 
-	client := &http.Client{
-		Transport: &http.Transport{
-			TLSClientConfig: tlsConfig,
-		},
-	}
 	resp, err := client.Do(req)
 	if err != nil {
 		return false, err
@@ -219,6 +245,26 @@ func (z *ZotRegistry) CheckTagExistance(imageName, tag string) (bool, error) {
 	}
 
 	return false, nil
+}
+
+func (z *ZotRegistry) createHttpClient() (*http.Client, error) {
+	caCert, err := os.ReadFile(z.rootCertPath)
+	if err != nil {
+		return nil, err
+	}
+	caCertPool := x509.NewCertPool()
+	if !caCertPool.AppendCertsFromPEM(caCert) {
+		return nil, err
+	}
+	tlsConfig := &tls.Config{
+		RootCAs: caCertPool,
+	}
+	client := &http.Client{
+		Transport: &http.Transport{
+			TLSClientConfig: tlsConfig,
+		},
+	}
+	return client, nil
 }
 
 // Prepare ensures all needed files for Zot registry are in place.
@@ -255,16 +301,26 @@ func (z *ZotRegistry) Prepare() error {
 		z.logger.Info("Using existing config file")
 	}
 
-	// Generate docker config json
-	registryHosts := []string{z.GetRegistryDomain(), "localhost:" + z.zotRegistryPort}
-	dockerConfigJson, err := GenerateDockerAuthContentWithAliases(registryHosts, zotRegistryUser, zotRegistryPassword)
-	if err != nil {
-		z.logger.Errorf("failed to generate dockerconfigjson: %s", err.Error())
-		return err
+	if !FileExists(z.dockerConfigJsonPath) {
+		// Generate docker config json
+		registryHosts := []string{z.GetRegistryDomain(), "localhost:" + z.zotRegistryPort}
+		dockerConfigJson, err := GenerateDockerAuthContentWithAliases(registryHosts, zotRegistryUser, zotRegistryPassword)
+		if err != nil {
+			z.logger.Errorf("failed to generate dockerconfigjson: %s", err.Error())
+			return err
+		}
+		if err := os.WriteFile(z.dockerConfigJsonPath, dockerConfigJson, 0644); err != nil {
+			z.logger.Errorf("failed to save dockerconfigjson: %s", err.Error())
+			return err
+		}
 	}
-	if err := os.WriteFile(z.dockerConfigJsonPath, dockerConfigJson, 0644); err != nil {
-		z.logger.Errorf("failed to save dockerconfigjson: %s", err.Error())
-		return err
+
+	if strings.ToLower(containerTool) == "podman" {
+		// To make podman trust self signed cert, we need to copy the CA cert into
+		// ~/.config/containers/certs.d/localhost:5000/ca-cert-file-name.crt
+		if err := z.ensureZotCaCertInPodmanConfig(executor); err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -357,6 +413,49 @@ func (z *ZotRegistry) createHtpasswdFile(executor *cliWrappers.CliExecutor) erro
 	htpasswdContent := strings.TrimSpace(stdout)
 	if err := os.WriteFile(z.zotHtpasswdPath, []byte(htpasswdContent), 0644); err != nil {
 		z.logger.Errorf("failed to create htpasswd file: %s", err.Error())
+		return err
+	}
+	return nil
+}
+
+// ensureZotCaCertInPodmanConfig puts the generated self-signed CA cert file into
+// ~/.config/containers/certs.d/localhost:5000/ directory
+// to make podman trust the Zot https endpoint with the self-signed certificate.
+// Should be used with Podman only.
+func (z *ZotRegistry) ensureZotCaCertInPodmanConfig(executor *cliWrappers.CliExecutor) error {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	zotRegistryPodmanCertsDir := path.Join(homeDir, ".config/containers/certs.d", z.GetRegistryDomain())
+	if err := EnsureDirectory(zotRegistryPodmanCertsDir); err != nil {
+		return err
+	}
+
+	zotRegistryPodmanCaCertPath := path.Join(zotRegistryPodmanCertsDir, zotRootCertFileName)
+
+	if FileExists(zotRegistryPodmanCaCertPath) {
+		// Check if the cert in Podman config is the same as teh cert in Zot config
+
+		zotCaCertFileStat, err := os.Stat(z.rootCertPath)
+		if err != nil {
+			return fmt.Errorf("failed to stat Zot CA cert file: %w", err)
+		}
+		zotCaCertInPodmanConfFileStat, err := os.Stat(zotRegistryPodmanCaCertPath)
+		if err != nil {
+			return fmt.Errorf("failed to stat Zot CA cert file in Podman config dir: %w", err)
+		}
+		// Compare modification times
+		if zotCaCertInPodmanConfFileStat.ModTime().After(zotCaCertFileStat.ModTime()) {
+			z.logger.Info("Using existing Zot CA cert in Podman config directory")
+			return nil
+		}
+	}
+
+	// Copy the CA cert into Podman config directory.
+	if stdout, stderr, _, err := executor.Execute("cp", z.rootCertPath, zotRegistryPodmanCaCertPath); err != nil {
+		z.logger.Errorf("failed to copy root CA cert into podman config dir: %s\n%s", stdout, stderr)
 		return err
 	}
 	return nil

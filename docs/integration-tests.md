@@ -35,7 +35,7 @@ Available integration tests settings:
 		"showLog": true
     }
    ```
- - `LocalRegistry`: whether to use local conteinerazed registry or quay.io.
+ - `LocalRegistry`: whether to use local containerized registry or quay.io.
    See [image registry for integration tests](#image-registry-for-integration-tests) section for more details.
 
 Also, there are the following environment variables:
@@ -80,7 +80,7 @@ func RunApplyTags(myCommandParams *MyCommandParams, ...) (*MyCommandResults, err
 
 	// Container settings before start, like adding volumes, environment variables, ports, etc.
     container.AddEnv("MY_ENV_VAR", "value")
-    container.AddVolume("/host/path", "/container/path")
+    container.AddVolumeWithOptions("/host/path", "/container/path", "z")
 
     // Run the container
 	err = container.Start()
@@ -126,7 +126,7 @@ func RunApplyTags(myCommandParams *MyCommandParams, ...) (*MyCommandResults, err
 
 ```
 
-Another reason to have the common part is to simplify whole pipeline testing.
+Another reason to have the common run function part is to simplify whole pipeline testing.
 For more details, see [pipeline integration testing](#integration-test-structure-for-a-pipeline).
 
 ### Integration test cases for a command
@@ -147,9 +147,7 @@ func TestMyCommand(t *testing.T) {
 		fmt.Printf("Test Failure: %s\n", message)
 		t.FailNow() // Terminate the test immediately
 	})
-
-	err := CompileKonfluxCli()
-	Expect(err).ToNot(HaveOccurred(), "failed to compile CLI")
+	var err error
 
 	// Prepare test environment.
     // Includes starting other containers (e.g. registry, git),
@@ -196,7 +194,8 @@ func TestMyCommand(t *testing.T) {
 ## Integration test structure for a pipeline
 
 When each command used in the pipeline has own [common run function](#common-run-function-for-a-command),
-an integration test for a pipeline will look very similar to an integration test case.
+integration tests for whole pipeline can be created.
+They will look very similar to an integration test case for a command.
 The only difference is that instead of calling one command run function, they will be called sequentially,
 sometimes passing one command results as arguments to other command results.
 ```golang
@@ -205,9 +204,7 @@ func TestPipeline(t *testing.T) {
 		fmt.Printf("Test Failure: %s\n", message)
 		t.FailNow() // Terminate the test immediately
 	})
-
-	err := CompileKonfluxCli()
-	Expect(err).ToNot(HaveOccurred(), "failed to compile CLI")
+	var err error
 
 	// Prepare test environment
 	// Setup image registry
@@ -282,7 +279,7 @@ Currently, the following registries are supported:
 - local [Zot](https://zotregistry.dev) registry running in a container
 - [quay.io](https://quay.io/)
 
-Whatever registry is used for tests, the actial implementation is incapsulated by `ImageRegistry` interface.
+Whatever registry is used for tests, the actual implementation is encapsulated by `ImageRegistry` interface.
 To change the registry, use `LocalRegistry` [test option](#integration-tests-settings).
 
 ### Using local Zot registry for integration tests
@@ -294,10 +291,10 @@ However, in order to do automatic registry configuration, the following tools ha
 
 The configuration data is saved under `zotdata` directory within `integration_tests` directory.
 Typically, `zotdata` contains:
-- `ca.crt` self signed root certifacte that should be added as trusted to other tools using the registry.
-- `ca.key` generated private key used to create the root certifacte.
+- `ca.crt` self signed root certificate that should be added as trusted to other tools using the registry.
+- `ca.key` generated private key used to create the root certificate.
 - `server.crt` descendent certificate used in Zot server.
-- `server.key` privet key used by Zot server to secure connections.
+- `server.key` private key used by Zot server to secure connections.
 - `zot-config.json` Zot registry configuration file.
 - `htpasswd` auth file for Zot registry user.
 - `config.json` docker config json that has credentials to push into Zot registry.
@@ -305,11 +302,11 @@ Typically, `zotdata` contains:
 
 ### Using quay.io for integration tests
 
-To use `quay.io` as registry for test, provide the following environaments variables:
+To use `quay.io` as registry for test, provide the following environments variables:
 - `QUAY_NAMESPACE`, for example `username` or `my-org`
 - `QUAY_ROBOT_NAME`
 - `QUAY_ROBOT_TOKEN`
 
-Also, image repository for tests should be created before the test run and **be public**.
+Also, image repository for tests should be created before the tests run and **be public**.
 Note, one can start a test which will create the image repository (private by default) and fail (unless run in debug mode),
 then the user needs to switch only the visibility in the image repository settings.

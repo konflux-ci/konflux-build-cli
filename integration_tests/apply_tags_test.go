@@ -27,7 +27,7 @@ func RunApplyTags(applyTagsParams ApplyTagsParams, imageRegistry ImageRegistry) 
 	container := NewBuildCliRunnerContainer("apply-tags", ApplyTagsImage)
 
 	if imageRegistry.IsLocal() {
-		container.AddVolume(imageRegistry.GetCaCertPath(), "/etc/pki/tls/certs/ca-custom-bundle.crt")
+		container.AddVolumeWithOptions(imageRegistry.GetCaCertPath(), "/etc/pki/tls/certs/ca-custom-bundle.crt", "z")
 	}
 
 	err = container.Start()
@@ -65,9 +65,7 @@ func TestApplyTags(t *testing.T) {
 		fmt.Printf("Test Failure: %s\n", message)
 		t.FailNow() // Terminate the test immediately
 	})
-
-	err := CompileKonfluxCli()
-	Expect(err).ToNot(HaveOccurred(), "failed to compile CLI")
+	var err error
 
 	// Setup registry
 	imageRegistry := NewImageRegistry()

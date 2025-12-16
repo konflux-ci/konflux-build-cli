@@ -59,7 +59,7 @@ func NewTestRunnerContainer(name, image string) *TestRunnerContainer {
 func NewBuildCliRunnerContainer(name, image string) *TestRunnerContainer {
 	container := NewTestRunnerContainer(name, image)
 
-	container.AddVolume(GetCliBinPath(), path.Join("/usr/bin/", KonfluxBuildCli))
+	container.AddVolumeWithOptions(GetCliBinPath(), path.Join("/usr/bin/", KonfluxBuildCli), "z")
 	container.AddNetwork("host")
 	if Debug {
 		container.AddPort("2345", "2345")
@@ -94,6 +94,11 @@ func (c *TestRunnerContainer) AddEnv(key, value string) {
 func (c *TestRunnerContainer) AddVolume(hostPath, containerPath string) {
 	c.ensureContainerNotStarted()
 	c.volumes[hostPath] = containerPath
+}
+
+func (c *TestRunnerContainer) AddVolumeWithOptions(hostPath, containerPath, mountOptions string) {
+	c.ensureContainerNotStarted()
+	c.volumes[hostPath] = containerPath + ":" + mountOptions
 }
 
 func (c *TestRunnerContainer) AddPort(hostPort, containerPort string) {
