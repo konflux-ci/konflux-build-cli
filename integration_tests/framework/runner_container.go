@@ -128,7 +128,7 @@ func (c *TestRunnerContainer) ContainerExists(isRunning bool) (bool, error) {
 	return len(stdout) > 0, nil
 }
 
-func (c *TestRunnerContainer) checkContainer() error {
+func (c *TestRunnerContainer) ensureDoesNotExist() error {
 	existRunning, err := c.ContainerExists(true)
 	if err != nil {
 		return err
@@ -148,7 +148,7 @@ func (c *TestRunnerContainer) checkContainer() error {
 }
 
 func (c *TestRunnerContainer) Start() error {
-	if err := c.checkContainer(); err != nil {
+	if err := c.ensureDoesNotExist(); err != nil {
 		return err
 	}
 

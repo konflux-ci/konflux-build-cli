@@ -298,6 +298,7 @@ To change the registry, use `LocalRegistry` [test option](#integration-tests-set
 ### Using local Zot registry for integration tests
 
 Using local Zot registry doesn't require any manual configuration.
+The test framework will do everything automatically.
 However, in order to do automatic registry configuration, the following tools have to be available in the system:
 - `htpasswd`
 - `openssl`
@@ -312,6 +313,10 @@ Typically, `zotdata` contains:
 - `htpasswd` auth file for Zot registry user.
 - `config.json` docker config json that has credentials to push into Zot registry.
   Use `DOCKER_CONFIG=./integration_tests/zotdata/ docker push/pull localhost:5000/my-image` to access the registry.
+
+In case of using `podman`, during the automatic Zot registry configuration,
+the test framework will copy the generated self-signed CA certificate into `podman`'s config directory:
+`~/.config/containers/certs.d/` under `localhost:5000` folder.
 
 ### Using quay.io for integration tests
 
