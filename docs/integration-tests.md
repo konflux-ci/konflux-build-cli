@@ -17,14 +17,26 @@ Integration tests are located under `integration_tests` directory.
 
 To run specific test from terminal execute:
 ```bash
-go test -run ^TestMyCommand$ ./integration_tests
+go test -timeout 100s -run ^TestMyCommand$ ./integration_tests
 ```
 or use your IDE to run or debug one.
 
 To run all integration tests execute:
 ```bash
-go test ./integration_tests
+go test -timeout 100s ./integration_tests
 ```
+
+If an IDE is used to run inetgration tests, make sure to configure tests timeout.
+For example, in case of VSCode, go to setting and change `Go: Test Timeout`
+or create / modify config file `.vscode/settings.json`:
+```json
+{
+    "go.testTimeout": "600s"
+}
+```
+
+Note, you need to set big timeout in case of just running a test but debugging the CLI inside container.
+In such situation better to debug both test (to avoid timeouts) and the CLI itself.
 
 ## Integration tests settings
 
