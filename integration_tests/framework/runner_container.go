@@ -272,7 +272,11 @@ func (c *TestRunnerContainer) debugBuildCli(cliArgs ...string) error {
 func getDlvPath() (string, error) {
 	goPath, isSet := os.LookupEnv("GOPATH")
 	if !isSet {
-		goPath = "~/go"
+		homeDir, err := os.UserHomeDir()
+		if err != nil {
+			return "", err
+		}
+		goPath = path.Join(homeDir, "go")
 	}
 	dlvPath := path.Join(goPath, "bin", "dlv")
 	if !FileExists(dlvPath) {
