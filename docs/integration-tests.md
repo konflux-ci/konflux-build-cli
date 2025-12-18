@@ -38,6 +38,15 @@ or create / modify config file `.vscode/settings.json`:
 Note, you need to set big timeout in case of just running a test but debugging the CLI inside container.
 In such situation better to debug both test (to avoid timeouts) and the CLI itself.
 
+If golang caches the test results with a message like:
+```
+ok  	github.com/konflux-ci/konflux-build-cli/integration_tests	(cached)
+```
+and it's needed to rerun the tests anyway, add `-count=1` argument to the test command:
+```
+go test -count=1 ./integration_tests
+```
+
 ## Integration tests settings
 
 There is `integration_tests/framework/settings.go` that holds global integration tests settings.
