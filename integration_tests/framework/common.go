@@ -27,7 +27,12 @@ var (
 )
 
 func init() {
-	cliBinPath = path.Join(KonfluxBuildCliCompileDir, KonfluxBuildCli)
+	compileDir, err := filepath.EvalSymlinks(KonfluxBuildCliCompileDir)
+	if err != nil {
+		fmt.Printf("failed to resolve symlinks for %s: %s\n", KonfluxBuildCliCompileDir, err.Error())
+		os.Exit(2)
+	}
+	cliBinPath = path.Join(compileDir, KonfluxBuildCli)
 
 	// Init logger
 	logLevel := "info"
@@ -118,6 +123,10 @@ func EnsureDirectory(dirPath string) error {
 // and returns full path to the creted directory.
 func CreateTempDir(prefix string) (string, error) {
 	tmpDir, err := os.MkdirTemp("", prefix)
+	if err != nil {
+		return "", err
+	}
+	tmpDir, err = filepath.EvalSymlinks(tmpDir)
 	if err != nil {
 		return "", err
 	}
