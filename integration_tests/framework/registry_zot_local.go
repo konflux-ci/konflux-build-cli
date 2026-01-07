@@ -67,6 +67,20 @@ func NewZotRegistry() ImageRegistry {
 		log.Fatal(err)
 	}
 
+	zotRegistryStorageHostDirAbsolutePath, err := filepath.Abs(zotRegistryStorageHostDir)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	if err := EnsureDirectory(zotRegistryStorageHostDirAbsolutePath); err != nil {
+		log.Fatal(err)
+	}
+
+	zotRegistryStorageHostDirAbsolutePath, err = filepath.EvalSymlinks(zotRegistryStorageHostDirAbsolutePath)
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	zotRegistryPort := os.Getenv("ZOT_REGISTRY_PORT")
 	if zotRegistryPort == "" {
 		zotRegistryPort = zotRegistryDefaultPort
@@ -90,7 +104,7 @@ func NewZotRegistry() ImageRegistry {
 		zotKeyPath:            path.Join(zotConfigDataDirAbsolutePath, zotKeyFileName),
 		zotCertPath:           path.Join(zotConfigDataDirAbsolutePath, zotCertFileName),
 		dockerConfigJsonPath:  path.Join(zotConfigDataDirAbsolutePath, "config.json"),
-		zotRegistryStorageDir: path.Join(zotRegistryStorageHostDir, strconv.FormatInt(time.Now().UnixMilli(), 10)),
+		zotRegistryStorageDir: path.Join(zotRegistryStorageHostDirAbsolutePath, strconv.FormatInt(time.Now().UnixMilli(), 10)),
 	}
 }
 
