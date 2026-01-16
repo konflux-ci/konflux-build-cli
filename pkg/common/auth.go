@@ -27,10 +27,17 @@ type AuthEntry struct {
 }
 
 // SelectRegistryAuth selects registry authentication credential from an authentication file.
+//
+// The format of authentication file, like ~/.docker/config.json, is not well defined. Some clients
+// allow the specification of repository specific tokens, e.g. buildah and kubernetes, while others
+// only allow registry specific tokens, e.g. oras. SelectRegistryAuth serves as an adapter to allow
+// repository specific tokens for clients that do not support it.
+//
 // Arguments:
 //   - imageRef: Image reference like registry.io/namespace/image:tag. It can be an image repository,
 //     or a full reference with either tag, digest or both.
 //   - authFilePath: Path to authentication file.
+//
 // Returns an object of RegistryAuth and an error.
 func SelectRegistryAuth(imageRef string, authFilePath string) (*RegistryAuth, error) {
 	imageRepo := GetImageName(imageRef)
@@ -64,12 +71,6 @@ func SelectRegistryAuthFromDefaultAuthFile(imageRef string) (*RegistryAuth, erro
 // findAuth finds out authentication credential string by image repository.
 // Argument registryAuths contains loaded authentication credentials loaded from authfile.
 // If nothing is found, returns an empty string.
-//
-// Quotation from the original script select-oci-auth.sh:
-// The format of ~/.docker/config.json is not well defined. Some clients allow the specification of
-// repository specific tokens, e.g. buildah and kubernetes, while others only allow registry specific
-// tokens, e.g. oras. This script serves as an adapter to allow repository specific tokens for
-// clients that do not support it.
 func findAuth(registryAuths *RegistryAuths, imageRepo string) string {
 	authKey := imageRepo
 	for {
