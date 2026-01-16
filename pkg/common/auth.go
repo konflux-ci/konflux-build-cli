@@ -9,8 +9,8 @@ import (
 )
 
 const (
-	REGISTRY_DOCKER_IO       = "docker.io"
-	REGISTRY_INDEX_DOCKER_IO = "https://index.docker.io/v1/"
+	registryDockerIO      = "docker.io"
+	registryIndexDockerIO = "https://index.docker.io/v1/"
 )
 
 type RegistryAuth struct {
@@ -60,12 +60,18 @@ func SelectRegistryAuth(imageRef string, authFilePath ...string) (*RegistryAuth,
 	}, nil
 }
 
-// findAuth finds out authentication credential and return the raw string.
+// findAuth finds out authentication credential string by image repository.
+// Argument registryAuths contains loaded authentication credentials loaded from authfile.
 // If nothing is found, returns an empty string.
+//
+// Quotation from the original script select-oci-auth.sh:
+// The format of ~/.docker/config.json is not well defined. Some clients allow the specification of
+// repository specific tokens, e.g. buildah and kubernetes, while others only allow registry specific
+// tokens, e.g. oras. This script serves as an adapter to allow repository specific tokens for
+// clients that do not support it.
 func findAuth(registryAuths *RegistryAuths, imageRepo string) string {
 	authKey := imageRepo
 	for {
-		fmt.Println(":))))", authKey)
 		if authEntry, exists := registryAuths.Auths[authKey]; exists {
 			return authEntry.Auth
 		}
@@ -75,9 +81,10 @@ func findAuth(registryAuths *RegistryAuths, imageRepo string) string {
 		}
 		authKey = authKey[:index]
 	}
+	// When log into dockerhub, oras-login writes https://index.docker.io/v1/ as registry into authfile.
 	registry := strings.Split(imageRepo, "/")[0]
-	if registry == REGISTRY_DOCKER_IO {
-		if authEntry, exists := registryAuths.Auths[REGISTRY_INDEX_DOCKER_IO]; exists {
+	if registry == registryDockerIO {
+		if authEntry, exists := registryAuths.Auths[registryIndexDockerIO]; exists {
 			return authEntry.Auth
 		}
 	}

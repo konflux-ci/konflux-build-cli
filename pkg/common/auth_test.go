@@ -2,7 +2,6 @@ package common
 
 import (
 	"encoding/json"
-	"fmt"
 	"math/rand"
 	"os"
 	"path/filepath"
@@ -91,9 +90,6 @@ func TestSelectAuth(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.imageRef, func(t *testing.T) {
 			registryAuth, err := SelectRegistryAuth(tc.imageRef, authFile)
-			if err != nil {
-				fmt.Println("-->", err.Error())
-			}
 
 			if tc.expectedToken == "err" {
 				if err == nil {
@@ -134,13 +130,13 @@ func TestFallbackSelectionForDockerIO(t *testing.T) {
 		return
 	}
 
-	if registryAuth.Registry != REGISTRY_DOCKER_IO {
-		t.Errorf("Token is not selected for registry %s", REGISTRY_DOCKER_IO)
+	if registryAuth.Registry != registryDockerIO {
+		t.Errorf("Token is not selected for registry %s", registryDockerIO)
 		return
 	}
 
 	if registryAuth.Token != indexDockerIOToken {
-		t.Errorf("Token is not selected from registry %s from auth file.", REGISTRY_INDEX_DOCKER_IO)
+		t.Errorf("Token is not selected from registry %s from auth file.", registryIndexDockerIO)
 		return
 	}
 }
