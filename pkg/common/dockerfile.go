@@ -12,7 +12,7 @@ type DockerfileSearchOpts struct {
 	SourceDir string
 	// Build context directory within the source. It defaults to ".".
 	ContextDir string
-	// Dockerfile within the source. It not specified, it is searched in order
+	// Dockerfile within the source. If not specified, it is searched in order
 	// of ./Containerfile and ./Dockerfile. Containerfile takes precedence.
 	Dockerfile string
 }
