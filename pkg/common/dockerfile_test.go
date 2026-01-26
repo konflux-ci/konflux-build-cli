@@ -1,6 +1,7 @@
 package common
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -104,12 +105,14 @@ func TestSearchDockerfileErrorOnEscapingFromSource(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			tc.setup(t, &tc)
 
-			result, err := SearchDockerfile(tc.searchOpts)
+			opts := tc.searchOpts
+			result, err := SearchDockerfile(opts)
 
 			if err == nil {
 				t.Errorf("Expected error for Dockerfile escaped from base directory, but got result: %s", result)
 			}
-			if !strings.Contains(err.Error(), "Dockerfile is outside of the source directory") {
+			errMsg := fmt.Sprintf("Dockerfile %s is not present under source '%s'", opts.Dockerfile, opts.SourceDir)
+			if !strings.Contains(err.Error(), errMsg) {
 				t.Errorf("Expected error message about escaping from source directory, got: %v", err)
 			}
 		})

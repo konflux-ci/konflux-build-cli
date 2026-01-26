@@ -39,30 +39,30 @@ func SearchDockerfile(opts DockerfileSearchOpts) (string, error) {
 		contextDir = "."
 	}
 
-	resolvedSourcePath, err := filepath.EvalSymlinks(opts.SourceDir)
+	actualSourcePath, err := filepath.EvalSymlinks(opts.SourceDir)
 	if err != nil {
 		return "", fmt.Errorf("Error on evaluating symlink for source %s: %w", opts.SourceDir, err)
 	}
-	if !strings.HasSuffix(resolvedSourcePath, "/") {
-		resolvedSourcePath += "/"
+	if !strings.HasSuffix(actualSourcePath, "/") {
+		actualSourcePath += "/"
 	}
 
 	var _search = func(dockerfile string) (string, error) {
-		contextDir = filepath.Join(resolvedSourcePath, contextDir)
+		contextDir = filepath.Join(actualSourcePath, contextDir)
 		possibleDockerfiles := []string{
 			filepath.Join(contextDir, dockerfile),
-			filepath.Join(resolvedSourcePath, dockerfile),
+			filepath.Join(actualSourcePath, dockerfile),
 		}
 		for _, dockerfilePath := range possibleDockerfiles {
-			if realPath, err := filepath.EvalSymlinks(dockerfilePath); err != nil {
+			if actualDockerfilePath, err := filepath.EvalSymlinks(dockerfilePath); err != nil {
 				if !os.IsNotExist(err) {
 					return "", fmt.Errorf("Error on evaluating symlink for Dockerfile path %s: %w", dockerfilePath, err)
 				}
 			} else {
-				if !strings.HasPrefix(realPath, resolvedSourcePath) {
-					return "", fmt.Errorf("Dockerfile is outside of the source directory '%s'.", realPath)
+				if !strings.HasPrefix(actualDockerfilePath, actualSourcePath) {
+					return "", fmt.Errorf("Dockerfile %s is not present under source '%s'.", dockerfile, opts.SourceDir)
 				}
-				return realPath, nil
+				return actualDockerfilePath, nil
 			}
 		}
 		// No Dockerfile is found.
