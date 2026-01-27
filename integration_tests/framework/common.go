@@ -12,6 +12,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/onsi/gomega"
+
 	cliWrappers "github.com/konflux-ci/konflux-build-cli/pkg/cliwrappers"
 	l "github.com/konflux-ci/konflux-build-cli/pkg/logger"
 )
@@ -289,4 +291,12 @@ func GenerateUniqueTag(t *testing.T) string {
 	}
 	randomSuffix := hex.EncodeToString(randomBytes)
 	return fmt.Sprintf("%s-%s", t.Name(), randomSuffix)
+}
+
+// Registers the Gomega failure handler for the test.
+func SetupGomega(t *testing.T) {
+	gomega.RegisterFailHandler(func(message string, callerSkip ...int) {
+		fmt.Printf("Test Failure: %s\n", message)
+		t.FailNow()
+	})
 }

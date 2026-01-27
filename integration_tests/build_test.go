@@ -129,14 +129,6 @@ func runBuild(container *TestRunnerContainer, buildParams BuildParams) error {
 	return nil
 }
 
-// Registers the Gomega failure handler for the test.
-func setupGomega(t *testing.T) {
-	RegisterFailHandler(func(message string, callerSkip ...int) {
-		fmt.Printf("Test Failure: %s\n", message)
-		t.FailNow()
-	})
-}
-
 // Creates a build container and registers cleanup.
 func setupBuildContainerWithCleanup(t *testing.T, buildParams BuildParams, imageRegistry ImageRegistry) *TestRunnerContainer {
 	container, err := setupBuildContainer(buildParams, imageRegistry)
@@ -181,7 +173,7 @@ func writeContainerfile(contextDir, content string) {
 }
 
 func TestBuild_BuildOnly(t *testing.T) {
-	setupGomega(t)
+	SetupGomega(t)
 
 	contextDir := setupTestContext(t)
 	writeContainerfile(contextDir, `
@@ -209,7 +201,7 @@ LABEL test.label="build-test"
 }
 
 func TestBuild_BuildAndPush(t *testing.T) {
-	setupGomega(t)
+	SetupGomega(t)
 
 	imageRegistry := setupImageRegistry(t)
 
@@ -243,7 +235,7 @@ LABEL %s="1h"
 }
 
 func TestBuild_WithExtraArgs(t *testing.T) {
-	setupGomega(t)
+	SetupGomega(t)
 
 	contextDir := setupTestContext(t)
 
@@ -277,7 +269,7 @@ LABEL test.label="extra-args-test"
 
 // Verify that a simple build with a RUN instruction passes
 func TestBuild_UsesRunInstruction(t *testing.T) {
-	setupGomega(t)
+	SetupGomega(t)
 
 	contextDir := setupTestContext(t)
 	writeContainerfile(contextDir, fmt.Sprintf(`
