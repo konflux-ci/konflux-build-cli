@@ -25,39 +25,41 @@ const (
 type TestRunnerContainer struct {
 	ReplaceEntrypoint bool
 
-	name       string
-	image      string
-	workdir    string
-	privileged bool
-	env        map[string]string
-	volumes    map[string]string
-	ports      map[string]string
-	networks   []string
-	results    map[string]string
+	name            string
+	image           string
+	workdir         string
+	privileged      bool
+	env             map[string]string
+	volumes         map[string]string
+	ports           map[string]string
+	networks        []string
+	results         map[string]string
+	dockerConfigDir string
 
 	executor cliWrappers.CliExecutorInterface
 
 	containerStatus ContainerStatus
 }
 
-func NewTestRunnerContainer(name, image string) *TestRunnerContainer {
+func NewTestRunnerContainer(name, image, dockerConfigDir string) *TestRunnerContainer {
 	return &TestRunnerContainer{
 		ReplaceEntrypoint: true,
 
-		executor: cliWrappers.NewCliExecutor(),
-		name:     name,
-		image:    image,
-		env:      make(map[string]string),
-		volumes:  make(map[string]string),
-		ports:    make(map[string]string),
-		results:  make(map[string]string),
+		executor:        cliWrappers.NewCliExecutor(),
+		name:            name,
+		image:           image,
+		env:             make(map[string]string),
+		volumes:         make(map[string]string),
+		ports:           make(map[string]string),
+		results:         make(map[string]string),
+		dockerConfigDir: dockerConfigDir,
 	}
 }
 
 // NewBuildCliRunnerContainer creates NewTestRunnerContainer
 // with additional settings for running the Build CLI.
-func NewBuildCliRunnerContainer(name, image string) *TestRunnerContainer {
-	container := NewTestRunnerContainer(name, image)
+func NewBuildCliRunnerContainer(name, image, dockerConfigDir string) *TestRunnerContainer {
+	container := NewTestRunnerContainer(name, image, dockerConfigDir)
 
 	container.AddVolumeWithOptions(GetCliBinPath(), path.Join("/usr/bin/", KonfluxBuildCli), "z")
 	container.AddNetwork("host")
@@ -94,6 +96,17 @@ func (c *TestRunnerContainer) AddEnv(key, value string) {
 func (c *TestRunnerContainer) AddVolume(hostPath, containerPath string) {
 	c.ensureContainerNotStarted()
 	c.volumes[hostPath] = containerPath
+}
+
+type ContainerVolumeOption struct {
+	HostPath      string
+	ContainerPath string
+	MountOptions  string
+}
+
+func (c *TestRunnerContainer) AddVolumeWithOptions2(option ContainerVolumeOption) {
+	c.ensureContainerNotStarted()
+	c.volumes[option.HostPath] = option.ContainerPath + ":" + option.MountOptions
 }
 
 func (c *TestRunnerContainer) AddVolumeWithOptions(hostPath, containerPath, mountOptions string) {
@@ -311,7 +324,10 @@ func (c *TestRunnerContainer) InjectDockerAuth(registry, login, password string)
 	}
 	defer func() { os.Remove(filePath) }()
 
-	dockerDir := "/root/.docker"
+	dockerDir := c.dockerConfigDir
+	if dockerDir == "" {
+		dockerDir = "/root/.docker"
+	}
 	if err := c.executeBuildCli("mkdir", "-p", dockerDir); err != nil {
 		return err
 	}

@@ -92,7 +92,7 @@ func NewZotRegistry() ImageRegistry {
 	}
 
 	return &ZotRegistry{
-		container: NewTestRunnerContainer(zotRegistryContainerName, zotRegistryImage),
+		container: NewTestRunnerContainer(zotRegistryContainerName, zotRegistryImage, ""),
 		logger:    l.Logger.WithField("logger", "zot"),
 
 		zotRegistryPort:       zotRegistryPort,

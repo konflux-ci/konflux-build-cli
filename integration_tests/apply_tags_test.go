@@ -24,7 +24,7 @@ type ApplyTagsParams struct {
 func RunApplyTags(applyTagsParams ApplyTagsParams, imageRegistry ImageRegistry) error {
 	var err error
 
-	container := NewBuildCliRunnerContainer("apply-tags", ApplyTagsImage)
+	container := NewBuildCliRunnerContainer("apply-tags", ApplyTagsImage, "/home/taskuser/.docker")
 
 	if imageRegistry.IsLocal() {
 		container.AddVolumeWithOptions(imageRegistry.GetCaCertPath(), "/etc/pki/tls/certs/ca-custom-bundle.crt", "z")
