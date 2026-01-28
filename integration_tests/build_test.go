@@ -36,7 +36,7 @@ func RunBuild(buildParams BuildParams, imageRegistry ImageRegistry) error {
 	// On macOS, containers run in a Linux VM; overlay storage driver
 	// doesn't work reliably with host volume mounts through the VM
 	if runtime.GOOS != "darwin" {
-		containerStoragePath, err := CreateTempDir("kbc-containers-storage-")
+		containerStoragePath, err := createContainerStorageDir()
 		if err != nil {
 			return err
 		}
@@ -59,7 +59,36 @@ func RunBuild(buildParams BuildParams, imageRegistry ImageRegistry) error {
 	return runBuild(container, buildParams)
 }
 
-// Remove a directory that was mounted as /var/lib/containers into a test runner container
+// Creates a temporary directory for container storage in the repository root,
+// under .test-containers-storage. Returns the full path to the created directory.
+// This directory can be mounted at /var/lib/containers in the test runner container.
+//
+// Why put the directory in the repository root:
+//   - The directory can't be in /tmp, because that is usually a tmpfs which doesn't
+//     support all the operations that buildah needs to do with /var/lib/containers.
+//   - The repository root is an obvious choice for a directory that likely isn't in /tmp,
+//     is writable for the current user and doesn't pollute the user's home directory.
+func createContainerStorageDir() (string, error) {
+	repoRoot, err := filepath.Abs(FindRepoRoot())
+	if err != nil {
+		return "", err
+	}
+
+	storageBaseDir := path.Join(repoRoot, ".test-containers-storage")
+	if err := EnsureDirectory(storageBaseDir); err != nil {
+		return "", err
+	}
+
+	tmpDir, err := os.MkdirTemp(storageBaseDir, "storage-")
+	if err != nil {
+		return "", err
+	}
+
+	return tmpDir, nil
+}
+
+// Remove a directory created by createContainerStorageDir,
+// and the parent .test-containers-storage directory if empty.
 func removeContainerStorageDir(containerStoragePath string) error {
 	// 1. 'chmod -R' to ensure write permissions (container storage often includes read-only files)
 	filepath.WalkDir(containerStoragePath, func(path string, d fs.DirEntry, err error) error {
@@ -68,7 +97,16 @@ func removeContainerStorageDir(containerStoragePath string) error {
 		return nil
 	})
 	// 2. 'rm -r'
-	return os.RemoveAll(containerStoragePath)
+	err := os.RemoveAll(containerStoragePath)
+	if err != nil {
+		return err
+	}
+
+	// Try to remove the parent .test-containers-storage directory. Will fail if it's not
+	// empty (e.g. a different test process is running in parallel). This is fine. The last
+	// test process that finishes should clean it up successfully.
+	_ = os.Remove(filepath.Dir(containerStoragePath))
+	return nil
 }
 
 // Creates and starts a container for running builds.
@@ -165,7 +203,8 @@ func TestBuild(t *testing.T) {
 	// On macOS, containers run in a Linux VM; overlay storage driver
 	// doesn't work reliably with host volume mounts through the VM
 	if runtime.GOOS != "darwin" {
-		containerStoragePath := t.TempDir()
+		containerStoragePath, err := createContainerStorageDir()
+		Expect(err).ToNot(HaveOccurred())
 		t.Cleanup(func() { removeContainerStorageDir(containerStoragePath) })
 		commonOpts = append(commonOpts, WithVolumeWithOptions(containerStoragePath, "/var/lib/containers", "z"))
 	}
