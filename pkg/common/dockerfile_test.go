@@ -288,6 +288,28 @@ func TestSearchDockerfile(t *testing.T) {
 			},
 			expectedDockerfile: "/Dockerfile",
 		},
+		{
+			name: "both source and context point to .",
+			searchOpts: DockerfileSearchOpts{
+				SourceDir:  ".",
+				ContextDir: ".",
+				Dockerfile: "dockerfiles/app",
+			},
+			setup: func(t *testing.T, tc *TestCase) {
+				curDir, err := os.Getwd()
+				if err != nil {
+					t.Errorf("Error on getting current working directory: %v", err)
+				}
+				sourceDir := t.TempDir()
+				os.Chdir(sourceDir)
+				t.Cleanup(func() {
+					os.Chdir(curDir)
+				})
+				path := createDir(t, sourceDir, "dockerfiles")
+				writeFile(t, filepath.Join(path, "app"), dockerfileContent)
+			},
+			expectedDockerfile: "/dockerfiles/app",
+		},
 	}
 
 	for _, tc := range testCases {
@@ -297,13 +319,15 @@ func TestSearchDockerfile(t *testing.T) {
 			result, err := SearchDockerfile(tc.searchOpts)
 			if err != nil {
 				t.Errorf("Unexpected error: %v", err)
+				return
 			}
 			if tc.name == "Ignore symlink source directory" {
 				if !strings.HasSuffix(result, "/outside/Dockerfile") {
 					t.Errorf("Expected getting Dockerfile from outside/ directroy, but got: '%s'", result)
 				}
 			} else {
-				relativePath := strings.TrimPrefix(result, tc.searchOpts.SourceDir)
+				absSourceDir, _ := filepath.Abs(tc.searchOpts.SourceDir)
+				relativePath := strings.TrimPrefix(result, absSourceDir)
 				expected := tc.expectedDockerfile
 				if relativePath != expected {
 					t.Errorf("Expected getting Dockerfile %s, but got: '%s'", expected, relativePath)
@@ -335,7 +359,7 @@ func TestSearchDockerfileSourceIsRelativePath(t *testing.T) {
 	if err != nil {
 		t.Errorf("Unexpected error: %v", err)
 	}
-	expected := "source/Dockerfile"
+	expected := filepath.Join(workDir, "source/Dockerfile")
 	if result != expected {
 		t.Errorf("Expected %s, but got %s", expected, result)
 	}

@@ -17,6 +17,16 @@ type DockerfileSearchOpts struct {
 	Dockerfile string
 }
 
+// isRelativeTo returns true if given path is relative to the base
+// path. Otherwise, false is returned.
+func isRelativeTo(path, base string) bool {
+	rel, err := filepath.Rel(base, path)
+	if err != nil {
+		return false
+	}
+	return !strings.HasPrefix(rel, "..")
+}
+
 // SearchDockerfile searches Dockerfile from given source directory.
 //
 // Dockerfile must be present under the source and possibly the specified build context directory.
@@ -39,19 +49,20 @@ func SearchDockerfile(opts DockerfileSearchOpts) (string, error) {
 		contextDir = "."
 	}
 
-	actualSourcePath, err := filepath.EvalSymlinks(opts.SourceDir)
+	absSourceDir, err := filepath.Abs(opts.SourceDir)
 	if err != nil {
-		return "", fmt.Errorf("Error on evaluating symlink for source %s: %w", opts.SourceDir, err)
+		return "", fmt.Errorf("Error :%w", err)
 	}
-	if !strings.HasSuffix(actualSourcePath, "/") {
-		actualSourcePath += "/"
+
+	actualAbsSourcePath, err := filepath.EvalSymlinks(absSourceDir)
+	if err != nil {
+		return "", fmt.Errorf("Error on evaluating symlink for source %s: %w", absSourceDir, err)
 	}
 
 	var _search = func(dockerfile string) (string, error) {
-		contextDir = filepath.Join(actualSourcePath, contextDir)
 		possibleDockerfiles := []string{
-			filepath.Join(contextDir, dockerfile),
-			filepath.Join(actualSourcePath, dockerfile),
+			filepath.Join(actualAbsSourcePath, contextDir, dockerfile),
+			filepath.Join(actualAbsSourcePath, dockerfile),
 		}
 		for _, dockerfilePath := range possibleDockerfiles {
 			if actualDockerfilePath, err := filepath.EvalSymlinks(dockerfilePath); err != nil {
@@ -59,8 +70,8 @@ func SearchDockerfile(opts DockerfileSearchOpts) (string, error) {
 					return "", fmt.Errorf("Error on evaluating symlink for Dockerfile path %s: %w", dockerfilePath, err)
 				}
 			} else {
-				if !strings.HasPrefix(actualDockerfilePath, actualSourcePath) {
-					return "", fmt.Errorf("Dockerfile %s is not present under source '%s'.", dockerfile, opts.SourceDir)
+				if !isRelativeTo(actualDockerfilePath, actualAbsSourcePath) {
+					return "", fmt.Errorf("Dockerfile %s is not present under source '%s'.", dockerfile, actualAbsSourcePath)
 				}
 				return actualDockerfilePath, nil
 			}
