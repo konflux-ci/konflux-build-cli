@@ -81,14 +81,19 @@ func IsKonfluxCliCompiled() bool {
 	return FileExists(cliBinPath)
 }
 
-func CompileKonfluxCli() error {
-	executor := cliWrappers.NewCliExecutor()
-
+func FindRepoRoot() string {
 	// Handle running from root and test folder
 	var mainGoPath = "main.go"
 	if !FileExists(mainGoPath) {
 		mainGoPath = path.Join("..", mainGoPath)
 	}
+	return path.Dir(mainGoPath)
+}
+
+func CompileKonfluxCli() error {
+	executor := cliWrappers.NewCliExecutor()
+
+	var mainGoPath = path.Join(FindRepoRoot(), "main.go")
 
 	os.Setenv("CGO_ENABLED", "0")
 	os.Setenv("GOOS", "linux")
