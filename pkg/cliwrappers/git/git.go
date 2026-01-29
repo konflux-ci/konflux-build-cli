@@ -10,6 +10,7 @@ type CliInterface interface {
 	Init(workdir string) error
 	RemoteAdd(workdir, name, url string) (string, error)
 	FetchWithRefspec(workdir, remote, refspec string, depth int) error
+	Checkout(workdir, ref string) error
 }
 
 var _ CliInterface = &Cli{}

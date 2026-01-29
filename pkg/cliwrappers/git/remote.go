@@ -36,3 +36,12 @@ func (g *Cli) FetchWithRefspec(workdir, remote, refspec string, depth int) error
 	return nil
 }
 
+// Checkout checks out a specific ref (branch, tag, or commit)
+func (g *Cli) Checkout(workdir, ref string) error {
+	_, stderr, exitCode, err := g.Executor.ExecuteInDir(workdir, "git", "checkout", ref)
+	if err != nil || exitCode != 0 {
+		return fmt.Errorf("git checkout failed with exit code %d: %v (stderr: %s)", exitCode, err, stderr)
+	}
+	return nil
+}
+
