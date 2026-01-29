@@ -22,6 +22,17 @@ func (c *GitClone) performClone() error {
 		return fmt.Errorf("git init failed: %w", err)
 	}
 
+	// Set directories to check out if parameter is set
+	if c.Params.SparseCheckoutDirectories != "" {
+		directories, err := parseCSV(c.Params.SparseCheckoutDirectories)
+		if err != nil {
+			return fmt.Errorf("failed to parse sparse-checkout-directories: %w", err)
+		}
+		if err := c.CliWrappers.GitCli.SetSparseCheckout(checkoutDir, directories); err != nil {
+			return err
+		}
+	}
+
 	l.Logger.Infof("Adding remote origin: %s", c.Params.URL)
 	if _, err := c.CliWrappers.GitCli.RemoteAdd(checkoutDir, "origin", c.Params.URL); err != nil {
 		return fmt.Errorf("git remote add failed: %w", err)
