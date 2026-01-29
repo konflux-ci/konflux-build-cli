@@ -427,6 +427,7 @@ func Test_GitClone_performClone(t *testing.T) {
 		_mockGitCli.SubmoduleUpdateFunc = func(workdir string, init bool, depth int, paths []string) error {
 			isSubmoduleUpdateCalled = true
 			g.Expect(init).To(BeTrue())
+			g.Expect(depth).To(Equal(1))
 			g.Expect(paths).To(Equal([]string{"lib", "vendor"}))
 			return nil
 		}
