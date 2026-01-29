@@ -20,6 +20,7 @@ type CliInterface interface {
 	Merge(workdir, fetchHead string) (string, error)
 	SetSparseCheckout(workdir string, directories []string) error
 	SubmoduleUpdate(workdir string, init bool, depth int, paths []string) error
+	FetchTags(workdir string) ([]string, error)
 	Log(workdir, format string, count int) (string, error)
 }
 

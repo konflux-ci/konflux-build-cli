@@ -17,6 +17,36 @@ func (g *Cli) RemoteAdd(workdir, name, url string) (string, error) {
 	return strings.TrimSpace(stdout), nil
 }
 
+// FetchTags fetches all tags from the remote and returns the list of tags.
+func (g *Cli) FetchTags(workdir string) ([]string, error) {
+	// Fetch tags from remote
+	_, stderr, exitCode, err := g.Executor.ExecuteInDir(workdir, "git", "fetch", "--tags")
+	if err != nil {
+		return nil, fmt.Errorf("git fetch --tags failed: %w (stderr: %s)", err, stderr)
+	}
+	if exitCode != 0 {
+		return nil, fmt.Errorf("git fetch --tags failed with exit code %d (stderr: %s)", exitCode, stderr)
+	}
+
+	// List all tags
+	stdout, stderr, exitCode, err := g.Executor.ExecuteInDir(workdir, "git", "tag", "-l")
+	if err != nil {
+		return nil, fmt.Errorf("git tag -l failed: %w (stderr: %s)", err, stderr)
+	}
+	if exitCode != 0 {
+		return nil, fmt.Errorf("git tag -l failed with exit code %d (stderr: %s)", exitCode, stderr)
+	}
+
+	// Parse tags from output (one per line)
+	tags := []string{}
+	for _, tag := range strings.Split(strings.TrimSpace(stdout), "\n") {
+		if tag != "" {
+			tags = append(tags, tag)
+		}
+	}
+	return tags, nil
+}
+
 // FetchWithRefspec fetches a specific refspec from a remote with optional depth and retry
 func (g *Cli) FetchWithRefspec(workdir, remote, refspec string, depth int, submodules bool, maxAttempts int) error {
 	gitArgs := []string{"fetch"}
