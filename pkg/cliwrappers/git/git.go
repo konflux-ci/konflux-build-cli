@@ -21,6 +21,8 @@ type CliInterface interface {
 	Checkout(workdir, ref string) error
 	// SubmoduleUpdate initializes and updates submodules. Runs: git submodule update --recursive [options]
 	SubmoduleUpdate(workdir string, init bool, depth int, paths []string) error
+	// SetSparseCheckout configures sparse checkout directories. Runs: git sparse-checkout set <dirs...>
+	SetSparseCheckout(workdir string, directories []string) error
 }
 
 var _ CliInterface = &GitCli{}

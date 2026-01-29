@@ -18,3 +18,35 @@ func (g *GitCli) Init(workdir string) error {
 	}
 	return nil
 }
+
+// SetSparseCheckout configures sparse checkout for the given directories.
+// Runs: git config --local core.sparseCheckout true && git sparse-checkout set <directories...>
+func (g *GitCli) SetSparseCheckout(workdir string, directories []string) error {
+	gitLog.Debugf("Configuring sparse checkout: %v", directories)
+	if len(directories) == 0 {
+		return fmt.Errorf("directories parameter empty")
+	}
+
+	// Enable sparse checkout
+	if err := g.ConfigLocal(workdir, "core.sparseCheckout", "true"); err != nil {
+		return fmt.Errorf("failed to enable sparse checkout: %w", err)
+	}
+
+	// Write sparse checkout patterns using git sparse-checkout set
+	args := append([]string{"sparse-checkout", "set"}, directories...)
+	_, stderr, exitCode, err := g.Executor.ExecuteInDir(workdir, "git", args...)
+	if err != nil || exitCode != 0 {
+		return fmt.Errorf("failed to set sparse checkout directories: %v (stderr: %s)", err, stderr)
+	}
+	return nil
+}
+
+// ConfigLocal sets a git config value locally in the repository.
+func (g *GitCli) ConfigLocal(workdir, key, value string) error {
+	gitArgs := []string{"config", "--local", key, value}
+	_, stderr, exitCode, err := g.Executor.ExecuteInDir(workdir, "git", gitArgs...)
+	if err != nil || exitCode != 0 {
+		return fmt.Errorf("git config failed with exit code %d: %v (stderr: %s)", exitCode, err, stderr)
+	}
+	return nil
+}
