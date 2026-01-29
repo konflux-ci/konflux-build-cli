@@ -76,6 +76,11 @@ func (c *GitClone) Run() error {
 		}
 	}
 
+	if c.Params.EnableSymlinkCheck {
+		if err := c.checkSymlinks(c.getCheckoutDir()); err != nil {
+			return err
+		}
+	}
 	return c.outputResults()
 }
 
