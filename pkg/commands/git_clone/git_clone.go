@@ -87,6 +87,13 @@ func (c *GitClone) Run() error {
 	if err := c.gatherCommitInfo(); err != nil {
 		return err
 	}
+
+	if c.Params.FetchTags {
+		if _, err := c.CliWrappers.GitCli.FetchTags(c.getCheckoutDir()); err != nil {
+			return err
+		}
+	}
+
 	return c.outputResults()
 }
 

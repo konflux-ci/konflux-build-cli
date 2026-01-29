@@ -31,6 +31,8 @@ type CliInterface interface {
 	SetSparseCheckout(workdir string, directories []string) error
 	// SubmoduleUpdate initializes and updates submodules. Runs: git submodule update --recursive [options]
 	SubmoduleUpdate(workdir string, init bool, depth int, paths []string) error
+	// FetchTags fetches all tags from the remote. Runs: git fetch --tags
+	FetchTags(workdir string) ([]string, error)
 	// Log returns formatted git log output. Runs: git log [--pretty=<format>] [-N]
 	Log(workdir, format string, count int) (string, error)
 }
