@@ -38,3 +38,33 @@ func (g *Cli) SetSparseCheckout(workdir, sparseCheckoutDirectories string) error
 	}
 	return nil
 }
+
+// ConfigLocal sets a git config value locally in the repository.
+func (g *Cli) ConfigLocal(workdir, key, value string) error {
+	gitArgs := []string{"config", "--local", key, value}
+	_, stderr, exitCode, err := g.Executor.ExecuteInDir(workdir, "git", gitArgs...)
+	if err != nil {
+		return fmt.Errorf("git config failed with exit code %d: %v (stderr: %s)", exitCode, err, stderr)
+	}
+	return nil
+}
+
+func (g *Cli) Commit(workdir, targetBranch, remote, resultSHA string) (string, error) {
+	gitArgs := []string{"commit", "-m", fmt.Sprintf("Merge branch '%s' from %s into %s", targetBranch, remote, resultSHA)}
+
+	stdout, stderr, exitCode, err := g.Executor.ExecuteInDir(workdir, "git", gitArgs...)
+	if err != nil {
+		return "", fmt.Errorf("git commit failed with exit code %d: %v (stderr: %s)", exitCode, err, stderr)
+	}
+	return strings.TrimSpace(stdout), nil
+}
+
+func (g *Cli) Merge(workdir, fetchHead string) (string, error) {
+	gitArgs := []string{"merge", fetchHead, "--no-commit", "--no-ff", "--allow-unrelated-histories"}
+
+	stdout, stderr, exitCode, err := g.Executor.ExecuteInDir(workdir, "git", gitArgs...)
+	if err != nil {
+		return "", fmt.Errorf("git merge failed with exit code %d: %v (stderr: %s)", exitCode, err, stderr)
+	}
+	return strings.TrimSpace(stdout), nil
+}
