@@ -2,6 +2,7 @@ package git_clone
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 
 	"github.com/konflux-ci/konflux-build-cli/pkg/cliwrappers"
@@ -20,6 +21,7 @@ type GitClone struct {
 	CliWrappers   CliWrappers
 	Results       Results
 	ResultsWriter common.ResultsWriterInterface
+	internalDir   string
 }
 
 func New(cmd *cobra.Command) (*GitClone, error) {
@@ -59,8 +61,22 @@ func (c *GitClone) Run() error {
 		return err
 	}
 
+	internalDir, err := os.MkdirTemp("", "git-clone-internal-*")
+	if err != nil {
+		return fmt.Errorf("failed to create internal directory: %w", err)
+	}
+	c.internalDir = internalDir
+	defer func() {
+		_ = os.RemoveAll(c.internalDir)
+		_ = os.Unsetenv("GIT_CONFIG_GLOBAL")
+	}()
+
 	// Set proxy environment variables if there are any
 	if err := c.setupProxies(); err != nil {
+		return err
+	}
+
+	if err := c.setupGitConfig(); err != nil {
 		return err
 	}
 
