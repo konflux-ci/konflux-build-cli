@@ -19,6 +19,8 @@ type CliInterface interface {
 	FetchWithRefspec(workdir, remote, refspec string, depth int, submodules bool, maxAttempts int) error
 	// Checkout checks out a ref. Runs: git checkout <ref>
 	Checkout(workdir, ref string) error
+	// SubmoduleUpdate initializes and updates submodules. Runs: git submodule update --recursive [options]
+	SubmoduleUpdate(workdir string, init bool, depth int, paths []string) error
 }
 
 var _ CliInterface = &GitCli{}

@@ -1,8 +1,10 @@
 package git_clone
 
 import (
+	"encoding/csv"
 	"fmt"
 	"os"
+	"strings"
 
 	l "github.com/konflux-ci/konflux-build-cli/pkg/logger"
 )
@@ -41,6 +43,18 @@ func (c *GitClone) performClone() error {
 	if err := c.CliWrappers.GitCli.Checkout(checkoutDir, checkoutRef); err != nil {
 		return fmt.Errorf("git checkout failed: %w", err)
 	}
+
+	if c.Params.Submodules {
+		l.Logger.Debug("Updating submodules")
+		paths, err := parseCSV(c.Params.SubmodulePaths)
+		if err != nil {
+			return fmt.Errorf("failed to parse submodule-paths: %w", err)
+		}
+		if err := c.CliWrappers.GitCli.SubmoduleUpdate(checkoutDir, true, c.Params.Depth, paths); err != nil {
+			return fmt.Errorf("git submodule update failed: %w", err)
+		}
+	}
+
 	return nil
 }
 
@@ -67,4 +81,14 @@ func (c *GitClone) fetchRevision(checkoutDir string) error {
 		return fmt.Errorf("git fetch failed: %w", err)
 	}
 	return nil
+}
+
+// parseCSV parses a comma-separated string into a slice of trimmed values.
+func parseCSV(input string) ([]string, error) {
+	if input == "" {
+		return nil, nil
+	}
+	reader := csv.NewReader(strings.NewReader(input))
+	reader.TrimLeadingSpace = true
+	return reader.Read()
 }
