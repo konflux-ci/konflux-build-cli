@@ -10,6 +10,7 @@ type CliInterface interface {
 	Init(workdir string) error
 	ConfigLocal(workdir, key, value string) error
 	RevParse(workdir string, ref string, short bool, length int) (string, error)
+	Log(workdir string, format string, count int) (string, error)
 	RemoteAdd(workdir, name, url string) (string, error)
 	FetchWithRefspec(workdir, remote, refspec string, depth int) error
 <<<<<<< Updated upstream
