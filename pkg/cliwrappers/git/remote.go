@@ -17,6 +17,14 @@ func (g *Cli) RemoteAdd(workdir, name, url string) (string, error) {
 	return strings.TrimSpace(stdout), nil
 }
 
+func (g *Cli) FetchTags(workdir string) (string, error) {
+	stdout, stderr, exitCode, err := g.Executor.ExecuteInDir(workdir, "git", "fetch", "--tags")
+	if err != nil {
+		return "", fmt.Errorf("git fetch --tags failed with exit code %d: %v (stderr: %s)", exitCode, err, stderr)
+	}
+	return stdout, nil
+}
+
 // FetchWithRefspec fetches a specific refspec from a remote with optional depth and retry
 func (g *Cli) FetchWithRefspec(workdir, remote, refspec string, depth int, submodules bool, maxAttempts int) error {
 	gitArgs := []string{"fetch"}
