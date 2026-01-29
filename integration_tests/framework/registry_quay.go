@@ -192,3 +192,8 @@ func (q *QuayRegistry) CheckTagExistance(repo string, tag string) (bool, error) 
 	}
 	return false, nil
 }
+
+func (q *QuayRegistry) OutputLogs() error {
+	fmt.Println("logs logs logs ...")
+	return nil
+}

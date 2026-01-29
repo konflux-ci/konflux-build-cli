@@ -521,3 +521,8 @@ func (z *ZotRegistry) ensureZotCaCertInPodmanMachine(executor *cliWrappers.CliEx
 	z.logger.Info("Copied CA cert into podman machine VM")
 	return nil
 }
+
+func (z *ZotRegistry) OutputLogs() error {
+	z.container.OutputLogs()
+	return nil
+}

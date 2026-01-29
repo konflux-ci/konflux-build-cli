@@ -55,6 +55,12 @@ func NewTestRunnerContainer(name, image string) *TestRunnerContainer {
 	}
 }
 
+type ContainerVolumeOption struct {
+	HostPath      string
+	ContainerPath string
+	MountOptions  string
+}
+
 // NewBuildCliRunnerContainer creates NewTestRunnerContainer
 // with additional settings for running the Build CLI.
 func NewBuildCliRunnerContainer(name, image string) *TestRunnerContainer {
@@ -243,6 +249,19 @@ func (c *TestRunnerContainer) ExecuteCommand(command string, args ...string) err
 	return err
 }
 
+func (c *TestRunnerContainer) ExecuteCommand2(command string, args ...string) (string, string, error) {
+	c.ensureContainerRunning()
+	execArgs := []string{"exec", "-t", c.name}
+	execArgs = append(execArgs, command)
+	execArgs = append(execArgs, args...)
+
+	stdout, stderr, _, err := c.executor.ExecuteWithOutput(containerTool, execArgs...)
+	if err != nil {
+		return "", "", err
+	}
+	return stdout, stderr, nil
+}
+
 func (c *TestRunnerContainer) debugBuildCli(cliArgs ...string) error {
 	c.ensureContainerRunning()
 
@@ -298,6 +317,15 @@ func (c *TestRunnerContainer) GetTaskResultValue(resultFilePath string) (string,
 	return resultValue, nil
 }
 
+func (c *TestRunnerContainer) GetHomeDir() (string, error) {
+	execCmd := []string{"exec", "-t", c.name, "bash", "-c", "echo -n $HOME"}
+	homeDir, _, _, err := c.executor.Execute(containerTool, execCmd...)
+	if err != nil {
+		return "", err
+	}
+	return homeDir, nil
+}
+
 func (c *TestRunnerContainer) InjectDockerAuth(registry, login, password string) error {
 	c.ensureContainerRunning()
 
@@ -312,8 +340,7 @@ func (c *TestRunnerContainer) InjectDockerAuth(registry, login, password string)
 	}
 	defer func() { os.Remove(filePath) }()
 
-	execCmd := []string{"exec", "-t", c.name, "bash", "-c", "echo -n $HOME"}
-	homeDir, _, _, err := c.executor.Execute(containerTool, execCmd...)
+	homeDir, err := c.GetHomeDir()
 	if err != nil {
 		return err
 	}
@@ -326,5 +353,14 @@ func (c *TestRunnerContainer) InjectDockerAuth(registry, login, password string)
 		return err
 	}
 
+	return nil
+}
+
+func (c *TestRunnerContainer) OutputLogs() error {
+	stdout, stderr, _, _ := c.executor.Execute(containerTool, "logs", c.name)
+	fmt.Println("stdout:")
+	fmt.Println(stdout)
+	fmt.Println("stderr:")
+	fmt.Println(stderr)
 	return nil
 }

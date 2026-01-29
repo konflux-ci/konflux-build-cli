@@ -28,6 +28,7 @@ type ImageRegistry interface {
 	GetCaCertPath() string
 	// Returns true if given image exists in the test namespace of the registry.
 	CheckTagExistance(imageName, tag string) (bool, error)
+	OutputLogs() error
 }
 
 func GenerateDockerAuthContent(registry, login, password string) ([]byte, error) {
