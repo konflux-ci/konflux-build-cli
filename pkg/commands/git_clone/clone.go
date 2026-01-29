@@ -29,6 +29,18 @@ func (c *GitClone) performClone() error {
 	if err := c.fetchRevision(checkoutDir); err != nil {
 		return err
 	}
+
+	// If both refspec and revision are set, the refspec is fetched first,
+	// then the specific revision is checked out. Otherwise, check out FETCH_HEAD.
+	checkoutRef := "FETCH_HEAD"
+	if c.Params.Refspec != "" && c.Params.Revision != "" {
+		checkoutRef = c.Params.Revision
+	}
+
+	l.Logger.Debugf("Checking out %s", checkoutRef)
+	if err := c.CliWrappers.GitCli.Checkout(checkoutDir, checkoutRef); err != nil {
+		return fmt.Errorf("git checkout failed: %w", err)
+	}
 	return nil
 }
 
