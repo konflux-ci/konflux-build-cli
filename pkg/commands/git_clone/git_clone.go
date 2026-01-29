@@ -69,7 +69,7 @@ func (c *GitClone) Run() error {
 	if err := c.performClone(); err != nil {
 		return err
 	}
-	return nil
+	return c.outputResults()
 }
 
 func (c *GitClone) logParams() {
