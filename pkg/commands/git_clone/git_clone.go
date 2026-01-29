@@ -83,6 +83,10 @@ func (c *GitClone) Run() error {
 			return fmt.Errorf("symlink check: %w", err)
 		}
 	}
+
+	if err := c.gatherCommitInfo(); err != nil {
+		return err
+	}
 	return c.outputResults()
 }
 
