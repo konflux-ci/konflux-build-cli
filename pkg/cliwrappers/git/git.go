@@ -15,6 +15,7 @@ type CliInterface interface {
 	FetchWithRefspec(workdir, remote, refspec string, depth int, submodules bool, maxAttempts int) error
 	Checkout(workdir, ref string) error
 	SubmoduleUpdate(workdir string, init bool, depth int, paths []string) error
+	SetSparseCheckout(workdir string, directories []string) error
 }
 
 var _ CliInterface = &Cli{}
