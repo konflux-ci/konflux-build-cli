@@ -2,14 +2,17 @@ package git_clone
 
 import (
 	"fmt"
+	"path/filepath"
 
+	"github.com/konflux-ci/konflux-build-cli/pkg/cliwrappers"
+	"github.com/konflux-ci/konflux-build-cli/pkg/cliwrappers/git"
 	"github.com/konflux-ci/konflux-build-cli/pkg/common"
 	l "github.com/konflux-ci/konflux-build-cli/pkg/logger"
 	"github.com/spf13/cobra"
 )
 
-type Wrappers struct {
-	// TODO fill
+type CliWrappers struct {
+	GitCli git.CliInterface
 }
 
 type Results struct {
@@ -18,7 +21,7 @@ type Results struct {
 
 type GitClone struct {
 	Params        *Params
-	CliWrappers   Wrappers
+	CliWrappers   CliWrappers
 	Results       Results
 	ResultsWriter common.ResultsWriterInterface
 }
@@ -42,13 +45,13 @@ func New(cmd *cobra.Command) (*GitClone, error) {
 }
 
 func (c *GitClone) initCliWrappers() error {
-	// TODO: create and assign CLI wrappers
-	// executor := cliWrappers.NewCliExecutor()
-	// someCli, err := cliWrappers.NewSomeCli(executor)
-	// if err != nil {
-	//     return err
-	// }
-	// c.CliWrappers.SomeCli = someCli
+	executor := cliwrappers.NewCliExecutor()
+
+	gitCli, err := git.NewCli(executor)
+	if err != nil {
+		return err
+	}
+	c.CliWrappers.GitCli = gitCli
 
 	return nil
 }
@@ -60,7 +63,9 @@ func (c *GitClone) Run() error {
 		return err
 	}
 
-	// TODO: implement command logic
+	if err := c.performClone(); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -103,4 +108,8 @@ func (c *GitClone) validateParams() error {
 		return fmt.Errorf("merge-source-depth must be >= 0 (0 means full history)")
 	}
 	return nil
+}
+
+func (c *GitClone) getCheckoutDir() string {
+	return filepath.Join(c.Params.OutputDir, c.Params.Subdirectory)
 }
