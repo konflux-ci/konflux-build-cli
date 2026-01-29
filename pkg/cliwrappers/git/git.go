@@ -8,6 +8,7 @@ import (
 
 type CliInterface interface {
 	Init(workdir string) error
+	RemoteAdd(workdir, name, url string) (string, error)
 }
 
 var _ CliInterface = &Cli{}
