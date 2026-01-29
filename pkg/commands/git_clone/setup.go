@@ -170,6 +170,53 @@ func (c *GitClone) setupBasicAuth() error {
 	return fmt.Errorf("unknown basic-auth workspace format: expected .git-credentials/.gitconfig or username/password files")
 }
 
+// setupSSH sets up SSH keys from an ssh-directory workspace.
+func (c *GitClone) setupSSH() error {
+	if c.Params.SshDirectory == "" {
+		return nil
+	}
+
+	sshDir := c.Params.SshDirectory
+	userHome := c.Params.UserHome
+
+	// Check if the SSH directory exists
+	if _, err := os.Stat(sshDir); os.IsNotExist(err) {
+		l.Logger.Infof("SSH directory not found: %s", sshDir)
+		return nil
+	}
+
+	l.Logger.Infof("Setting up SSH keys from %s", sshDir)
+
+	destSSHDir := filepath.Join(userHome, ".ssh")
+
+	// Create destination .ssh directory
+	if err := os.MkdirAll(destSSHDir, 0700); err != nil {
+		return fmt.Errorf("failed to create .ssh directory: %w", err)
+	}
+
+	// Copy all files from source to destination
+	entries, err := os.ReadDir(sshDir)
+	if err != nil {
+		return fmt.Errorf("failed to read SSH directory: %w", err)
+	}
+
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue // Skip subdirectories
+		}
+
+		srcPath := filepath.Join(sshDir, entry.Name())
+		destPath := filepath.Join(destSSHDir, entry.Name())
+
+		if err := copyFile(srcPath, destPath, 0400); err != nil {
+			return fmt.Errorf("failed to copy SSH file %s: %w", entry.Name(), err)
+		}
+	}
+
+	l.Logger.Info("SSH keys configured")
+	return nil
+}
+
 // fileExists checks if a file exists and is not a directory.
 func fileExists(path string) bool {
 	info, err := os.Stat(path)
