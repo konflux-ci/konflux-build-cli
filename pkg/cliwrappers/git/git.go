@@ -13,23 +13,26 @@ import (
 type CliInterface interface {
 	// Init initializes a new git repository. Runs: git init
 	Init(workdir string) error
+	// ConfigLocal sets a local git config value. Runs: git config --local <key> <value>
+	ConfigLocal(workdir, key, value string) error
+	// RevParse resolves a git ref to its SHA. Runs: git rev-parse [--short[=N]] <ref>
+	RevParse(workdir string, ref string, short bool, length int) (string, error)
 	// RemoteAdd adds a new remote. Runs: git remote add <name> <url>
 	RemoteAdd(workdir, name, url string) (string, error)
 	// FetchWithRefspec fetches a refspec from a remote with retry. Runs: git fetch [options] <remote> [<refspec>]
 	FetchWithRefspec(workdir, remote, refspec string, depth int, submodules bool, maxAttempts int) error
 	// Checkout checks out a ref. Runs: git checkout <ref>
 	Checkout(workdir, ref string) error
-	// SubmoduleUpdate initializes and updates submodules. Runs: git submodule update --recursive [options]
-	SubmoduleUpdate(workdir string, init bool, depth int, paths []string) error
-	// SetSparseCheckout configures sparse checkout directories. Runs: git sparse-checkout set <dirs...>
-	SetSparseCheckout(workdir string, directories []string) error
-	// ConfigLocal sets a local git config value. Runs: git config --local <key> <value>
-	ConfigLocal(workdir, key, value string) error
 	// Commit creates a commit with the given message. Runs: git commit -m <message>
 	Commit(workdir, message string) (string, error)
 	// Merge merges a ref with a commit message. Runs: git merge -m <message> --no-ff <ref>
 	Merge(workdir, ref, message string) (string, error)
-	RevParse(workdir, ref string, short bool, length int) (string, error)
+	// SetSparseCheckout configures sparse checkout directories. Runs: git sparse-checkout set <dirs...>
+	SetSparseCheckout(workdir string, directories []string) error
+	// SubmoduleUpdate initializes and updates submodules. Runs: git submodule update --recursive [options]
+	SubmoduleUpdate(workdir string, init bool, depth int, paths []string) error
+	// Log returns formatted git log output. Runs: git log [--pretty=<format>] [-N]
+	Log(workdir, format string, count int) (string, error)
 }
 
 var _ CliInterface = &GitCli{}
