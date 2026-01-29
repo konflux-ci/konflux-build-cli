@@ -65,6 +65,13 @@ func (c *GitClone) Run() error {
 		return err
 	}
 
+	// Clean checkout directory if requested
+	if c.Params.DeleteExisting {
+		if err := c.cleanCheckoutDir(); err != nil {
+			return err
+		}
+	}
+
 	if err := c.performClone(); err != nil {
 		return err
 	}
