@@ -54,3 +54,26 @@ func (g *Cli) Checkout(workdir, ref string) error {
 	}
 	return nil
 }
+
+// SubmoduleUpdate initializes and/or updates submodules
+func (g *Cli) SubmoduleUpdate(workdir string, init bool, depth int, paths []string) error {
+	gitArgs := []string{"submodule", "update", "--recursive"}
+
+	if init {
+		gitArgs = append(gitArgs, "--init")
+	}
+
+	gitArgs = append(gitArgs, "--force")
+
+	if depth > 0 {
+		gitArgs = append(gitArgs, fmt.Sprintf("--depth=%d", depth))
+	}
+
+	gitArgs = append(gitArgs, paths...)
+
+	_, stderr, exitCode, err := g.Executor.ExecuteInDir(workdir, "git", gitArgs...)
+	if err != nil || exitCode != 0 {
+		return fmt.Errorf("git submodule update failed with exit code %d: %v (stderr: %s)", exitCode, err, stderr)
+	}
+	return nil
+}
