@@ -15,10 +15,6 @@ type CliWrappers struct {
 	GitCli git.CliInterface
 }
 
-type Results struct {
-	// TODO fill
-}
-
 type GitClone struct {
 	Params        *Params
 	CliWrappers   CliWrappers
@@ -73,7 +69,7 @@ func (c *GitClone) Run() error {
 	if err := c.performClone(); err != nil {
 		return err
 	}
-	return nil
+	return c.outputResults()
 }
 
 func (c *GitClone) logParams() {
