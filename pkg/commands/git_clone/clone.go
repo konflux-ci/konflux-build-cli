@@ -15,11 +15,20 @@ func (c *GitClone) performClone() error {
 		return fmt.Errorf("failed to create checkout directory: %w", err)
 	}
 
+	// Step 1: Initialize empty git repository
 	l.Logger.Info("Initializing git repository")
 	if err := c.CliWrappers.GitCli.Init(checkoutDir); err != nil {
 		return fmt.Errorf("git init failed: %w", err)
 	}
 
+	// Set directories to check out if parameter is set
+	if c.Params.SparseCheckoutDirectories != "" {
+		if err := c.CliWrappers.GitCli.SetSparseCheckout(checkoutDir, c.Params.SparseCheckoutDirectories); err != nil {
+			return err
+		}
+	}
+
+	// Step 2: Add remote origin
 	l.Logger.Infof("Adding remote origin: %s", c.Params.Url)
 	if _, err := c.CliWrappers.GitCli.RemoteAdd(checkoutDir, "origin", c.Params.Url); err != nil {
 		return fmt.Errorf("git remote add failed: %w", err)
