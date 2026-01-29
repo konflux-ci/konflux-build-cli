@@ -44,14 +44,8 @@ func RunBuild(buildParams BuildParams, imageRegistry ImageRegistry) error {
 		opts = append(opts, WithVolumeWithOptions(containerStoragePath, "/var/lib/containers", "z"))
 	}
 
-	container, err := setupBuildContainer(
-		buildParams,
-		imageRegistry,
-		opts...,
-	)
-	if container != nil {
-		defer container.Delete()
-	}
+	container, err := setupBuildContainer(buildParams, imageRegistry, opts...)
+	defer container.DeleteIfExists()
 	if err != nil {
 		return err
 	}
@@ -111,30 +105,20 @@ func removeContainerStorageDir(containerStoragePath string) error {
 
 // Creates and starts a container for running builds.
 // The caller is responsible for cleaning up the container.
-// May return a non-nil container even if an error occurs. In that case, the caller
-// should clean up the container before failing.
+// Returns a non-nil container even if an error occurs. The caller should always call
+// DeleteIfExists() on the container for cleanup.
 func setupBuildContainer(buildParams BuildParams, imageRegistry ImageRegistry, opts ...ContainerOption) (*TestRunnerContainer, error) {
 	container := NewBuildCliRunnerContainer("kbc-build", BuildImage, opts...)
 	container.AddVolumeWithOptions(buildParams.Context, "/workspace", "z")
 
-	if imageRegistry != nil && imageRegistry.IsLocal() {
-		container.AddVolumeWithOptions(imageRegistry.GetCaCertPath(), "/etc/pki/tls/certs/ca-custom-bundle.crt", "z")
-	}
-
-	err := container.Start()
-	if err != nil {
-		return nil, err
-	}
-
+	var err error
 	if imageRegistry != nil {
-		login, password := imageRegistry.GetCredentials()
-		err = container.InjectDockerAuth(imageRegistry.GetRegistryDomain(), login, password)
-		if err != nil {
-			return container, err
-		}
+		err = container.StartWithRegistryIntegration(imageRegistry)
+	} else {
+		err = container.Start()
 	}
 
-	return container, nil
+	return container, err
 }
 
 // Executes the build command in the provided container.
@@ -212,11 +196,7 @@ func TestBuild(t *testing.T) {
 	// Creates a build container and registers cleanup.
 	setupBuildContainerWithCleanup := func(t *testing.T, buildParams BuildParams, imageRegistry ImageRegistry) *TestRunnerContainer {
 		container, err := setupBuildContainer(buildParams, imageRegistry, commonOpts...)
-		t.Cleanup(func() {
-			if container != nil {
-				container.Delete()
-			}
-		})
+		t.Cleanup(func() { container.DeleteIfExists() })
 		Expect(err).ToNot(HaveOccurred())
 		return container
 	}

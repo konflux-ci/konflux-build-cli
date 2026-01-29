@@ -239,13 +239,40 @@ func (c *TestRunnerContainer) Start() error {
 	return err
 }
 
+// Start the container while injecting the certificates and credentials required to access
+// the image registry.
+//
+// Note that the method may fail to start the container but may also fail *after*
+// starting the container. Use the DeleteIfExists() method for cleanup to handle either case.
+func (c *TestRunnerContainer) StartWithRegistryIntegration(imageRegistry ImageRegistry) error {
+	if imageRegistry.IsLocal() {
+		c.AddVolumeWithOptions(imageRegistry.GetCaCertPath(), "/etc/pki/tls/certs/ca-custom-bundle.crt", "z")
+	}
+	err := c.Start()
+	if err != nil {
+		return err
+	}
+
+	login, password := imageRegistry.GetCredentials()
+	return c.InjectDockerAuth(imageRegistry.GetRegistryDomain(), login, password)
+}
+
 func (c *TestRunnerContainer) Delete() error {
 	stdout, stderr, _, err := c.executor.Execute(containerTool, "rm", "-f", c.name)
-	if err != nil {
+	if err == nil {
+		c.containerStatus = ContainerStatus_Deleted
+	} else {
 		l.Logger.Infof("[stdout]:\n%s\n", stdout)
 		l.Logger.Infof("[stderr]:\n%s\n", stderr)
 	}
 	return err
+}
+
+func (c *TestRunnerContainer) DeleteIfExists() error {
+	if c.containerStatus != ContainerStatus_Running {
+		return nil
+	}
+	return c.Delete()
 }
 
 func (c *TestRunnerContainer) CopyFileIntoContainer(hostPath, containerPath string) error {
