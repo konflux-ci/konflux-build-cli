@@ -2,8 +2,10 @@ package git_clone
 
 import (
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 
 	l "github.com/konflux-ci/konflux-build-cli/pkg/logger"
 )
@@ -79,4 +81,113 @@ func (c *GitClone) setupGitConfig() error {
 	}
 
 	return nil
+}
+
+// setupBasicAuth sets up git credentials from a basic-auth workspace.
+// Supports two formats:
+// 1. .git-credentials and .gitconfig files (copied directly)
+// 2. username and password files (kubernetes.io/basic-auth secret format)
+func (c *GitClone) setupBasicAuth() error {
+	if c.Params.BasicAuthDirectory == "" {
+		return nil
+	}
+
+	authDir := c.Params.BasicAuthDirectory
+	userHome := c.Params.UserHome
+
+	// Check if the auth directory exists
+	if _, err := os.Stat(authDir); os.IsNotExist(err) {
+		l.Logger.Infof("Basic auth directory not found: %s", authDir)
+		return nil
+	}
+
+	gitCredentialsPath := filepath.Join(authDir, ".git-credentials")
+	gitConfigPath := filepath.Join(authDir, ".gitconfig")
+	usernamePath := filepath.Join(authDir, "username")
+	passwordPath := filepath.Join(authDir, "password")
+
+	// Format 1: .git-credentials and .gitconfig files
+	if fileExists(gitCredentialsPath) && fileExists(gitConfigPath) {
+		l.Logger.Info("Setting up basic auth from .git-credentials and .gitconfig")
+
+		destCredentials := filepath.Join(userHome, ".git-credentials")
+		destConfig := filepath.Join(userHome, ".gitconfig")
+
+		if err := copyFile(gitCredentialsPath, destCredentials, 0400); err != nil {
+			return fmt.Errorf("failed to copy .git-credentials: %w", err)
+		}
+		if err := copyFile(gitConfigPath, destConfig, 0400); err != nil {
+			return fmt.Errorf("failed to copy .gitconfig: %w", err)
+		}
+
+		l.Logger.Info("Basic auth credentials configured")
+		return nil
+	}
+
+	// Format 2: kubernetes.io/basic-auth secret (username and password files)
+	if fileExists(usernamePath) && fileExists(passwordPath) {
+		l.Logger.Info("Setting up basic auth from username/password files")
+
+		username, err := os.ReadFile(usernamePath)
+		if err != nil {
+			return fmt.Errorf("failed to read username file: %w", err)
+		}
+
+		password, err := os.ReadFile(passwordPath)
+		if err != nil {
+			return fmt.Errorf("failed to read password file: %w", err)
+		}
+
+		// Extract hostname from URL
+		parsedURL, err := url.Parse(c.Params.Url)
+		if err != nil {
+			return fmt.Errorf("failed to parse repository URL: %w", err)
+		}
+		hostname := parsedURL.Host
+
+		// Create .git-credentials file
+		credentialsContent := fmt.Sprintf("https://%s:%s@%s\n",
+			strings.TrimSpace(string(username)),
+			strings.TrimSpace(string(password)),
+			hostname)
+
+		destCredentials := filepath.Join(userHome, ".git-credentials")
+		if err := os.WriteFile(destCredentials, []byte(credentialsContent), 0400); err != nil {
+			return fmt.Errorf("failed to write .git-credentials: %w", err)
+		}
+
+		// Create .gitconfig file
+		gitConfigContent := fmt.Sprintf("[credential \"https://%s\"]\n  helper = store\n", hostname)
+		destConfig := filepath.Join(userHome, ".gitconfig")
+		if err := os.WriteFile(destConfig, []byte(gitConfigContent), 0400); err != nil {
+			return fmt.Errorf("failed to write .gitconfig: %w", err)
+		}
+
+		l.Logger.Infof("Basic auth credentials configured for %s", hostname)
+		return nil
+	}
+
+	return fmt.Errorf("unknown basic-auth workspace format: expected .git-credentials/.gitconfig or username/password files")
+}
+
+// fileExists checks if a file exists and is not a directory.
+func fileExists(path string) bool {
+	info, err := os.Stat(path)
+	if os.IsNotExist(err) {
+		return false
+	}
+	return err == nil && !info.IsDir()
+}
+
+// copyFile copies a file from src to dest with the specified permissions.
+func copyFile(src, dest string, perm os.FileMode) error {
+	if err := os.MkdirAll(filepath.Dir(dest), 0755); err != nil {
+		return err
+	}
+
+	data, err := os.ReadFile(src)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(dest, data, perm)
 }
