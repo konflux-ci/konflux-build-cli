@@ -11,15 +11,16 @@ import (
 
 type CliInterface interface {
 	Init(workdir string) error
+	ConfigLocal(workdir, key, value string) error
+	RevParse(workdir string, ref string, short bool, length int) (string, error)
 	RemoteAdd(workdir, name, url string) (string, error)
 	FetchWithRefspec(workdir, remote, refspec string, depth int, submodules bool, maxAttempts int) error
 	Checkout(workdir, ref string) error
-	SubmoduleUpdate(workdir string, init bool, depth int, paths []string) error
+	Commit(workdir, targetBranch, remote, resultSHA string) (string, error)
+	Merge(workdir, fetchHead string) (string, error)
 	SetSparseCheckout(workdir string, directories []string) error
-	ConfigLocal(workdir, key, value string) error
-	Merge(workdir, ref string) (string, error)
-	Commit(workdir, targetBranch, mergeRemote, originalCommit string) (string, error)
-	RevParse(workdir, ref string, short bool, length int) (string, error)
+	SubmoduleUpdate(workdir string, init bool, depth int, paths []string) error
+	Log(workdir, format string, count int) (string, error)
 }
 
 var _ CliInterface = &Cli{}
