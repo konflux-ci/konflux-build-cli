@@ -43,3 +43,26 @@ func (c *GitClone) cleanCheckoutDir() error {
 
 	return nil
 }
+
+// setupGitConfig configures git settings for SSL verification and CA bundle.
+func (c *GitClone) setupGitConfig() error {
+	if !c.Params.SSLVerify {
+		l.Logger.Info("Disabling SSL verification (http.sslVerify=false)")
+		if err := c.CliWrappers.GitCli.ConfigLocal("", "http.sslVerify", "false"); err != nil {
+			return fmt.Errorf("failed to configure http.sslVerify: %w", err)
+		}
+	}
+
+	caBundlePath := c.Params.CaBundlePath
+	if caBundlePath == "" {
+		caBundlePath = "/mnt/trusted-ca/ca-bundle.crt"
+	}
+	if _, err := os.Stat(caBundlePath); err == nil {
+		l.Logger.Infof("Using mounted CA bundle: %s", caBundlePath)
+		if err := c.CliWrappers.GitCli.ConfigLocal("", "http.sslCAInfo", caBundlePath); err != nil {
+			return fmt.Errorf("failed to configure http.sslCAInfo: %w", err)
+		}
+	}
+
+	return nil
+}
