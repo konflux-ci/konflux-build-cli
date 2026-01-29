@@ -43,3 +43,27 @@ func (c *GitClone) cleanCheckoutDir() error {
 
 	return nil
 }
+
+// setupProxies sets HTTP_PROXY, HTTPS_PROXY, and NO_PROXY environment variables
+// if the corresponding parameters are provided.
+func (c *GitClone) setupProxies() error {
+	if c.Params.HTTPProxy != "" {
+		l.Logger.Infof("Setting HTTP_PROXY=%s", c.Params.HTTPProxy)
+		if err := os.Setenv("HTTP_PROXY", c.Params.HTTPProxy); err != nil {
+			return err
+		}
+	}
+	if c.Params.HTTPSProxy != "" {
+		l.Logger.Infof("Setting HTTPS_PROXY=%s", c.Params.HTTPSProxy)
+		if err := os.Setenv("HTTPS_PROXY", c.Params.HTTPSProxy); err != nil {
+			return err
+		}
+	}
+	if c.Params.NoProxy != "" {
+		l.Logger.Infof("Setting NO_PROXY=%s", c.Params.NoProxy)
+		if err := os.Setenv("NO_PROXY", c.Params.NoProxy); err != nil {
+			return err
+		}
+	}
+	return nil
+}
