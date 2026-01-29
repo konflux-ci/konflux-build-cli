@@ -15,6 +15,8 @@ type CliInterface interface {
 	Init(workdir string) error
 	// RemoteAdd adds a new remote. Runs: git remote add <name> <url>
 	RemoteAdd(workdir, name, url string) (string, error)
+	// FetchWithRefspec fetches a refspec from a remote with retry. Runs: git fetch [options] <remote> [<refspec>]
+	FetchWithRefspec(workdir, remote, refspec string, depth int, submodules bool, maxAttempts int) error
 }
 
 var _ CliInterface = &GitCli{}
