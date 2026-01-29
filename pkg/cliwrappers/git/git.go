@@ -13,12 +13,8 @@ type CliInterface interface {
 	Log(workdir string, format string, count int) (string, error)
 	RemoteAdd(workdir, name, url string) (string, error)
 	FetchWithRefspec(workdir, remote, refspec string, depth int) error
-<<<<<<< Updated upstream
-	Fetch(workdir, repository string, depth int) (string, error)
-=======
-	FetchTags(workdir string) (string, error)
->>>>>>> Stashed changes
 	Checkout(workdir, ref string) error
+	FetchTags(workdir string) (string, error)
 	Commit(workdir, targetBranch, remote, resultSHA string) (string, error)
 	Merge(workdir, fetchHead string) (string, error)
 	SetSparseCheckout(workdir, sparseCheckoutDirectories string) error
