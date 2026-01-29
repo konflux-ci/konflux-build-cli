@@ -16,6 +16,10 @@ type CliInterface interface {
 	Checkout(workdir, ref string) error
 	SubmoduleUpdate(workdir string, init bool, depth int, paths []string) error
 	SetSparseCheckout(workdir string, directories []string) error
+	ConfigLocal(workdir, key, value string) error
+	Merge(workdir, ref string) (string, error)
+	Commit(workdir, targetBranch, mergeRemote, originalCommit string) (string, error)
+	RevParse(workdir, ref string, short bool, length int) (string, error)
 }
 
 var _ CliInterface = &Cli{}
