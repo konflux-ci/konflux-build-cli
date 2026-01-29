@@ -77,6 +77,11 @@ func (c *GitClone) Run() error {
 		return err
 	}
 
+	// Setup authentication
+	if err := c.setupBasicAuth(); err != nil {
+		return err
+	}
+
 	// Clean checkout directory if requested
 	if c.Params.DeleteExisting {
 		if err := c.cleanCheckoutDir(); err != nil {
