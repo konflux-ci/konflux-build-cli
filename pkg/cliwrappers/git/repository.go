@@ -2,6 +2,7 @@ package git
 
 import (
 	"fmt"
+	"strings"
 
 	l "github.com/konflux-ci/konflux-build-cli/pkg/logger"
 )
@@ -49,4 +50,30 @@ func (g *GitCli) ConfigLocal(workdir, key, value string) error {
 		return fmt.Errorf("git config failed with exit code %d: %v (stderr: %s)", exitCode, err, stderr)
 	}
 	return nil
+}
+
+// Commit creates a commit with the specified message.
+// Runs: git commit -m <message>
+func (g *GitCli) Commit(workdir, message string) (string, error) {
+	gitArgs := []string{"commit", "-m", message}
+
+	stdout, stderr, exitCode, err := g.Executor.ExecuteInDir(workdir, "git", gitArgs...)
+	if err != nil || exitCode != 0 {
+		return "", fmt.Errorf("git commit failed with exit code %d: %v (stderr: %s)", exitCode, err, stderr)
+	}
+	return strings.TrimSpace(stdout), nil
+}
+
+// Merge merges the specified ref into the current branch with the given commit message.
+// Uses --no-ff to always create a merge commit. Returns the merge output.
+// If the merge is already up-to-date, no commit is created and no error is returned.
+// Runs: git merge -m <message> --no-ff --allow-unrelated-histories <ref>
+func (g *GitCli) Merge(workdir, ref, message string) (string, error) {
+	gitArgs := []string{"merge", "-m", message, "--no-ff", "--allow-unrelated-histories", ref}
+
+	stdout, stderr, exitCode, err := g.Executor.ExecuteInDir(workdir, "git", gitArgs...)
+	if err != nil || exitCode != 0 {
+		return "", fmt.Errorf("git merge failed with exit code %d: %v (stderr: %s)", exitCode, err, stderr)
+	}
+	return strings.TrimSpace(stdout), nil
 }

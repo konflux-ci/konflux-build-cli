@@ -23,6 +23,13 @@ type CliInterface interface {
 	SubmoduleUpdate(workdir string, init bool, depth int, paths []string) error
 	// SetSparseCheckout configures sparse checkout directories. Runs: git sparse-checkout set <dirs...>
 	SetSparseCheckout(workdir string, directories []string) error
+	// ConfigLocal sets a local git config value. Runs: git config --local <key> <value>
+	ConfigLocal(workdir, key, value string) error
+	// Commit creates a commit with the given message. Runs: git commit -m <message>
+	Commit(workdir, message string) (string, error)
+	// Merge merges a ref with a commit message. Runs: git merge -m <message> --no-ff <ref>
+	Merge(workdir, ref, message string) (string, error)
+	RevParse(workdir, ref string, short bool, length int) (string, error)
 }
 
 var _ CliInterface = &GitCli{}
