@@ -3,6 +3,7 @@ package git_clone
 import (
 	"fmt"
 	"net/url"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -22,6 +23,7 @@ type GitClone struct {
 	CliWrappers   CliWrappers
 	Results       Results
 	ResultsWriter common.ResultsWriterInterface
+	internalDir   string
 }
 
 func New(cmd *cobra.Command) (*GitClone, error) {
@@ -58,6 +60,20 @@ func (c *GitClone) Run() error {
 	c.logParams()
 
 	if err := c.validateParams(); err != nil {
+		return err
+	}
+
+	internalDir, err := os.MkdirTemp("", "git-clone-internal-*")
+	if err != nil {
+		return fmt.Errorf("failed to create internal directory: %w", err)
+	}
+	c.internalDir = internalDir
+	defer func() {
+		_ = os.RemoveAll(c.internalDir)
+		_ = os.Unsetenv("GIT_CONFIG_GLOBAL")
+	}()
+
+	if err := c.setupGitConfig(); err != nil {
 		return err
 	}
 
