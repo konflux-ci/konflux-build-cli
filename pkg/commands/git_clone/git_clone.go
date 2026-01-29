@@ -59,6 +59,9 @@ func (c *GitClone) Run() error {
 		return err
 	}
 
+	// Set proxy environment variables if there are any
+	c.setupProxies()
+
 	// Clean checkout directory if requested
 	if c.Params.DeleteExisting {
 		if err := c.cleanCheckoutDir(); err != nil {
