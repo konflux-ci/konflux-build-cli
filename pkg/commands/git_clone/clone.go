@@ -33,6 +33,14 @@ func (c *GitClone) performClone() error {
 	if err := c.CliWrappers.GitCli.Checkout(checkoutDir, "FETCH_HEAD"); err != nil {
 		return fmt.Errorf("git checkout failed: %w", err)
 	}
+
+	if c.Params.Submodules {
+		l.Logger.Info("Updating submodules")
+		if err := c.CliWrappers.GitCli.SubmoduleUpdate(checkoutDir, true, c.Params.SubmodulePaths); err != nil {
+			return fmt.Errorf("git submodule update failed: %w", err)
+		}
+	}
+
 	return nil
 }
 

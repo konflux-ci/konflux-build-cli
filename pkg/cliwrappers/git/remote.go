@@ -45,3 +45,27 @@ func (g *Cli) Checkout(workdir, ref string) error {
 	return nil
 }
 
+// SubmoduleUpdate initializes and/or updates submodules
+func (g *Cli) SubmoduleUpdate(workdir string, init bool, paths string) error {
+	gitArgs := []string{"submodule", "update"}
+
+	if init {
+		gitArgs = append(gitArgs, "--init")
+	}
+
+	if paths != "" {
+		// Split comma-separated paths
+		for _, path := range strings.Split(paths, ",") {
+			path = strings.TrimSpace(path)
+			if path != "" {
+				gitArgs = append(gitArgs, path)
+			}
+		}
+	}
+
+	_, stderr, exitCode, err := g.Executor.ExecuteInDir(workdir, "git", gitArgs...)
+	if err != nil || exitCode != 0 {
+		return fmt.Errorf("git submodule update failed with exit code %d: %v (stderr: %s)", exitCode, err, stderr)
+	}
+	return nil
+}
