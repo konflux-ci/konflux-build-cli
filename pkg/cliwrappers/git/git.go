@@ -13,6 +13,8 @@ import (
 type CliInterface interface {
 	// Init initializes a new git repository. Runs: git init
 	Init(workdir string) error
+	// RemoteAdd adds a new remote. Runs: git remote add <name> <url>
+	RemoteAdd(workdir, name, url string) (string, error)
 }
 
 var _ CliInterface = &GitCli{}
