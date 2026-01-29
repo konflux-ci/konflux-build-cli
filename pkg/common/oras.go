@@ -13,6 +13,8 @@ import (
 	"oras.land/oras-go/v2/registry/remote"
 	"oras.land/oras-go/v2/registry/remote/auth"
 	"oras.land/oras-go/v2/registry/remote/retry"
+
+	l "github.com/konflux-ci/konflux-build-cli/pkg/logger"
 )
 
 // OrasPush pushes a file to remote registry as an OCI artifact.
@@ -35,7 +37,7 @@ func OrasPush(username, password string, imageRef registry.Reference, tag, fileP
 	ctx := context.Background()
 	fileDescriptor, err := fs.Add(ctx, filepath.Base(filePath), "", filePath)
 	if err != nil {
-		panic(err)
+		return "", fmt.Errorf("Error on adding file %s to file storage: %w", filePath, err)
 	}
 	fileDescriptors := []v1.Descriptor{fileDescriptor}
 
@@ -44,7 +46,7 @@ func OrasPush(username, password string, imageRef registry.Reference, tag, fileP
 	if err != nil {
 		return "", fmt.Errorf("Error on creating manifest: %w", err)
 	}
-	fmt.Println("manifest descriptor:", manifestDescriptor)
+	l.Logger.Infof("Manifest descriptor: %v", manifestDescriptor)
 
 	if err = fs.Tag(ctx, manifestDescriptor, tag); err != nil {
 		return "", fmt.Errorf("Error on tagging manifest: %w", err)

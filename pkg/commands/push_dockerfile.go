@@ -156,17 +156,17 @@ func (c *PushDockerfile) Run() error {
 	}
 	l.Logger.Infof("Using current directory: %s\n", curDir)
 
-	sourceDir := filepath.Join(curDir, c.Params.Source)
-	contextDir := filepath.Join(sourceDir, c.Params.Context)
-	l.Logger.Infof("Using context directory: %s\n", contextDir)
-	realContextDir, err := filepath.EvalSymlinks(contextDir)
-	if err != nil {
-		return fmt.Errorf("Failed to eval symlinks for path %s: %w", contextDir, err)
-	}
-	l.Logger.Infof("Using real context directory: %s\n", realContextDir)
-	if strings.HasPrefix(realContextDir, sourceDir) {
-		return fmt.Errorf("Context '%s' is invalid as it escapes the source directory '%s'.", c.Params.Context, sourceDir)
-	}
+	// sourceDir := filepath.Join(curDir, c.Params.Source)
+	// contextDir := filepath.Join(sourceDir, c.Params.Context)
+	// l.Logger.Infof("Using context directory: %s\n", contextDir)
+	// realContextDir, err := filepath.EvalSymlinks(contextDir)
+	// if err != nil {
+	// 	return fmt.Errorf("Failed to eval symlinks for path %s: %w", contextDir, err)
+	// }
+	// l.Logger.Infof("Using real context directory: %s\n", realContextDir)
+	// if strings.HasPrefix(realContextDir, sourceDir) {
+	// 	return fmt.Errorf("Context '%s' is invalid as it escapes the source directory '%s'.", c.Params.Context, sourceDir)
+	// }
 
 	dockerfilePath, err := c.SearchDockerfile(SearchOpts{
 		SourceDir:  c.Params.Source,
@@ -193,7 +193,11 @@ func (c *PushDockerfile) Run() error {
 
 	l.Logger.Infof("Pushing Dockerfile to registry. File: %s, tag: %s\n", dockerfilePath, tag)
 
-	digest, err := common.OrasPush(username, password, dockerfileImageRef, tag, dockerfilePath, c.Params.ArtifactType)
+	absDockerfilePath, err := filepath.Abs(dockerfilePath)
+	if err != nil {
+		return fmt.Errorf("Error on getting absolute path of %s: %w", dockerfilePath, err)
+	}
+	digest, err := common.OrasPush(username, password, dockerfileImageRef, tag, absDockerfilePath, c.Params.ArtifactType)
 	if err != nil {
 		return fmt.Errorf("Failed to push Dockerfile: %w", err)
 	}

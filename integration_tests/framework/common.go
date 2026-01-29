@@ -300,3 +300,56 @@ func SetupGomega(t *testing.T) {
 		t.FailNow()
 	})
 }
+
+func SetupBuildContainer(name, runnerImage string, volumnOptions []ContainerVolumeOption, imageRegistry ImageRegistry) (*TestRunnerContainer, error) {
+	container := NewBuildCliRunnerContainer(name, runnerImage)
+	for _, opt := range volumnOptions {
+		container.AddVolumeWithOptions(opt.HostPath, opt.ContainerPath, opt.MountOptions)
+	}
+
+	if imageRegistry != nil && imageRegistry.IsLocal() {
+		container.AddVolumeWithOptions(imageRegistry.GetCaCertPath(), "/etc/pki/tls/certs/ca-custom-bundle.crt", "z")
+	}
+
+	err := container.Start()
+	if err != nil {
+		return nil, err
+	}
+
+	if imageRegistry != nil {
+		login, password := imageRegistry.GetCredentials()
+		err = container.InjectDockerAuth(imageRegistry.GetRegistryDomain(), login, password)
+		if err != nil {
+			return container, err
+		}
+	}
+
+	return container, nil
+}
+
+func SetupBuildContainerWithCleanup(t *testing.T, name, runnerImage string, volumeOptions []ContainerVolumeOption, imageRegistry ImageRegistry) (*TestRunnerContainer, error) {
+	container, err := SetupBuildContainer(name, runnerImage, volumeOptions, imageRegistry)
+	if err != nil {
+		return nil, fmt.Errorf("Error on setup build container: %w", err)
+	}
+	t.Cleanup(func() {
+		if container != nil {
+			container.Delete()
+		}
+		if err := imageRegistry.Stop(); err != nil {
+			fmt.Printf("Error on stopping image registry during test cleanup: %v\n", err)
+		}
+	})
+	return container, nil
+}
+
+func StartImageRegistry() (ImageRegistry, error) {
+	imageRegistry := NewImageRegistry()
+	if err := imageRegistry.Prepare(); err != nil {
+		return nil, fmt.Errorf("Error on preparing image registry: %w", err)
+	}
+	if err := imageRegistry.Start(); err != nil {
+		return nil, fmt.Errorf("Error on starting image registry: %w", err)
+	}
+	return imageRegistry, nil
+}
