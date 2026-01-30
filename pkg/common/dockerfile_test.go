@@ -95,7 +95,7 @@ func TestSearchDockerfileErrorOnEscapingFromSource(t *testing.T) {
 				// /tmp/workdir/source/../Dockerfile, where dockerfile is ../Dockerfile
 				opts := &tc.searchOpts
 				workDir := t.TempDir()
-				opts.SourceDir = createDir(t, workDir, opts.SourceDir)
+				opts.SourceDir = createDir(t, workDir, "source")
 				writeFile(t, filepath.Join(workDir, "Dockerfile"), dockerfileContent)
 			},
 		},
