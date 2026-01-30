@@ -3,6 +3,7 @@ package cliwrappers_test
 import (
 	"errors"
 	"os"
+	"path/filepath"
 	"testing"
 
 	. "github.com/onsi/gomega"
@@ -290,5 +291,75 @@ func TestBuildahCli_Push(t *testing.T) {
 		g.Expect(capturedArgs[0]).To(Equal("push"))
 		g.Expect(capturedArgs[len(capturedArgs)-2]).To(Equal(image))
 		g.Expect(capturedArgs[len(capturedArgs)-1]).To(Equal(destination))
+	})
+}
+
+func TestBuildahBuildArgs_MakePathsAbsolute(t *testing.T) {
+	g := NewWithT(t)
+
+	t.Run("should not modify absolute paths", func(t *testing.T) {
+		args := &cliwrappers.BuildahBuildArgs{
+			Containerfile: "/absolute/path/Containerfile",
+			ContextDir:    "/absolute/path/context",
+			Secrets: []cliwrappers.BuildahSecret{
+				{Src: "/absolute/path/secret", Id: "secret1"},
+			},
+		}
+
+		err := args.MakePathsAbsolute("/base/dir")
+		g.Expect(err).ToNot(HaveOccurred())
+		g.Expect(args.Containerfile).To(Equal("/absolute/path/Containerfile"))
+		g.Expect(args.ContextDir).To(Equal("/absolute/path/context"))
+		g.Expect(args.Secrets[0].Src).To(Equal("/absolute/path/secret"))
+	})
+
+	t.Run("should make relative paths absolute", func(t *testing.T) {
+		args := &cliwrappers.BuildahBuildArgs{
+			Containerfile: "relative/Containerfile",
+			ContextDir:    ".",
+			Secrets: []cliwrappers.BuildahSecret{
+				{Src: "relative/secret", Id: "secret1"},
+			},
+		}
+
+		err := args.MakePathsAbsolute("/base/dir")
+		g.Expect(err).ToNot(HaveOccurred())
+		g.Expect(args.Containerfile).To(Equal("/base/dir/relative/Containerfile"))
+		g.Expect(args.ContextDir).To(Equal("/base/dir"))
+		g.Expect(args.Secrets[0].Src).To(Equal("/base/dir/relative/secret"))
+	})
+
+	t.Run("should handle a mix of relative and absolute paths", func(t *testing.T) {
+		args := &cliwrappers.BuildahBuildArgs{
+			Containerfile: "/path/to/Containerfile",
+			ContextDir:    "context",
+			Secrets: []cliwrappers.BuildahSecret{
+				{Src: "secret1/file", Id: "secret1"},
+				{Src: "/absolute/secret2/file", Id: "secret2"},
+			},
+		}
+
+		err := args.MakePathsAbsolute("/base/dir")
+		g.Expect(err).ToNot(HaveOccurred())
+		g.Expect(args.Containerfile).To(Equal("/path/to/Containerfile"))
+		g.Expect(args.ContextDir).To(Equal("/base/dir/context"))
+		g.Expect(args.Secrets[0].Src).To(Equal("/base/dir/secret1/file"))
+		g.Expect(args.Secrets[1].Src).To(Equal("/absolute/secret2/file"))
+	})
+
+	t.Run("should use current working directory when baseDir is relative", func(t *testing.T) {
+		cwd, err := os.Getwd()
+		g.Expect(err).ToNot(HaveOccurred())
+
+		args := &cliwrappers.BuildahBuildArgs{
+			Containerfile: "Containerfile",
+			ContextDir:    "context",
+		}
+
+		err = args.MakePathsAbsolute(".")
+		g.Expect(err).ToNot(HaveOccurred())
+
+		g.Expect(args.Containerfile).To(Equal(filepath.Join(cwd, "Containerfile")))
+		g.Expect(args.ContextDir).To(Equal(filepath.Join(cwd, "context")))
 	})
 }

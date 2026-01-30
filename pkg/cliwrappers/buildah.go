@@ -2,7 +2,9 @@ package cliwrappers
 
 import (
 	"errors"
+	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	l "github.com/konflux-ci/konflux-build-cli/pkg/logger"
@@ -46,6 +48,40 @@ type BuildahBuildArgs struct {
 type BuildahSecret struct {
 	Src string
 	Id  string
+}
+
+// Make all paths (containerfile, context dir, secret files, ...) absolute.
+func (args *BuildahBuildArgs) MakePathsAbsolute(baseDir string) error {
+	ensureAbsolute := func(path *string) error {
+		if filepath.IsAbs(*path) {
+			return nil
+		}
+		abspath, err := filepath.Abs(filepath.Join(baseDir, *path))
+		if err != nil {
+			return fmt.Errorf("finding absolute path of %s in %s: %w", *path, baseDir, err)
+		}
+		*path = abspath
+		return nil
+	}
+
+	err := ensureAbsolute(&args.Containerfile)
+	if err != nil {
+		return err
+	}
+
+	err = ensureAbsolute(&args.ContextDir)
+	if err != nil {
+		return err
+	}
+
+	for i := range args.Secrets {
+		err = ensureAbsolute(&args.Secrets[i].Src)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func (b *BuildahCli) Build(args *BuildahBuildArgs) error {
