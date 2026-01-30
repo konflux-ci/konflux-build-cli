@@ -163,6 +163,17 @@ func WithNetwork(networkName string) ContainerOption {
 	}
 }
 
+func (c *TestRunnerContainer) SetPrivileged(privileged bool) {
+	c.ensureContainerNotStarted()
+	c.privileged = privileged
+}
+
+func WithPrivileged(privileged bool) ContainerOption {
+	return func(c *TestRunnerContainer) {
+		c.SetPrivileged(privileged)
+	}
+}
+
 // ContainerExists checks for container with the same name.
 func (c *TestRunnerContainer) ContainerExists(isRunning bool) (bool, error) {
 	args := []string{"ps", "-q"}
