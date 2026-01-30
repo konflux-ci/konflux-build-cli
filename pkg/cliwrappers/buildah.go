@@ -39,7 +39,13 @@ type BuildahBuildArgs struct {
 	Containerfile string
 	ContextDir    string
 	OutputRef     string
+	Secrets       []BuildahSecret
 	ExtraArgs     []string
+}
+
+type BuildahSecret struct {
+	Src string
+	Id  string
 }
 
 func (b *BuildahCli) Build(args *BuildahBuildArgs) error {
@@ -54,6 +60,12 @@ func (b *BuildahCli) Build(args *BuildahBuildArgs) error {
 	}
 
 	buildahArgs := []string{"build", "--file", args.Containerfile, "--tag", args.OutputRef}
+
+	for _, secret := range args.Secrets {
+		secretArg := "src=" + secret.Src + ",id=" + secret.Id
+		buildahArgs = append(buildahArgs, "--secret="+secretArg)
+	}
+
 	// Append extra arguments before the context directory
 	buildahArgs = append(buildahArgs, args.ExtraArgs...)
 	// Context directory must be the last argument

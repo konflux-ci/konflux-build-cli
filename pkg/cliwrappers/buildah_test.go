@@ -102,6 +102,32 @@ func TestBuildahCli_Build(t *testing.T) {
 		g.Expect(err.Error()).To(ContainSubstring("output-ref is empty"))
 	})
 
+	t.Run("should turn Secrets into --secret params", func(t *testing.T) {
+		buildahCli, executor := setupBuildahCli()
+		var capturedArgs []string
+		executor.executeWithOutput = func(command string, args ...string) (string, string, int, error) {
+			g.Expect(command).To(Equal("buildah"))
+			capturedArgs = args
+			return "", "", 0, nil
+		}
+
+		buildArgs := &cliwrappers.BuildahBuildArgs{
+			Containerfile: containerfile,
+			ContextDir:    contextDir,
+			OutputRef:     outputRef,
+			Secrets: []cliwrappers.BuildahSecret{
+				{Src: "/some/file", Id: "mysecret_1"},
+				{Src: "/other/file", Id: "mysecret_2"},
+			},
+		}
+
+		err := buildahCli.Build(buildArgs)
+		g.Expect(err).ToNot(HaveOccurred())
+
+		g.Expect(capturedArgs).To(ContainElement("--secret=src=/some/file,id=mysecret_1"))
+		g.Expect(capturedArgs).To(ContainElement("--secret=src=/other/file,id=mysecret_2"))
+	})
+
 	t.Run("should append extra args before context directory", func(t *testing.T) {
 		buildahCli, executor := setupBuildahCli()
 		var capturedArgs []string
