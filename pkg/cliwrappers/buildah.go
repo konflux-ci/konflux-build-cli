@@ -50,6 +50,21 @@ type BuildahSecret struct {
 	Id  string
 }
 
+// Check that the build arguments are valid, e.g. required arguments are set.
+// Also called automatically by the BuildahCli.Build() method.
+func (args *BuildahBuildArgs) Validate() error {
+	if args.Containerfile == "" {
+		return errors.New("containerfile path is empty")
+	}
+	if args.ContextDir == "" {
+		return errors.New("context directory is empty")
+	}
+	if args.OutputRef == "" {
+		return errors.New("output-ref is empty")
+	}
+	return nil
+}
+
 // Make all paths (containerfile, context dir, secret files, ...) absolute.
 func (args *BuildahBuildArgs) MakePathsAbsolute(baseDir string) error {
 	ensureAbsolute := func(path *string) error {
@@ -85,14 +100,8 @@ func (args *BuildahBuildArgs) MakePathsAbsolute(baseDir string) error {
 }
 
 func (b *BuildahCli) Build(args *BuildahBuildArgs) error {
-	if args.Containerfile == "" {
-		return errors.New("containerfile path is empty")
-	}
-	if args.ContextDir == "" {
-		return errors.New("context directory is empty")
-	}
-	if args.OutputRef == "" {
-		return errors.New("output-ref is empty")
+	if err := args.Validate(); err != nil {
+		return fmt.Errorf("validating buildah args: %w", err)
 	}
 
 	buildahArgs := []string{"build", "--file", args.Containerfile, "--tag", args.OutputRef}

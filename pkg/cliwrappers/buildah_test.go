@@ -67,7 +67,7 @@ func TestBuildahCli_Build(t *testing.T) {
 		g.Expect(err.Error()).To(Equal("failed to execute buildah build"))
 	})
 
-	t.Run("should error if containerfile is empty", func(t *testing.T) {
+	t.Run("should error if args are invalid", func(t *testing.T) {
 		buildahCli, _ := setupBuildahCli()
 		buildArgs := &cliwrappers.BuildahBuildArgs{
 			Containerfile: "",
@@ -76,31 +76,7 @@ func TestBuildahCli_Build(t *testing.T) {
 		}
 		err := buildahCli.Build(buildArgs)
 		g.Expect(err).To(HaveOccurred())
-		g.Expect(err.Error()).To(ContainSubstring("containerfile path is empty"))
-	})
-
-	t.Run("should error if context directory is empty", func(t *testing.T) {
-		buildahCli, _ := setupBuildahCli()
-		buildArgs := &cliwrappers.BuildahBuildArgs{
-			Containerfile: containerfile,
-			ContextDir:    "",
-			OutputRef:     outputRef,
-		}
-		err := buildahCli.Build(buildArgs)
-		g.Expect(err).To(HaveOccurred())
-		g.Expect(err.Error()).To(ContainSubstring("context directory is empty"))
-	})
-
-	t.Run("should error if output-ref is empty", func(t *testing.T) {
-		buildahCli, _ := setupBuildahCli()
-		buildArgs := &cliwrappers.BuildahBuildArgs{
-			Containerfile: containerfile,
-			ContextDir:    contextDir,
-			OutputRef:     "",
-		}
-		err := buildahCli.Build(buildArgs)
-		g.Expect(err).To(HaveOccurred())
-		g.Expect(err.Error()).To(ContainSubstring("output-ref is empty"))
+		g.Expect(err.Error()).To(ContainSubstring("validating buildah args: containerfile path is empty"))
 	})
 
 	t.Run("should turn Secrets into --secret params", func(t *testing.T) {
@@ -361,5 +337,60 @@ func TestBuildahBuildArgs_MakePathsAbsolute(t *testing.T) {
 
 		g.Expect(args.Containerfile).To(Equal(filepath.Join(cwd, "Containerfile")))
 		g.Expect(args.ContextDir).To(Equal(filepath.Join(cwd, "context")))
+	})
+}
+
+func TestBuildahBuildArgs_Validate(t *testing.T) {
+	g := NewWithT(t)
+
+	const containerfile = "/path/to/Containerfile"
+	const contextDir = "/path/to/context"
+	const outputRef = "quay.io/org/image:tag"
+
+	t.Run("should succeed with valid args", func(t *testing.T) {
+		args := &cliwrappers.BuildahBuildArgs{
+			Containerfile: containerfile,
+			ContextDir:    contextDir,
+			OutputRef:     outputRef,
+		}
+
+		err := args.Validate()
+		g.Expect(err).ToNot(HaveOccurred())
+	})
+
+	t.Run("should error if containerfile is empty", func(t *testing.T) {
+		args := &cliwrappers.BuildahBuildArgs{
+			Containerfile: "",
+			ContextDir:    contextDir,
+			OutputRef:     outputRef,
+		}
+
+		err := args.Validate()
+		g.Expect(err).To(HaveOccurred())
+		g.Expect(err.Error()).To(Equal("containerfile path is empty"))
+	})
+
+	t.Run("should error if context directory is empty", func(t *testing.T) {
+		args := &cliwrappers.BuildahBuildArgs{
+			Containerfile: containerfile,
+			ContextDir:    "",
+			OutputRef:     outputRef,
+		}
+
+		err := args.Validate()
+		g.Expect(err).To(HaveOccurred())
+		g.Expect(err.Error()).To(Equal("context directory is empty"))
+	})
+
+	t.Run("should error if output-ref is empty", func(t *testing.T) {
+		args := &cliwrappers.BuildahBuildArgs{
+			Containerfile: containerfile,
+			ContextDir:    contextDir,
+			OutputRef:     "",
+		}
+
+		err := args.Validate()
+		g.Expect(err).To(HaveOccurred())
+		g.Expect(err.Error()).To(Equal("output-ref is empty"))
 	})
 }
