@@ -42,7 +42,7 @@ var PushDockerfileParamsConfig = map[string]common.Parameter{
 		ShortName:  "i",
 		EnvVarName: "KBC_PUSH_DOCKERFILE_IMAGE_URL",
 		TypeKind:   reflect.String,
-		Usage:      "Required. Binary image URL. Dockerfile is pushed to the image repository where this binary image is.",
+		Usage:      "Binary image URL. Dockerfile is pushed to the image repository where this binary image is.",
 		Required:   true,
 	},
 	"digest": {
@@ -50,7 +50,7 @@ var PushDockerfileParamsConfig = map[string]common.Parameter{
 		ShortName:  "d",
 		EnvVarName: "KBC_PUSH_DOCKERFILE_IMAGE_DIGEST",
 		TypeKind:   reflect.String,
-		Usage:      "Required. Binary image digest, which is used to construct the tag of Dockerfile image.",
+		Usage:      "Binary image digest, which is used to construct the tag of Dockerfile image.",
 		Required:   true,
 	},
 	"dockerfile": {
@@ -59,7 +59,7 @@ var PushDockerfileParamsConfig = map[string]common.Parameter{
 		EnvVarName:   "KBC_PUSH_DOCKERFILE_DOCKERFILE_PATH",
 		TypeKind:     reflect.String,
 		DefaultValue: dockerfileFilePath,
-		Usage:        fmt.Sprintf("Optional. Path to Dockerfile relative to source repository root. Defaults to '%s'.", dockerfileFilePath),
+		Usage:        fmt.Sprintf("Path to Dockerfile relative to source repository root. Defaults to '%s'.", dockerfileFilePath),
 		Required:     false,
 	},
 	"context": {
@@ -68,7 +68,7 @@ var PushDockerfileParamsConfig = map[string]common.Parameter{
 		EnvVarName:   "KBC_PUSH_DOCKERFILE_CONTEXT",
 		TypeKind:     reflect.String,
 		DefaultValue: dockerfileContext,
-		Usage:        fmt.Sprintf("Optional. Build context used to search Dockerfile. Defaults to '%s'.", dockerfileContext),
+		Usage:        fmt.Sprintf("Build context used to search Dockerfile. Defaults to '%s'.", dockerfileContext),
 		Required:     false,
 	},
 	"tag-suffix": {
@@ -77,7 +77,7 @@ var PushDockerfileParamsConfig = map[string]common.Parameter{
 		EnvVarName:   "KBC_PUSH_DOCKERFILE_TAG_SUFFIX",
 		TypeKind:     reflect.String,
 		DefaultValue: dockerfileAritfactTagSuffix,
-		Usage:        "Optional. Suffix to construct artifact image tag. Defaults to '.dockerfile'.",
+		Usage:        "Suffix to construct artifact image tag. Defaults to '.dockerfile'.",
 		Required:     false,
 	},
 	"artifact-type": {
@@ -86,7 +86,7 @@ var PushDockerfileParamsConfig = map[string]common.Parameter{
 		EnvVarName:   "KBC_PUSH_DOCKERFILE_ARTIFACT_TYPE",
 		TypeKind:     reflect.String,
 		DefaultValue: dockerfileArtifactType,
-		Usage:        fmt.Sprintf("Optional. Artifact type of the dockerfile artifact image. Defaults to '%s'.", dockerfileArtifactType),
+		Usage:        fmt.Sprintf("Artifact type of the dockerfile artifact image. Defaults to '%s'.", dockerfileArtifactType),
 		Required:     false,
 	},
 	"source": {
@@ -102,7 +102,7 @@ var PushDockerfileParamsConfig = map[string]common.Parameter{
 		ShortName:  "r",
 		EnvVarName: "KBC_PUSH_DOCKERFILE_RESULT_IMAGE_REF",
 		TypeKind:   reflect.String,
-		Usage:      "Optional. Write digested image reference of the pushed Dockerfile image into this file.",
+		Usage:      "Write digested image reference of the pushed Dockerfile image into this file.",
 		Required:   false,
 	},
 }
