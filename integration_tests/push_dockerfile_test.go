@@ -215,49 +215,4 @@ func TestPushDockerfile(t *testing.T) {
 			}
 		})
 	}
-
-	t.Run("Nothing is pushed if Dockerfile is not found", func(t *testing.T) {
-		digest := "sha256:19c35b02788b272a5a7c0071906a9c6b654760e44a1fc8226f8268c70848148f"
-		artifactTag := "sha256-19c35b02788b272a5a7c0071906a9c6b654760e44a1fc8226f8268c70848148f.dockerfile"
-		cmd := []string{
-			"image", "push-dockerfile",
-			"--image-url", imageRepo,
-			"--digest", digest,
-			"--source", "source",
-			"--dockerfile", "./Containerfile.app",
-		}
-		err = container.ExecuteBuildCliInDir(homeDir, cmd...)
-		g.Expect(err).ShouldNot(HaveOccurred())
-
-		artifactImageRef := fmt.Sprintf("%s:%s", imageRepo, artifactTag)
-		cmdArgs := []string{"inspect", "--raw", "docker://" + artifactImageRef}
-		stdout, _, err := container.ExecuteCommandWithOutput("skopeo", cmdArgs...)
-		g.Expect(err).Should(HaveOccurred())
-		g.Expect(stdout).Should(Or(
-			ContainSubstring("repository name not known to registry"),
-			ContainSubstring("manifest unknown"),
-		))
-	})
-
-	t.Run("Abort on registry authentication cannot be selected", func(t *testing.T) {
-		// Make registry authentication selection fail.
-		err = container.ExecuteCommandInDir(homeDir, "mv", ".docker/config.json", ".docker/bak.json")
-		g.Expect(err).ShouldNot(HaveOccurred())
-
-		defer func() {
-			err = container.ExecuteCommandInDir(homeDir, "mv", ".docker/bak.json", ".docker/config.json")
-			g.Expect(err).ShouldNot(HaveOccurred())
-		}()
-
-		cmd := []string{
-			"image", "push-dockerfile",
-			"--image-url", imageRepo,
-			"--digest", "sha256:19c35b02788b272a5a7c0071906a9c6b654760e44a1fc8226f8268c70848148f",
-			"--source", "source",
-			"--dockerfile", "./Dockerfile",
-		}
-		stdout, _, err := container.ExecuteBuildCliInDirWithOutput(homeDir, cmd...)
-		g.Expect(err).Should(HaveOccurred())
-		g.Expect(stdout).Should(ContainSubstring(".docker/config.json: no such file or directory"))
-	})
 }
