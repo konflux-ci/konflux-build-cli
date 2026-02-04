@@ -227,9 +227,7 @@ func (c *PushDockerfile) validateParams() error {
 
 	tagSuffix := c.Params.TagSuffix
 	if !regexp.MustCompile(tagSuffixRegex).MatchString(tagSuffix) {
-		return fmt.Errorf(
-			"Tag suffix includes invalid characters. Also ensure it has at least one and maximum 100 characters.",
-		)
+		return fmt.Errorf("Tag suffix includes invalid characters or exceeds the max length of 57 characters.")
 	}
 
 	return nil
