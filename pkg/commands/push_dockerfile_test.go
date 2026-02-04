@@ -5,7 +5,6 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
-	"strings"
 	"testing"
 
 	. "github.com/onsi/gomega"
@@ -53,7 +52,7 @@ func TestValidateParams(t *testing.T) {
 	})
 
 	t.Run("Capture invalid tag suffix", func(t *testing.T) {
-		taggedDigest := strings.Replace(imageDigest, ":", "-", 1)
+		taggedDigest := "sha256-e7afdb605d0685d214876ae9d13ae0cc15da3a766be86e919fecee4032b9783b"
 		testCases := []string{
 			"",
 			"^dockerfile",
@@ -89,7 +88,7 @@ func TestDockerfileImageTag(t *testing.T) {
 		},
 		imageName: "localhost:5000/cool/app",
 	}
-	expected := strings.Replace(imageDigest, ":", "-", 1) + ".containerfile"
+	expected := "sha256-e7afdb605d0685d214876ae9d13ae0cc15da3a766be86e919fecee4032b9783b.containerfile"
 	imageTag := cmd.dockerfileImageTag()
 	if imageTag != expected {
 		t.Errorf("Expect tag %s, but got: %s", expected, imageTag)

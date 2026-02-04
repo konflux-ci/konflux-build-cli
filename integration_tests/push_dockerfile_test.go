@@ -98,8 +98,9 @@ func TestPushDockerfile(t *testing.T) {
 	imageRepo := filepath.Join(imageRegistry.GetRegistryDomain(), "app")
 
 	testCases := []struct {
-		name   string
-		params PushDockerfileParams
+		name                 string
+		params               PushDockerfileParams
+		expectedTaggedDigest string
 	}{
 		{
 			name: "Push and write result",
@@ -109,6 +110,7 @@ func TestPushDockerfile(t *testing.T) {
 				dockerfile:         "./Dockerfile",
 				imageRefResultFile: "/tmp/result-image-ref",
 			},
+			expectedTaggedDigest: "sha256-cfc8226f8268c70848148f19c35b02788b272a5a7c0071906a9c6b654760e44a",
 		},
 		{
 			name: "Push with custom suffix",
@@ -118,6 +120,7 @@ func TestPushDockerfile(t *testing.T) {
 				dockerfile: "./Dockerfile",
 				tagSuffix:  ".containerfile",
 			},
+			expectedTaggedDigest: "sha256-f8268c70848148f19c35b02788b272a5a7c0071906a9c6b654760e44a1fc8226",
 		},
 		{
 			name: "Push with custom artifact type",
@@ -127,6 +130,7 @@ func TestPushDockerfile(t *testing.T) {
 				dockerfile:   "./Dockerfile",
 				artifactType: "application/vnd.my.org.containerfile",
 			},
+			expectedTaggedDigest: "sha256-48148f19c35b02788b272a5a7c0071906a9c6b654760e44a1fc8226f8268c708",
 		},
 		{
 			name: "Push custom Dockerfile from subdirectory",
@@ -135,6 +139,7 @@ func TestPushDockerfile(t *testing.T) {
 				digest:     "sha256:70848148f19c35b02788b272a5a7c0071906a9c6b654760e44a1fc8226f8268c",
 				dockerfile: "./containerfiles/operator",
 			},
+			expectedTaggedDigest: "sha256-70848148f19c35b02788b272a5a7c0071906a9c6b654760e44a1fc8226f8268c",
 		},
 		{
 			name: "Push by using default ./Dockerfile",
@@ -142,6 +147,7 @@ func TestPushDockerfile(t *testing.T) {
 				source: "source",
 				digest: "sha256:35b02788b272a5a7c0071906a9c6b654760e44a1fc8226f8268c70848148f19c",
 			},
+			expectedTaggedDigest: "sha256-35b02788b272a5a7c0071906a9c6b654760e44a1fc8226f8268c70848148f19c",
 		},
 	}
 
@@ -177,7 +183,7 @@ func TestPushDockerfile(t *testing.T) {
 				tagSuffix = ".dockerfile"
 			}
 
-			expectedTag := fmt.Sprintf("%s%s", strings.Replace(tc.params.digest, ":", "-", 1), tagSuffix)
+			expectedTag := fmt.Sprintf("%s%s", tc.expectedTaggedDigest, tagSuffix)
 			artifactImageRef := imageRepo + ":" + expectedTag
 
 			cmdArgs := []string{"inspect", "--raw", "docker://" + artifactImageRef}
