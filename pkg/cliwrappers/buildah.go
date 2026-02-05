@@ -43,6 +43,8 @@ type BuildahBuildArgs struct {
 	OutputRef     string
 	Secrets       []BuildahSecret
 	Volumes       []BuildahVolume
+	BuildArgs     []string
+	BuildArgsFile string
 	ExtraArgs     []string
 }
 
@@ -119,6 +121,13 @@ func (args *BuildahBuildArgs) MakePathsAbsolute(baseDir string) error {
 		}
 	}
 
+	if args.BuildArgsFile != "" {
+		err = ensureAbsolute(&args.BuildArgsFile)
+		if err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
@@ -140,6 +149,14 @@ func (b *BuildahCli) Build(args *BuildahBuildArgs) error {
 			volumeArg += ":" + volume.Options
 		}
 		buildahArgs = append(buildahArgs, "--volume="+volumeArg)
+	}
+
+	for _, buildArg := range args.BuildArgs {
+		buildahArgs = append(buildahArgs, "--build-arg="+buildArg)
+	}
+
+	if args.BuildArgsFile != "" {
+		buildahArgs = append(buildahArgs, "--build-arg-file="+args.BuildArgsFile)
 	}
 
 	// Append extra arguments before the context directory

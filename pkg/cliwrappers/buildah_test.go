@@ -131,6 +131,31 @@ func TestBuildahCli_Build(t *testing.T) {
 		g.Expect(capturedArgs).To(ContainElement("--volume=/host/dir2:/container/dir2:ro"))
 	})
 
+	t.Run("should turn BuildArgs(File) into --build-arg(-file) params", func(t *testing.T) {
+		buildahCli, executor := setupBuildahCli()
+		var capturedArgs []string
+		executor.executeWithOutput = func(command string, args ...string) (string, string, int, error) {
+			g.Expect(command).To(Equal("buildah"))
+			capturedArgs = args
+			return "", "", 0, nil
+		}
+
+		buildArgs := &cliwrappers.BuildahBuildArgs{
+			Containerfile: containerfile,
+			ContextDir:    contextDir,
+			OutputRef:     outputRef,
+			BuildArgs:     []string{"VERSION=1.0.0", "BUILD_DATE=2024-01-01"},
+			BuildArgsFile: "/path/to/build-args-file",
+		}
+
+		err := buildahCli.Build(buildArgs)
+		g.Expect(err).ToNot(HaveOccurred())
+
+		g.Expect(capturedArgs).To(ContainElement("--build-arg=VERSION=1.0.0"))
+		g.Expect(capturedArgs).To(ContainElement("--build-arg=BUILD_DATE=2024-01-01"))
+		g.Expect(capturedArgs).To(ContainElement("--build-arg-file=/path/to/build-args-file"))
+	})
+
 	t.Run("should append extra args before context directory", func(t *testing.T) {
 		buildahCli, executor := setupBuildahCli()
 		var capturedArgs []string
@@ -309,6 +334,7 @@ func TestBuildahBuildArgs_MakePathsAbsolute(t *testing.T) {
 			Volumes: []cliwrappers.BuildahVolume{
 				{HostDir: "/absolute/path/volume", ContainerDir: "/container/dir", Options: ""},
 			},
+			BuildArgsFile: "/absolute/path/build-args-file",
 		}
 
 		err := args.MakePathsAbsolute("/base/dir")
@@ -317,6 +343,7 @@ func TestBuildahBuildArgs_MakePathsAbsolute(t *testing.T) {
 		g.Expect(args.ContextDir).To(Equal("/absolute/path/context"))
 		g.Expect(args.Secrets[0].Src).To(Equal("/absolute/path/secret"))
 		g.Expect(args.Volumes[0].HostDir).To(Equal("/absolute/path/volume"))
+		g.Expect(args.BuildArgsFile).To(Equal("/absolute/path/build-args-file"))
 	})
 
 	t.Run("should make relative paths absolute", func(t *testing.T) {
@@ -329,6 +356,7 @@ func TestBuildahBuildArgs_MakePathsAbsolute(t *testing.T) {
 			Volumes: []cliwrappers.BuildahVolume{
 				{HostDir: "relative/volume", ContainerDir: "/container/dir", Options: ""},
 			},
+			BuildArgsFile: "relative/build-args-file",
 		}
 
 		err := args.MakePathsAbsolute("/base/dir")
@@ -337,6 +365,7 @@ func TestBuildahBuildArgs_MakePathsAbsolute(t *testing.T) {
 		g.Expect(args.ContextDir).To(Equal("/base/dir"))
 		g.Expect(args.Secrets[0].Src).To(Equal("/base/dir/relative/secret"))
 		g.Expect(args.Volumes[0].HostDir).To(Equal("/base/dir/relative/volume"))
+		g.Expect(args.BuildArgsFile).To(Equal("/base/dir/relative/build-args-file"))
 	})
 
 	t.Run("should handle a mix of relative and absolute paths", func(t *testing.T) {
@@ -377,6 +406,18 @@ func TestBuildahBuildArgs_MakePathsAbsolute(t *testing.T) {
 
 		g.Expect(args.Containerfile).To(Equal(filepath.Join(cwd, "Containerfile")))
 		g.Expect(args.ContextDir).To(Equal(filepath.Join(cwd, "context")))
+	})
+
+	t.Run("should not modify empty BuildArgsFile", func(t *testing.T) {
+		args := &cliwrappers.BuildahBuildArgs{
+			Containerfile: "/absolute/path/Containerfile",
+			ContextDir:    "/absolute/path/context",
+			BuildArgsFile: "",
+		}
+
+		err := args.MakePathsAbsolute("/base/dir")
+		g.Expect(err).ToNot(HaveOccurred())
+		g.Expect(args.BuildArgsFile).To(Equal(""))
 	})
 }
 
