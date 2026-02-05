@@ -95,12 +95,17 @@ func TestPushDockerfile(t *testing.T) {
 		g.Expect(err).ShouldNot(HaveOccurred())
 	}
 
+	sourceDockerfileContentDigest := sha256Checksum("FROM fedora")
+	sourceContainerfilesOperatorContentDigest := sha256Checksum("FROM ubi9")
+
 	imageRepo := filepath.Join(imageRegistry.GetRegistryDomain(), "app")
 
 	testCases := []struct {
-		name                 string
-		params               PushDockerfileParams
-		expectedTaggedDigest string
+		name                         string
+		params                       PushDockerfileParams
+		expectedTaggedDigest         string
+		expectedDockerfileDigest     string
+		expectedTitleAnnotationValue string
 	}{
 		{
 			name: "Push and write result",
@@ -110,7 +115,9 @@ func TestPushDockerfile(t *testing.T) {
 				dockerfile:         "./Dockerfile",
 				imageRefResultFile: "/tmp/result-image-ref",
 			},
-			expectedTaggedDigest: "sha256-cfc8226f8268c70848148f19c35b02788b272a5a7c0071906a9c6b654760e44a",
+			expectedTaggedDigest:         "sha256-cfc8226f8268c70848148f19c35b02788b272a5a7c0071906a9c6b654760e44a",
+			expectedDockerfileDigest:     sourceDockerfileContentDigest,
+			expectedTitleAnnotationValue: "Dockerfile",
 		},
 		{
 			name: "Push with custom suffix",
@@ -120,7 +127,9 @@ func TestPushDockerfile(t *testing.T) {
 				dockerfile: "./Dockerfile",
 				tagSuffix:  ".containerfile",
 			},
-			expectedTaggedDigest: "sha256-f8268c70848148f19c35b02788b272a5a7c0071906a9c6b654760e44a1fc8226",
+			expectedTaggedDigest:         "sha256-f8268c70848148f19c35b02788b272a5a7c0071906a9c6b654760e44a1fc8226",
+			expectedDockerfileDigest:     sourceDockerfileContentDigest,
+			expectedTitleAnnotationValue: "Dockerfile",
 		},
 		{
 			name: "Push with custom artifact type",
@@ -130,7 +139,9 @@ func TestPushDockerfile(t *testing.T) {
 				dockerfile:   "./Dockerfile",
 				artifactType: "application/vnd.my.org.containerfile",
 			},
-			expectedTaggedDigest: "sha256-48148f19c35b02788b272a5a7c0071906a9c6b654760e44a1fc8226f8268c708",
+			expectedTaggedDigest:         "sha256-48148f19c35b02788b272a5a7c0071906a9c6b654760e44a1fc8226f8268c708",
+			expectedDockerfileDigest:     sourceDockerfileContentDigest,
+			expectedTitleAnnotationValue: "Dockerfile",
 		},
 		{
 			name: "Push custom Dockerfile from subdirectory",
@@ -139,7 +150,9 @@ func TestPushDockerfile(t *testing.T) {
 				digest:     "sha256:70848148f19c35b02788b272a5a7c0071906a9c6b654760e44a1fc8226f8268c",
 				dockerfile: "./containerfiles/operator",
 			},
-			expectedTaggedDigest: "sha256-70848148f19c35b02788b272a5a7c0071906a9c6b654760e44a1fc8226f8268c",
+			expectedTaggedDigest:         "sha256-70848148f19c35b02788b272a5a7c0071906a9c6b654760e44a1fc8226f8268c",
+			expectedDockerfileDigest:     sourceContainerfilesOperatorContentDigest,
+			expectedTitleAnnotationValue: "operator",
 		},
 		{
 			name: "Push by using default ./Dockerfile",
@@ -147,7 +160,9 @@ func TestPushDockerfile(t *testing.T) {
 				source: "source",
 				digest: "sha256:35b02788b272a5a7c0071906a9c6b654760e44a1fc8226f8268c70848148f19c",
 			},
-			expectedTaggedDigest: "sha256-35b02788b272a5a7c0071906a9c6b654760e44a1fc8226f8268c70848148f19c",
+			expectedTaggedDigest:         "sha256-35b02788b272a5a7c0071906a9c6b654760e44a1fc8226f8268c70848148f19c",
+			expectedDockerfileDigest:     sourceDockerfileContentDigest,
+			expectedTitleAnnotationValue: "Dockerfile",
 		},
 	}
 
@@ -194,16 +209,12 @@ func TestPushDockerfile(t *testing.T) {
 			err = json.Unmarshal([]byte(manifestJson), &manifest)
 			g.Expect(err).ShouldNot(HaveOccurred())
 
-			var expectedDockerfile string
-			if tc.params.dockerfile == "" {
-				expectedDockerfile = "Dockerfile"
-			} else {
-				expectedDockerfile = filepath.Base(tc.params.dockerfile)
-			}
-			layerAnnotations := manifest.Layers[0].Annotations
+			layerDescriptor := manifest.Layers[0]
+			layerAnnotations := layerDescriptor.Annotations
 			if title, exists := layerAnnotations["org.opencontainers.image.title"]; exists {
-				g.Expect(title).Should(Equal(expectedDockerfile))
+				g.Expect(title).Should(Equal(tc.expectedTitleAnnotationValue))
 			}
+			g.Expect(layerDescriptor.Digest, tc.expectedDockerfileDigest)
 
 			expectedArtifactType := tc.params.artifactType
 			if expectedArtifactType == "" {
