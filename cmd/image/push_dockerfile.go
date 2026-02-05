@@ -8,19 +8,19 @@ import (
 	l "github.com/konflux-ci/konflux-build-cli/pkg/logger"
 )
 
-const commandName = "push-dockerfile"
+const commandName = "push-containerfile"
 
-var PushDockerfileCmd = &cobra.Command{
+var PushContainerfileCmd = &cobra.Command{
 	Use:   commandName,
-	Short: "Discover Dockerfile from source code and push it to registry as an OCI artifact.",
-	Long:  "Discover Dockerfile from source code and push it to registry as an OCI artifact.",
+	Short: "Discover Containerfile from source code and push it to registry as an OCI artifact.",
+	Long:  "Discover Containerfile from source code and push it to registry as an OCI artifact.",
 	Run: func(cmd *cobra.Command, args []string) {
 		l.Logger.Debugf("Starting %s", commandName)
-		pushDockerfile, err := commands.NewPushDockerfile(cmd)
+		pushContainerfile, err := commands.NewPushContainerfile(cmd)
 		if err != nil {
 			l.Logger.Fatal(err)
 		}
-		if err := pushDockerfile.Run(); err != nil {
+		if err := pushContainerfile.Run(); err != nil {
 			l.Logger.Fatal(err)
 		}
 		l.Logger.Debugf("Finished %s", commandName)
@@ -28,5 +28,5 @@ var PushDockerfileCmd = &cobra.Command{
 }
 
 func init() {
-	common.RegisterParameters(PushDockerfileCmd, commands.PushDockerfileParamsConfig)
+	common.RegisterParameters(PushContainerfileCmd, commands.PushContainerfileParamsConfig)
 }

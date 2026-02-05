@@ -15,73 +15,71 @@ import (
 )
 
 const (
-	dockerfileArtifactTagSuffix = ".dockerfile"
-	dockerfileArtifactType      = "application/vnd.konflux.dockerfile"
-	dockerfileContext           = "."
-	dockerfileFilePath          = "./Dockerfile"
+	containerfileArtifactTagSuffix = ".containerfile"
+	containerfileArtifactType      = "application/vnd.konflux.containerfile"
+	containerfileContext           = "."
 
 	// Max length of a tag - length of sha256 digest: 128 - 71
 	// Refer to https://github.com/opencontainers/distribution-spec/blob/main/spec.md#pulling-manifests
 	tagSuffixRegex = "^[a-zA-Z0-9._-]{1,57}$"
 )
 
-var PushDockerfileParamsConfig = map[string]common.Parameter{
+var PushContainerfileParamsConfig = map[string]common.Parameter{
 	"image-url": {
 		Name:       "image-url",
 		ShortName:  "i",
-		EnvVarName: "KBC_PUSH_DOCKERFILE_IMAGE_URL",
+		EnvVarName: "KBC_PUSH_CONTAINERFILE_IMAGE_URL",
 		TypeKind:   reflect.String,
-		Usage:      "Binary image URL. Dockerfile is pushed to the image repository where this binary image is.",
+		Usage:      "Binary image URL. Containerfile is pushed to the image repository where this binary image is.",
 		Required:   true,
 	},
 	"image-digest": {
 		Name:       "image-digest",
 		ShortName:  "d",
-		EnvVarName: "KBC_PUSH_DOCKERFILE_IMAGE_DIGEST",
+		EnvVarName: "KBC_PUSH_CONTAINERFILE_IMAGE_DIGEST",
 		TypeKind:   reflect.String,
-		Usage:      "Binary image digest, which is used to construct the tag of Dockerfile image.",
+		Usage:      "Binary image digest, which is used to construct the tag of Containerfile image.",
 		Required:   true,
 	},
-	"dockerfile": {
-		Name:         "dockerfile",
-		ShortName:    "f",
-		EnvVarName:   "KBC_PUSH_DOCKERFILE_DOCKERFILE_PATH",
-		TypeKind:     reflect.String,
-		DefaultValue: dockerfileFilePath,
-		Usage:        fmt.Sprintf("Path to Dockerfile relative to source repository root. Defaults to '%s'.", dockerfileFilePath),
-		Required:     false,
+	"containerfile": {
+		Name:       "containerfile",
+		ShortName:  "f",
+		EnvVarName: "KBC_PUSH_CONTAINERFILE_CONTAINERFILE",
+		TypeKind:   reflect.String,
+		Usage:      "Path to Containerfile relative to source repository root. If not specified, Containerfile is searched from context then the source directory. Fallback to search Dockerfile if no Containerfile is found.",
+		Required:   false,
 	},
 	"context": {
 		Name:         "context",
 		ShortName:    "c",
-		EnvVarName:   "KBC_PUSH_DOCKERFILE_CONTEXT",
+		EnvVarName:   "KBC_PUSH_CONTAINERFILE_CONTEXT",
 		TypeKind:     reflect.String,
-		DefaultValue: dockerfileContext,
-		Usage:        fmt.Sprintf("Build context used to search Dockerfile. Defaults to '%s'.", dockerfileContext),
+		DefaultValue: containerfileContext,
+		Usage:        fmt.Sprintf("Build context used to search Containerfile. Defaults to '%s'.", containerfileContext),
 		Required:     false,
 	},
 	"tag-suffix": {
 		Name:         "tag-suffix",
 		ShortName:    "t",
-		EnvVarName:   "KBC_PUSH_DOCKERFILE_TAG_SUFFIX",
+		EnvVarName:   "KBC_PUSH_CONTAINERFILE_TAG_SUFFIX",
 		TypeKind:     reflect.String,
-		DefaultValue: dockerfileArtifactTagSuffix,
-		Usage:        "Suffix to construct artifact image tag. Defaults to '.dockerfile'.",
+		DefaultValue: containerfileArtifactTagSuffix,
+		Usage:        fmt.Sprintf("Suffix to construct artifact image tag. Defaults to '%s'.", containerfileArtifactTagSuffix),
 		Required:     false,
 	},
 	"artifact-type": {
 		Name:         "artifact-type",
 		ShortName:    "a",
-		EnvVarName:   "KBC_PUSH_DOCKERFILE_ARTIFACT_TYPE",
+		EnvVarName:   "KBC_PUSH_CONTAINERFILE_ARTIFACT_TYPE",
 		TypeKind:     reflect.String,
-		DefaultValue: dockerfileArtifactType,
-		Usage:        fmt.Sprintf("Artifact type of the dockerfile artifact image. Defaults to '%s'.", dockerfileArtifactType),
+		DefaultValue: containerfileArtifactType,
+		Usage:        fmt.Sprintf("Artifact type of the Containerfile artifact image. Defaults to '%s'.", containerfileArtifactType),
 		Required:     false,
 	},
 	"source": {
 		Name:       "source",
 		ShortName:  "s",
-		EnvVarName: "KBC_PUSH_DOCKERFILE_SOURCE",
+		EnvVarName: "KBC_PUSH_CONTAINERFILE_SOURCE",
 		TypeKind:   reflect.String,
 		Usage:      "Directory containing the source code. It is a relative path to the root of current working directory.",
 		Required:   true,
@@ -89,17 +87,17 @@ var PushDockerfileParamsConfig = map[string]common.Parameter{
 	"result-path-image-ref": {
 		Name:       "result-path-image-ref",
 		ShortName:  "r",
-		EnvVarName: "KBC_PUSH_DOCKERFILE_RESULT_PATH_IMAGE_REF",
+		EnvVarName: "KBC_PUSH_CONTAINERFILE_RESULT_PATH_IMAGE_REF",
 		TypeKind:   reflect.String,
-		Usage:      "Write digested image reference of the pushed Dockerfile image into this file.",
+		Usage:      "Write digested image reference of the pushed Containerfile image into this file.",
 		Required:   false,
 	},
 }
 
-type PushDockerfileParams struct {
+type PushContainerfileParams struct {
 	ImageUrl           string `paramName:"image-url"`
 	ImageDigest        string `paramName:"image-digest"`
-	Dockerfile         string `paramName:"dockerfile"`
+	Containerfile      string `paramName:"containerfile"`
 	Context            string `paramName:"context"`
 	TagSuffix          string `paramName:"tag-suffix"`
 	ArtifactType       string `paramName:"artifact-type"`
@@ -107,33 +105,33 @@ type PushDockerfileParams struct {
 	ResultPathImageRef string `paramName:"result-path-image-ref"`
 }
 
-type PushDockerfileResults struct {
+type PushContainerfileResults struct {
 	ImageRef string `json:"image_ref"`
 }
 
-type PushDockerfile struct {
-	Params        *PushDockerfileParams
+type PushContainerfile struct {
+	Params        *PushContainerfileParams
 	OrasClient    common.OrasClientInterface
-	Results       PushDockerfileResults
+	Results       PushContainerfileResults
 	ResultsWriter common.ResultsWriterInterface
 
 	imageName string
 }
 
-func NewPushDockerfile(cmd *cobra.Command) (*PushDockerfile, error) {
-	params := &PushDockerfileParams{}
-	if err := common.ParseParameters(cmd, PushDockerfileParamsConfig, params); err != nil {
+func NewPushContainerfile(cmd *cobra.Command) (*PushContainerfile, error) {
+	params := &PushContainerfileParams{}
+	if err := common.ParseParameters(cmd, PushContainerfileParamsConfig, params); err != nil {
 		return nil, err
 	}
-	pushDockerfile := &PushDockerfile{
+	pushContainerfile := &PushContainerfile{
 		Params:        params,
 		OrasClient:    common.NewOrasClient(),
 		ResultsWriter: common.NewResultsWriter(),
 	}
-	return pushDockerfile, nil
+	return pushContainerfile, nil
 }
 
-func (c *PushDockerfile) Run() error {
+func (c *PushContainerfile) Run() error {
 	c.logParams()
 
 	imageUrl := c.Params.ImageUrl
@@ -149,22 +147,22 @@ func (c *PushDockerfile) Run() error {
 	}
 	l.Logger.Debugf("Using current directory: %s\n", curDir)
 
-	dockerfilePath, err := common.SearchDockerfile(common.DockerfileSearchOpts{
+	containerfilePath, err := common.SearchDockerfile(common.DockerfileSearchOpts{
 		SourceDir:  c.Params.Source,
 		ContextDir: c.Params.Context,
-		Dockerfile: c.Params.Dockerfile,
+		Dockerfile: c.Params.Containerfile,
 	})
 	if err != nil {
-		return fmt.Errorf("Error on searching Dockerfile: %w", err)
+		return fmt.Errorf("Error on searching Container: %w", err)
 	}
 
-	if dockerfilePath == "" {
-		l.Logger.Debugf("Dockerfile '%s' is not found from source '%s' and context '%s'. Abort push.",
-			c.Params.Dockerfile, c.Params.Source, c.Params.Context)
+	if containerfilePath == "" {
+		l.Logger.Debugf("Containerfile '%s' is not found from source '%s' and context '%s'. Abort push.",
+			c.Params.Containerfile, c.Params.Source, c.Params.Context)
 		return nil
 	}
 
-	l.Logger.Debugf("Got Dockerfile: %s", dockerfilePath)
+	l.Logger.Debugf("Got Containerfile: %s", containerfilePath)
 
 	l.Logger.Debugf("Select registry authentication for %s\n", imageUrl)
 	registryAuth, err := common.SelectRegistryAuthFromDefaultAuthFile(imageUrl)
@@ -177,19 +175,19 @@ func (c *PushDockerfile) Run() error {
 		return fmt.Errorf("Error on extracting authentication credential: %w", err)
 	}
 
-	tag := c.generateDockerfileImageTag()
+	tag := c.generateContainerfileImageTag()
 
-	absDockerfilePath, err := filepath.Abs(dockerfilePath)
+	absContainerfilePath, err := filepath.Abs(containerfilePath)
 	if err != nil {
-		return fmt.Errorf("Error on getting absolute path of %s: %w", dockerfilePath, err)
+		return fmt.Errorf("Error on getting absolute path of %s: %w", containerfilePath, err)
 	}
 	remoteRepo := common.NewRepository(c.imageName, username, password)
-	digest, err := c.OrasClient.Push(remoteRepo, tag, absDockerfilePath, c.Params.ArtifactType)
+	digest, err := c.OrasClient.Push(remoteRepo, tag, absContainerfilePath, c.Params.ArtifactType)
 	if err != nil {
-		return fmt.Errorf("Failed to push Dockerfile %s: %w", dockerfilePath, err)
+		return fmt.Errorf("Failed to push Containerfile %s: %w", containerfilePath, err)
 	}
 
-	l.Logger.Debugf("Dockerfile '%s' is pushed to registry with tag: %s\n", dockerfilePath, tag)
+	l.Logger.Debugf("Containerfile '%s' is pushed to registry with tag: %s\n", containerfilePath, tag)
 
 	artifactImageRef := fmt.Sprintf("%s@%s", c.imageName, digest)
 
@@ -210,12 +208,12 @@ func (c *PushDockerfile) Run() error {
 	return nil
 }
 
-func (c *PushDockerfile) generateDockerfileImageTag() string {
+func (c *PushContainerfile) generateContainerfileImageTag() string {
 	digest := strings.Replace(c.Params.ImageDigest, ":", "-", 1)
 	return digest + c.Params.TagSuffix
 }
 
-func (c *PushDockerfile) validateParams() error {
+func (c *PushContainerfile) validateParams() error {
 	if !common.IsImageNameValid(c.imageName) {
 		return fmt.Errorf("image name '%s' is invalid", c.imageName)
 	}
@@ -232,11 +230,11 @@ func (c *PushDockerfile) validateParams() error {
 	return nil
 }
 
-func (c *PushDockerfile) logParams() {
+func (c *PushContainerfile) logParams() {
 	l.Logger.Infof("[param] Image URL: %s", c.Params.ImageUrl)
 	l.Logger.Infof("[param] Image digest: %s", c.Params.ImageDigest)
 	l.Logger.Infof("[param] Tag suffix: %s", c.Params.TagSuffix)
-	l.Logger.Infof("[param] Dockerfile: %s", c.Params.Dockerfile)
+	l.Logger.Infof("[param] Containerfile: %s", c.Params.Containerfile)
 	l.Logger.Infof("[param] Context: %s", c.Params.Context)
 	l.Logger.Infof("[param] Artifact type: %s", c.Params.ArtifactType)
 	l.Logger.Infof("[param] Source directory: %s", c.Params.Source)

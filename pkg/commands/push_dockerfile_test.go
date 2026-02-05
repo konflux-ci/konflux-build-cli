@@ -18,7 +18,7 @@ const imageDigest = "sha256:e7afdb605d0685d214876ae9d13ae0cc15da3a766be86e919fec
 func TestValidateParams(t *testing.T) {
 	t.Run("Capture invalid image name", func(t *testing.T) {
 		for _, imageName := range []string{"", "localhost^5000/app"} {
-			cmd := PushDockerfile{
+			cmd := PushContainerfile{
 				imageName: imageName,
 			}
 			err := cmd.validateParams()
@@ -34,8 +34,8 @@ func TestValidateParams(t *testing.T) {
 
 	t.Run("Capture invalid digest", func(t *testing.T) {
 		for _, digest := range []string{"", "some-digest"} {
-			cmd := PushDockerfile{
-				Params: &PushDockerfileParams{
+			cmd := PushContainerfile{
+				Params: &PushContainerfileParams{
 					ImageDigest: digest,
 				},
 				imageName: "localhost:5000/cool/app",
@@ -55,14 +55,14 @@ func TestValidateParams(t *testing.T) {
 		taggedDigest := "sha256-e7afdb605d0685d214876ae9d13ae0cc15da3a766be86e919fecee4032b9783b"
 		testCases := []string{
 			"",
-			"^dockerfile",
+			"^containerfile",
 			fmt.Sprintf("%s-%s", taggedDigest, taggedDigest),
 			// exceeds the max length 57.
 			fmt.Sprintf("%s-%s", taggedDigest, taggedDigest)[:58],
 		}
 		for _, testTagSuffix := range testCases {
-			cmd := PushDockerfile{
-				Params: &PushDockerfileParams{
+			cmd := PushContainerfile{
+				Params: &PushContainerfileParams{
 					ImageDigest: imageDigest,
 					TagSuffix:   testTagSuffix,
 				},
@@ -80,16 +80,16 @@ func TestValidateParams(t *testing.T) {
 	})
 }
 
-func TestDockerfileImageTag(t *testing.T) {
-	cmd := PushDockerfile{
-		Params: &PushDockerfileParams{
+func TestGenerateContainerfileImageTag(t *testing.T) {
+	cmd := PushContainerfile{
+		Params: &PushContainerfileParams{
 			ImageDigest: imageDigest,
 			TagSuffix:   ".containerfile",
 		},
 		imageName: "localhost:5000/cool/app",
 	}
 	expected := "sha256-e7afdb605d0685d214876ae9d13ae0cc15da3a766be86e919fecee4032b9783b.containerfile"
-	imageTag := cmd.generateDockerfileImageTag()
+	imageTag := cmd.generateContainerfileImageTag()
 	if imageTag != expected {
 		t.Errorf("Expect tag %s, but got: %s", expected, imageTag)
 	}
@@ -137,15 +137,15 @@ func TestRun(t *testing.T) {
 			return artifactImageDigest, nil
 		}
 
-		cmd := &PushDockerfile{
-			Params: &PushDockerfileParams{
+		cmd := &PushContainerfile{
+			Params: &PushContainerfileParams{
 				ImageUrl:           "localhost.reg.io/app",
 				ImageDigest:        imageDigest,
 				Source:             "source",
-				Dockerfile:         "Containerfile",
+				Containerfile:      "Containerfile",
 				Context:            ".",
-				TagSuffix:          ".dockerfile",
-				ArtifactType:       "application/vnd.konflux.dockerfile",
+				TagSuffix:          ".containerfile",
+				ArtifactType:       "application/vnd.konflux.containerfile",
 				ResultPathImageRef: filepath.Join(workDir, "results", "image-ref"),
 			},
 			ResultsWriter: &common.ResultsWriter{},
@@ -160,14 +160,14 @@ func TestRun(t *testing.T) {
 		g.Expect(string(actualImageRef)).Should(Equal(expectedImageRef))
 	})
 
-	t.Run("Do not push if Dockerfile is not found", func(t *testing.T) {
-		cmd := &PushDockerfile{
-			Params: &PushDockerfileParams{
-				ImageUrl:    "localhost.reg.io/app",
-				ImageDigest: imageDigest,
-				Dockerfile:  "Dockerfile",
-				Source:      "source",
-				TagSuffix:   ".containerfile",
+	t.Run("Do not push if specified Containerfile is not found", func(t *testing.T) {
+		cmd := &PushContainerfile{
+			Params: &PushContainerfileParams{
+				ImageUrl:      "localhost.reg.io/app",
+				ImageDigest:   imageDigest,
+				Containerfile: "Dockerfile",
+				Source:        "source",
+				TagSuffix:     ".containerfile",
 			},
 			ResultsWriter: &common.ResultsWriter{},
 		}
@@ -178,14 +178,14 @@ func TestRun(t *testing.T) {
 	})
 
 	t.Run("Registry authentication cannot be selected", func(t *testing.T) {
-		cmd := &PushDockerfile{
-			Params: &PushDockerfileParams{
-				ImageUrl:    "other-registry.io/app",
-				ImageDigest: imageDigest,
-				Source:      "source",
-				Dockerfile:  "Containerfile",
-				Context:     ".",
-				TagSuffix:   ".containerfile",
+		cmd := &PushContainerfile{
+			Params: &PushContainerfileParams{
+				ImageUrl:      "other-registry.io/app",
+				ImageDigest:   imageDigest,
+				Source:        "source",
+				Containerfile: "Containerfile",
+				Context:       ".",
+				TagSuffix:     ".containerfile",
 			},
 			ResultsWriter: &common.ResultsWriter{},
 		}
@@ -201,14 +201,14 @@ func TestRun(t *testing.T) {
 			return "", fmt.Errorf("Mock oras push failed.")
 		}
 
-		cmd := &PushDockerfile{
-			Params: &PushDockerfileParams{
-				ImageUrl:    "localhost.reg.io/app",
-				ImageDigest: imageDigest,
-				Source:      "source",
-				Dockerfile:  "Containerfile",
-				Context:     ".",
-				TagSuffix:   ".containerfile",
+		cmd := &PushContainerfile{
+			Params: &PushContainerfileParams{
+				ImageUrl:      "localhost.reg.io/app",
+				ImageDigest:   imageDigest,
+				Source:        "source",
+				Containerfile: "Containerfile",
+				Context:       ".",
+				TagSuffix:     ".containerfile",
 			},
 			ResultsWriter: &common.ResultsWriter{},
 			OrasClient:    orasClient,

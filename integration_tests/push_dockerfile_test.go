@@ -24,8 +24,8 @@ func sha256Checksum(input string) string {
 	return hex.EncodeToString(hashBytes)
 }
 
-func setupPushDockerfileContainer(imageRegistry ImageRegistry, opts ...ContainerOption) (*TestRunnerContainer, error) {
-	container := NewBuildCliRunnerContainer("kbc-push-dockerfile", TaskRunnerImage, opts...)
+func setupPushContainerfileContainer(imageRegistry ImageRegistry, opts ...ContainerOption) (*TestRunnerContainer, error) {
+	container := NewBuildCliRunnerContainer("kbc-push-containerfile", TaskRunnerImage, opts...)
 
 	var err error
 	if imageRegistry != nil {
@@ -38,30 +38,30 @@ func setupPushDockerfileContainer(imageRegistry ImageRegistry, opts ...Container
 }
 
 // Creates a container and registers cleanup.
-func setupPushDockerfileContainerWithCleanup(t *testing.T, imageRegistry ImageRegistry, opts ...ContainerOption) *TestRunnerContainer {
-	container, err := setupPushDockerfileContainer(imageRegistry, opts...)
+func setupPushContainerfileContainerWithCleanup(t *testing.T, imageRegistry ImageRegistry, opts ...ContainerOption) *TestRunnerContainer {
+	container, err := setupPushContainerfileContainer(imageRegistry, opts...)
 	t.Cleanup(func() { container.DeleteIfExists() })
 	Expect(err).ShouldNot(HaveOccurred())
 	return container
 }
 
-type PushDockerfileParams struct {
+type PushContainerfileParams struct {
 	source             string
 	context            string
-	dockerfile         string
+	containerfile      string
 	digest             string
 	tagSuffix          string
 	artifactType       string
 	resultPathImageRef string
 }
 
-func TestPushDockerfile(t *testing.T) {
+func TestPushContainerfile(t *testing.T) {
 	SetupGomega(t)
 	g := NewWithT(t)
 
 	commonOpts := []ContainerOption{}
 	imageRegistry := setupImageRegistry(t)
-	container := setupPushDockerfileContainerWithCleanup(t, imageRegistry, commonOpts...)
+	container := setupPushContainerfileContainerWithCleanup(t, imageRegistry, commonOpts...)
 
 	dirs := []string{
 		"source/containerfiles",
@@ -72,7 +72,7 @@ func TestPushDockerfile(t *testing.T) {
 	}
 
 	files := []string{
-		"FROM fedora", "source/Dockerfile",
+		"FROM fedora", "source/Containerfile",
 		"FROM ubi9", "source/containerfiles/operator",
 	}
 	for i := 0; i < len(files); i += 2 {
@@ -83,87 +83,87 @@ func TestPushDockerfile(t *testing.T) {
 		g.Expect(err).ShouldNot(HaveOccurred())
 	}
 
-	sourceDockerfileContentDigest := sha256Checksum("FROM fedora")
+	sourceContainerfileContentDigest := sha256Checksum("FROM fedora")
 	sourceContainerfilesOperatorContentDigest := sha256Checksum("FROM ubi9")
 
 	imageRepo := filepath.Join(imageRegistry.GetRegistryDomain(), "app")
 
 	testCases := []struct {
 		name                         string
-		params                       PushDockerfileParams
+		params                       PushContainerfileParams
 		expectedTaggedDigest         string
-		expectedDockerfileDigest     string
+		expectedContainerfileDigest  string
 		expectedTitleAnnotationValue string
 	}{
 		{
 			name: "Push and write result",
-			params: PushDockerfileParams{
+			params: PushContainerfileParams{
 				source:             "source",
 				digest:             "sha256:cfc8226f8268c70848148f19c35b02788b272a5a7c0071906a9c6b654760e44a",
-				dockerfile:         "./Dockerfile",
+				containerfile:      "./Containerfile",
 				resultPathImageRef: "/tmp/result-image-ref",
 			},
 			expectedTaggedDigest:         "sha256-cfc8226f8268c70848148f19c35b02788b272a5a7c0071906a9c6b654760e44a",
-			expectedDockerfileDigest:     sourceDockerfileContentDigest,
-			expectedTitleAnnotationValue: "Dockerfile",
+			expectedContainerfileDigest:  sourceContainerfileContentDigest,
+			expectedTitleAnnotationValue: "Containerfile",
 		},
 		{
 			name: "Push with custom suffix",
-			params: PushDockerfileParams{
-				source:     "source",
-				digest:     "sha256:f8268c70848148f19c35b02788b272a5a7c0071906a9c6b654760e44a1fc8226",
-				dockerfile: "./Dockerfile",
-				tagSuffix:  ".containerfile",
+			params: PushContainerfileParams{
+				source:        "source",
+				digest:        "sha256:f8268c70848148f19c35b02788b272a5a7c0071906a9c6b654760e44a1fc8226",
+				containerfile: "./Containerfile",
+				tagSuffix:     ".containerfile",
 			},
 			expectedTaggedDigest:         "sha256-f8268c70848148f19c35b02788b272a5a7c0071906a9c6b654760e44a1fc8226",
-			expectedDockerfileDigest:     sourceDockerfileContentDigest,
-			expectedTitleAnnotationValue: "Dockerfile",
+			expectedContainerfileDigest:  sourceContainerfileContentDigest,
+			expectedTitleAnnotationValue: "Containerfile",
 		},
 		{
 			name: "Push with custom artifact type",
-			params: PushDockerfileParams{
-				source:       "source",
-				digest:       "sha256:48148f19c35b02788b272a5a7c0071906a9c6b654760e44a1fc8226f8268c708",
-				dockerfile:   "./Dockerfile",
-				artifactType: "application/vnd.my.org.containerfile",
+			params: PushContainerfileParams{
+				source:        "source",
+				digest:        "sha256:48148f19c35b02788b272a5a7c0071906a9c6b654760e44a1fc8226f8268c708",
+				containerfile: "./Containerfile",
+				artifactType:  "application/vnd.my.org.containerfile",
 			},
 			expectedTaggedDigest:         "sha256-48148f19c35b02788b272a5a7c0071906a9c6b654760e44a1fc8226f8268c708",
-			expectedDockerfileDigest:     sourceDockerfileContentDigest,
-			expectedTitleAnnotationValue: "Dockerfile",
+			expectedContainerfileDigest:  sourceContainerfileContentDigest,
+			expectedTitleAnnotationValue: "Containerfile",
 		},
 		{
-			name: "Push custom Dockerfile from subdirectory",
-			params: PushDockerfileParams{
-				source:     "source",
-				digest:     "sha256:70848148f19c35b02788b272a5a7c0071906a9c6b654760e44a1fc8226f8268c",
-				dockerfile: "./containerfiles/operator",
+			name: "Push custom containerfile from subdirectory",
+			params: PushContainerfileParams{
+				source:        "source",
+				digest:        "sha256:70848148f19c35b02788b272a5a7c0071906a9c6b654760e44a1fc8226f8268c",
+				containerfile: "./containerfiles/operator",
 			},
 			expectedTaggedDigest:         "sha256-70848148f19c35b02788b272a5a7c0071906a9c6b654760e44a1fc8226f8268c",
-			expectedDockerfileDigest:     sourceContainerfilesOperatorContentDigest,
+			expectedContainerfileDigest:  sourceContainerfilesOperatorContentDigest,
 			expectedTitleAnnotationValue: "operator",
 		},
 		{
-			name: "Push by using default ./Dockerfile",
-			params: PushDockerfileParams{
+			name: "Push by using default ./Containerfile",
+			params: PushContainerfileParams{
 				source: "source",
 				digest: "sha256:35b02788b272a5a7c0071906a9c6b654760e44a1fc8226f8268c70848148f19c",
 			},
 			expectedTaggedDigest:         "sha256-35b02788b272a5a7c0071906a9c6b654760e44a1fc8226f8268c70848148f19c",
-			expectedDockerfileDigest:     sourceDockerfileContentDigest,
-			expectedTitleAnnotationValue: "Dockerfile",
+			expectedContainerfileDigest:  sourceContainerfileContentDigest,
+			expectedTitleAnnotationValue: "Containerfile",
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			cmd := []string{
-				"image", "push-dockerfile",
+				"image", "push-containerfile",
 				"--image-url", imageRepo,
 				"--image-digest", tc.params.digest,
 				"--source", "source",
 			}
-			if tc.params.dockerfile != "" {
-				cmd = append(cmd, "--dockerfile", tc.params.dockerfile)
+			if tc.params.containerfile != "" {
+				cmd = append(cmd, "--containerfile", tc.params.containerfile)
 			}
 			if tc.params.resultPathImageRef != "" {
 				cmd = append(cmd, "--result-path-image-ref", tc.params.resultPathImageRef)
@@ -183,7 +183,7 @@ func TestPushDockerfile(t *testing.T) {
 
 			tagSuffix := tc.params.tagSuffix
 			if tagSuffix == "" {
-				tagSuffix = ".dockerfile"
+				tagSuffix = ".containerfile"
 			}
 
 			expectedTag := fmt.Sprintf("%s%s", tc.expectedTaggedDigest, tagSuffix)
@@ -202,11 +202,11 @@ func TestPushDockerfile(t *testing.T) {
 			if title, exists := layerAnnotations["org.opencontainers.image.title"]; exists {
 				g.Expect(title).Should(Equal(tc.expectedTitleAnnotationValue))
 			}
-			g.Expect(layerDescriptor.Digest, tc.expectedDockerfileDigest)
+			g.Expect(layerDescriptor.Digest, tc.expectedContainerfileDigest)
 
 			expectedArtifactType := tc.params.artifactType
 			if expectedArtifactType == "" {
-				expectedArtifactType = "application/vnd.konflux.dockerfile" // the default
+				expectedArtifactType = "application/vnd.konflux.containerfile" // the default
 			}
 
 			g.Expect(manifest.ArtifactType).Should(Equal(expectedArtifactType))
