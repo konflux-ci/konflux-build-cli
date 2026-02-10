@@ -69,6 +69,7 @@ func (c *GitClone) Run() error {
 	defer func() {
 		_ = os.RemoveAll(c.internalDir)
 		_ = os.Unsetenv("GIT_CONFIG_GLOBAL")
+		_ = os.Unsetenv("GIT_SSH_COMMAND")
 	}()
 
 	// Set proxy environment variables if there are any
@@ -82,6 +83,10 @@ func (c *GitClone) Run() error {
 
 	// Setup authentication
 	if err := c.setupBasicAuth(); err != nil {
+		return err
+	}
+
+	if err := c.setupSSH(); err != nil {
 		return err
 	}
 
