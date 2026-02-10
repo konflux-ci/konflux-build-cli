@@ -183,6 +183,75 @@ func rewriteGitConfigCredentialHelper(configContent, credentialsPath string) str
 	return strings.Join(lines, "\n")
 }
 
+// setupSSH sets up SSH keys from an ssh-directory workspace.
+// SSH files are copied to c.internalDir/.ssh/ and GIT_SSH_COMMAND is set
+// with explicit flags so that git uses the custom SSH config without modifying $HOME.
+func (c *GitClone) setupSSH() error {
+	if c.Params.SSHDirectory == "" {
+		return nil
+	}
+
+	sshDir := c.Params.SSHDirectory
+
+	// Check if the SSH directory exists
+	if _, err := os.Stat(sshDir); os.IsNotExist(err) {
+		l.Logger.Infof("SSH directory not found: %s", sshDir)
+		return nil
+	}
+
+	l.Logger.Infof("Setting up SSH keys from %s", sshDir)
+
+	destSSHDir := filepath.Join(c.internalDir, ".ssh")
+
+	// Create destination .ssh directory
+	if err := os.MkdirAll(destSSHDir, 0700); err != nil {
+		return fmt.Errorf("failed to create .ssh directory: %w", err)
+	}
+
+	// Copy all files from source to destination
+	entries, err := os.ReadDir(sshDir)
+	if err != nil {
+		return fmt.Errorf("failed to read SSH directory: %w", err)
+	}
+
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue // Skip subdirectories
+		}
+
+		srcPath := filepath.Join(sshDir, entry.Name())
+		destPath := filepath.Join(destSSHDir, entry.Name())
+
+		if err := copyFile(srcPath, destPath, 0400); err != nil {
+			return fmt.Errorf("failed to copy SSH file %s: %w", entry.Name(), err)
+		}
+	}
+
+	// Build GIT_SSH_COMMAND with explicit flags
+	sshCmd := "ssh"
+
+	// Add identity files for private keys (files matching id_* without .pub suffix)
+	for _, entry := range entries {
+		name := entry.Name()
+		if strings.HasPrefix(name, "id_") && !strings.HasSuffix(name, ".pub") && !entry.IsDir() {
+			sshCmd += fmt.Sprintf(" -i %s", filepath.Join(destSSHDir, name))
+		}
+	}
+
+	// Add known_hosts if present
+	knownHostsPath := filepath.Join(destSSHDir, "known_hosts")
+	if fileExists(knownHostsPath) {
+		sshCmd += fmt.Sprintf(" -o UserKnownHostsFile=%s", knownHostsPath)
+	}
+
+	if err := os.Setenv("GIT_SSH_COMMAND", sshCmd); err != nil {
+		return err
+	}
+
+	l.Logger.Infof("SSH keys configured (GIT_SSH_COMMAND=%s)", sshCmd)
+	return nil
+}
+
 // fileExists checks if a file exists and is not a directory.
 func fileExists(path string) bool {
 	info, err := os.Stat(path)
