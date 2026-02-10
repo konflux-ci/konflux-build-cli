@@ -156,6 +156,29 @@ func TestBuildahCli_Build(t *testing.T) {
 		g.Expect(capturedArgs).To(ContainElement("--build-arg-file=/path/to/build-args-file"))
 	})
 
+	t.Run("should turn Envs into --env params", func(t *testing.T) {
+		buildahCli, executor := setupBuildahCli()
+		var capturedArgs []string
+		executor.executeWithOutput = func(command string, args ...string) (string, string, int, error) {
+			g.Expect(command).To(Equal("buildah"))
+			capturedArgs = args
+			return "", "", 0, nil
+		}
+
+		buildArgs := &cliwrappers.BuildahBuildArgs{
+			Containerfile: containerfile,
+			ContextDir:    contextDir,
+			OutputRef:     outputRef,
+			Envs:          []string{"FOO=bar", "BAZ=qux"},
+		}
+
+		err := buildahCli.Build(buildArgs)
+		g.Expect(err).ToNot(HaveOccurred())
+
+		g.Expect(capturedArgs).To(ContainElement("--env=FOO=bar"))
+		g.Expect(capturedArgs).To(ContainElement("--env=BAZ=qux"))
+	})
+
 	t.Run("should append extra args before context directory", func(t *testing.T) {
 		buildahCli, executor := setupBuildahCli()
 		var capturedArgs []string
