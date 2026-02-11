@@ -1,0 +1,41 @@
+package image
+
+import (
+	"github.com/spf13/cobra"
+
+	"github.com/konflux-ci/konflux-build-cli/pkg/commands"
+	"github.com/konflux-ci/konflux-build-cli/pkg/common"
+	l "github.com/konflux-ci/konflux-build-cli/pkg/logger"
+)
+
+var BuildImageIndexCmd = &cobra.Command{
+	Use:   "build-image-index",
+	Short: "Build a multi-architecture image index",
+	Long: `Build a multi-architecture image index (manifest list) from multiple platform-specific images.
+
+This command combines multiple container images into a single image index, enabling
+multi-platform container image support.
+
+Examples:
+  # Build an image index from multiple platform images
+  konflux-build-cli image build-image-index \
+    --image quay.io/myorg/myapp:latest \
+    --images quay.io/myorg/myapp@sha256:amd64digest... \
+    --images quay.io/myorg/myapp@sha256:arm64digest...
+`,
+	Run: func(cmd *cobra.Command, args []string) {
+		l.Logger.Debug("Starting build-image-index")
+		buildImageIndex, err := commands.NewBuildImageIndex(cmd)
+		if err != nil {
+			l.Logger.Fatal(err)
+		}
+		if err := buildImageIndex.Run(); err != nil {
+			l.Logger.Fatal(err)
+		}
+		l.Logger.Debug("Finished build-image-index")
+	},
+}
+
+func init() {
+	common.RegisterParameters(BuildImageIndexCmd, commands.BuildImageIndexParamsConfig)
+}
