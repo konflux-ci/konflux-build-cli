@@ -1,0 +1,29 @@
+name: go mod tidy
+
+"on":
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  gomod-tidy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6.0.2
+
+      - name: Check if dependencies are tidy
+        run: |
+          #!/bin/bash
+          set -o errexit -o nounset -o pipefail
+
+          go mod tidy
+
+          if ! git diff --quiet; then
+            echo "::error::go mod tidy made changes"
+            git diff --color
+            echo
+            echo "Please run 'go mod tidy' and commit the changes."
+            exit 1
+          fi
