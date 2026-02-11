@@ -22,6 +22,14 @@ Examples:
     --image quay.io/myorg/myapp:latest \
     --images quay.io/myorg/myapp@sha256:amd64digest... \
     --images quay.io/myorg/myapp@sha256:arm64digest...
+
+  # Build and push to additional tags (e.g., TaskRun name, commit SHA)
+  konflux-build-cli image build-image-index \
+    --image quay.io/myorg/myapp:latest \
+    --images quay.io/myorg/myapp@sha256:amd64digest... \
+    --images quay.io/myorg/myapp@sha256:arm64digest... \
+    --additional-tags taskrun-xyz-12345 \
+    --additional-tags commit-abc123
 `,
 	Run: func(cmd *cobra.Command, args []string) {
 		l.Logger.Debug("Starting build-image-index")
