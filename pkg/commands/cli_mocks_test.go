@@ -28,8 +28,12 @@ func (m *mockSkopeoCli) Inspect(args *cliwrappers.SkopeoInspectArgs) (string, er
 var _ cliwrappers.BuildahCliInterface = &mockBuildahCli{}
 
 type mockBuildahCli struct {
-	BuildFunc func(args *cliwrappers.BuildahBuildArgs) error
-	PushFunc  func(args *cliwrappers.BuildahPushArgs) (string, error)
+	BuildFunc          func(args *cliwrappers.BuildahBuildArgs) error
+	PushFunc           func(args *cliwrappers.BuildahPushArgs) (string, error)
+	ManifestCreateFunc func(args *cliwrappers.BuildahManifestCreateArgs) error
+	ManifestAddFunc    func(args *cliwrappers.BuildahManifestAddArgs) error
+	ManifestInspectFunc func(args *cliwrappers.BuildahManifestInspectArgs) (string, error)
+	ManifestPushFunc   func(args *cliwrappers.BuildahManifestPushArgs) (string, error)
 }
 
 func (m *mockBuildahCli) Build(args *cliwrappers.BuildahBuildArgs) error {
@@ -42,6 +46,34 @@ func (m *mockBuildahCli) Build(args *cliwrappers.BuildahBuildArgs) error {
 func (m *mockBuildahCli) Push(args *cliwrappers.BuildahPushArgs) (string, error) {
 	if m.PushFunc != nil {
 		return m.PushFunc(args)
+	}
+	return "", nil
+}
+
+func (m *mockBuildahCli) ManifestCreate(args *cliwrappers.BuildahManifestCreateArgs) error {
+	if m.ManifestCreateFunc != nil {
+		return m.ManifestCreateFunc(args)
+	}
+	return nil
+}
+
+func (m *mockBuildahCli) ManifestAdd(args *cliwrappers.BuildahManifestAddArgs) error {
+	if m.ManifestAddFunc != nil {
+		return m.ManifestAddFunc(args)
+	}
+	return nil
+}
+
+func (m *mockBuildahCli) ManifestInspect(args *cliwrappers.BuildahManifestInspectArgs) (string, error) {
+	if m.ManifestInspectFunc != nil {
+		return m.ManifestInspectFunc(args)
+	}
+	return "", nil
+}
+
+func (m *mockBuildahCli) ManifestPush(args *cliwrappers.BuildahManifestPushArgs) (string, error) {
+	if m.ManifestPushFunc != nil {
+		return m.ManifestPushFunc(args)
 	}
 	return "", nil
 }
