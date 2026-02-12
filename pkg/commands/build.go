@@ -88,6 +88,20 @@ var BuildParamsConfig = map[string]common.Parameter{
 		TypeKind:   reflect.Slice,
 		Usage:      "Environment variables to pass to the build using buildah's --env option.",
 	},
+	"labels": {
+		Name:       "labels",
+		ShortName:  "",
+		EnvVarName: "KBC_BUILD_LABELS",
+		TypeKind:   reflect.Slice,
+		Usage:      "Labels to apply to the image using buildah's --label option.",
+	},
+	"annotations": {
+		Name:       "annotations",
+		ShortName:  "",
+		EnvVarName: "KBC_BUILD_ANNOTATIONS",
+		TypeKind:   reflect.Slice,
+		Usage:      "Annotations to apply to the image using buildah's --annotation option.",
+	},
 	"containerfile-json-output": {
 		Name:       "containerfile-json-output",
 		ShortName:  "",
@@ -107,6 +121,8 @@ type BuildParams struct {
 	BuildArgs               []string `paramName:"build-args"`
 	BuildArgsFile           string   `paramName:"build-args-file"`
 	Envs                    []string `paramName:"envs"`
+	Labels                  []string `paramName:"labels"`
+	Annotations             []string `paramName:"annotations"`
 	ContainerfileJsonOutput string   `paramName:"containerfile-json-output"`
 	ExtraArgs               []string // Additional arguments to pass to buildah build
 }
@@ -233,6 +249,12 @@ func (c *Build) logParams() {
 	}
 	if len(c.Params.Envs) > 0 {
 		l.Logger.Infof("[param] Envs: %v", c.Params.Envs)
+	}
+	if len(c.Params.Labels) > 0 {
+		l.Logger.Infof("[param] Labels: %v", c.Params.Labels)
+	}
+	if len(c.Params.Annotations) > 0 {
+		l.Logger.Infof("[param] Annotations: %v", c.Params.Annotations)
 	}
 	if c.Params.ContainerfileJsonOutput != "" {
 		l.Logger.Infof("[param] ContainerfileJsonOutput: %s", c.Params.ContainerfileJsonOutput)
@@ -516,6 +538,8 @@ func (c *Build) buildImage() error {
 		BuildArgs:     c.Params.BuildArgs,
 		BuildArgsFile: c.Params.BuildArgsFile,
 		Envs:          c.Params.Envs,
+		Labels:        c.Params.Labels,
+		Annotations:   c.Params.Annotations,
 		ExtraArgs:     c.Params.ExtraArgs,
 	}
 	if c.Params.WorkdirMount != "" {

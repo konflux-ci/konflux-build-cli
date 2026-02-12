@@ -46,6 +46,8 @@ type BuildahBuildArgs struct {
 	BuildArgs     []string
 	BuildArgsFile string
 	Envs          []string
+	Labels        []string
+	Annotations   []string
 	ExtraArgs     []string
 }
 
@@ -162,6 +164,14 @@ func (b *BuildahCli) Build(args *BuildahBuildArgs) error {
 
 	for _, env := range args.Envs {
 		buildahArgs = append(buildahArgs, "--env="+env)
+	}
+
+	for _, label := range args.Labels {
+		buildahArgs = append(buildahArgs, "--label="+label)
+	}
+
+	for _, annotation := range args.Annotations {
+		buildahArgs = append(buildahArgs, "--annotation="+annotation)
 	}
 
 	// Append extra arguments before the context directory

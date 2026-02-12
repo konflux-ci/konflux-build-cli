@@ -34,6 +34,8 @@ type BuildParams struct {
 	BuildArgs               []string
 	BuildArgsFile           string
 	Envs                    []string
+	Labels                  []string
+	Annotations             []string
 	ContainerfileJsonOutput string
 	ExtraArgs               []string
 }
@@ -163,6 +165,14 @@ func runBuildWithOutput(container *TestRunnerContainer, buildParams BuildParams)
 		args = append(args, "--envs")
 		args = append(args, buildParams.Envs...)
 	}
+	if len(buildParams.Labels) > 0 {
+		args = append(args, "--labels")
+		args = append(args, buildParams.Labels...)
+	}
+	if len(buildParams.Annotations) > 0 {
+		args = append(args, "--annotations")
+		args = append(args, buildParams.Annotations...)
+	}
 	if buildParams.ContainerfileJsonOutput != "" {
 		args = append(args, "--containerfile-json-output", buildParams.ContainerfileJsonOutput)
 	}
@@ -207,8 +217,9 @@ func writeContainerfile(contextDir, content string) {
 }
 
 type containerImageMeta struct {
-	labels map[string]string
-	envs   map[string]string
+	labels      map[string]string
+	annotations map[string]string
+	envs        map[string]string
 }
 
 func getImageMeta(container *TestRunnerContainer, imageRef string) containerImageMeta {
@@ -222,6 +233,7 @@ func getImageMeta(container *TestRunnerContainer, imageRef string) containerImag
 				Env    []string
 			} `json:"config"`
 		}
+		ImageAnnotations map[string]string
 	}
 
 	err = json.Unmarshal([]byte(stdout), &inspect)
@@ -233,7 +245,11 @@ func getImageMeta(container *TestRunnerContainer, imageRef string) containerImag
 		envs[key] = value
 	}
 
-	return containerImageMeta{labels: inspect.OCIv1.Config.Labels, envs: envs}
+	return containerImageMeta{
+		labels:      inspect.OCIv1.Config.Labels,
+		annotations: inspect.ImageAnnotations,
+		envs:        envs,
+	}
 }
 
 func getContainerfileMeta(container *TestRunnerContainer, containerfileJsonPath string) containerImageMeta {
@@ -744,10 +760,10 @@ LABEL test.label="envs-test"
 		containerfileJsonPath := "/workspace/parsed-containerfile.json"
 
 		buildParams := BuildParams{
-			Context:                 contextDir,
-			OutputRef:               outputRef,
-			Push:                    false,
-			Envs:                    []string{
+			Context:   contextDir,
+			OutputRef: outputRef,
+			Push:      false,
+			Envs: []string{
 				"FOO=foo-value",
 				"BAR=bar-value",
 				// Corner cases to verify that dockerfile-json and buildah handle them the same way
@@ -796,5 +812,46 @@ LABEL test.label="envs-test"
 
 		containerfileLabels := formatAsKeyValuePairs(containerfileMeta.labels)
 		Expect(containerfileLabels).To(ContainElements(expectedLabels))
+	})
+
+	t.Run("WithLabelsAndAnnotations", func(t *testing.T) {
+		contextDir := setupTestContext(t)
+
+		writeContainerfile(contextDir, `FROM scratch`)
+
+		outputRef := "localhost/test-image-labels-annotations:" + GenerateUniqueTag(t)
+
+		buildParams := BuildParams{
+			Context:   contextDir,
+			OutputRef: outputRef,
+			Push:      false,
+			Labels: []string{
+				"custom.label1=value1",
+				"custom.label2=value2",
+			},
+			Annotations: []string{
+				"org.opencontainers.image.title=King Arthur",
+				"org.opencontainers.image.description=Elected by farcical aquatic ceremony.",
+			},
+		}
+
+		container := setupBuildContainerWithCleanup(t, buildParams, nil)
+
+		err := runBuild(container, buildParams)
+		Expect(err).ToNot(HaveOccurred())
+
+		imageMeta := getImageMeta(container, outputRef)
+
+		imageLabels := formatAsKeyValuePairs(imageMeta.labels)
+		Expect(imageLabels).To(ContainElements(
+			"custom.label1=value1",
+			"custom.label2=value2",
+		))
+
+		imageAnnotations := formatAsKeyValuePairs(imageMeta.annotations)
+		Expect(imageAnnotations).To(ContainElements(
+			"org.opencontainers.image.title=King Arthur",
+			"org.opencontainers.image.description=Elected by farcical aquatic ceremony.",
+		))
 	})
 }
