@@ -33,6 +33,7 @@ type BuildParams struct {
 	WorkdirMount            string
 	BuildArgs               []string
 	BuildArgsFile           string
+	Envs                    []string
 	ContainerfileJsonOutput string
 	ExtraArgs               []string
 }
@@ -158,6 +159,10 @@ func runBuildWithOutput(container *TestRunnerContainer, buildParams BuildParams)
 	if buildParams.BuildArgsFile != "" {
 		args = append(args, "--build-args-file", buildParams.BuildArgsFile)
 	}
+	if len(buildParams.Envs) > 0 {
+		args = append(args, "--envs")
+		args = append(args, buildParams.Envs...)
+	}
 	if buildParams.ContainerfileJsonOutput != "" {
 		args = append(args, "--containerfile-json-output", buildParams.ContainerfileJsonOutput)
 	}
@@ -201,7 +206,12 @@ func writeContainerfile(contextDir, content string) {
 	Expect(err).ToNot(HaveOccurred())
 }
 
-func getImageLabels(container *TestRunnerContainer, imageRef string) map[string]string {
+type containerImageMeta struct {
+	labels map[string]string
+	envs   map[string]string
+}
+
+func getImageMeta(container *TestRunnerContainer, imageRef string) containerImageMeta {
 	stdout, _, err := container.ExecuteCommandWithOutput("buildah", "inspect", imageRef)
 	Expect(err).ToNot(HaveOccurred())
 
@@ -209,6 +219,7 @@ func getImageLabels(container *TestRunnerContainer, imageRef string) map[string]
 		OCIv1 struct {
 			Config struct {
 				Labels map[string]string
+				Env    []string
 			} `json:"config"`
 		}
 	}
@@ -216,10 +227,16 @@ func getImageLabels(container *TestRunnerContainer, imageRef string) map[string]
 	err = json.Unmarshal([]byte(stdout), &inspect)
 	Expect(err).ToNot(HaveOccurred())
 
-	return inspect.OCIv1.Config.Labels
+	envs := make(map[string]string, len(inspect.OCIv1.Config.Env))
+	for _, env := range inspect.OCIv1.Config.Env {
+		key, value, _ := strings.Cut(env, "=")
+		envs[key] = value
+	}
+
+	return containerImageMeta{labels: inspect.OCIv1.Config.Labels, envs: envs}
 }
 
-func getContainerfileLabels(container *TestRunnerContainer, containerfileJsonPath string) map[string]string {
+func getContainerfileMeta(container *TestRunnerContainer, containerfileJsonPath string) containerImageMeta {
 	containerfileJSON, err := container.GetFileContent(containerfileJsonPath)
 	Expect(err).ToNot(HaveOccurred())
 
@@ -232,8 +249,12 @@ func getContainerfileLabels(container *TestRunnerContainer, containerfileJsonPat
 			Commands []struct {
 				Name   string
 				Labels []struct {
-					Key     string
-					Value   string
+					Key   string
+					Value string
+				}
+				Env []struct {
+					Key   string
+					Value string
 				}
 			}
 		}
@@ -243,14 +264,18 @@ func getContainerfileLabels(container *TestRunnerContainer, containerfileJsonPat
 	Expect(err).ToNot(HaveOccurred())
 
 	labels := make(map[string]string)
+	envs := make(map[string]string)
+
 	for _, cmd := range containerfile.Stages[0].Commands {
-		if strings.ToLower(cmd.Name) == "label" {
-			for _, label := range cmd.Labels {
-				labels[label.Key] = label.Value
-			}
+		for _, label := range cmd.Labels {
+			labels[label.Key] = label.Value
+		}
+		for _, env := range cmd.Env {
+			envs[env.Key] = env.Value
 		}
 	}
-	return labels
+
+	return containerImageMeta{labels: labels, envs: envs}
 }
 
 func formatAsKeyValuePairs(m map[string]string) []string {
@@ -562,12 +587,15 @@ LABEL test.label="build-args-test"
 			"undefined-buildarg=",
 		}
 
+		imageMeta := getImageMeta(container, outputRef)
+		containerfileMeta := getContainerfileMeta(container, containerfileJsonPath)
+
 		// Verify image labels
-		imageLabels := formatAsKeyValuePairs(getImageLabels(container, outputRef))
+		imageLabels := formatAsKeyValuePairs(imageMeta.labels)
 		Expect(imageLabels).To(ContainElements(expectedLabels))
 
 		// Verify the parsed Containerfile has the same label values
-		containerfileLabels := formatAsKeyValuePairs(getContainerfileLabels(container, containerfileJsonPath))
+		containerfileLabels := formatAsKeyValuePairs(containerfileMeta.labels)
 		Expect(containerfileLabels).To(ContainElements(expectedLabels))
 	})
 
@@ -614,8 +642,8 @@ LABEL test.label="platform-build-args-test"
 		Expect(err).ToNot(HaveOccurred())
 
 		// Verify platform values match between the parsed Containerfile and the actual image
-		imageLabels := getImageLabels(container, outputRef)
-		containerfileLabels := getContainerfileLabels(container, containerfileJsonPath)
+		imageLabels := getImageMeta(container, outputRef).labels
+		containerfileLabels := getContainerfileMeta(container, containerfileJsonPath).labels
 
 		labelsToCheck := []string{
 			"TARGETPLATFORM",
@@ -697,5 +725,76 @@ LABEL test.label="platform-build-args-test"
     }
   ]
 }`))
+	})
+
+	t.Run("WithEnvs", func(t *testing.T) {
+		contextDir := setupTestContext(t)
+
+		writeContainerfile(contextDir, `
+FROM scratch
+
+LABEL foo=$FOO
+LABEL bar=$BAR
+
+LABEL test.label="envs-test"
+`)
+
+		outputRef := "localhost/test-image-envs:" + GenerateUniqueTag(t)
+		// Also verify that envs are handled properly for Containerfile parsing
+		containerfileJsonPath := "/workspace/parsed-containerfile.json"
+
+		buildParams := BuildParams{
+			Context:                 contextDir,
+			OutputRef:               outputRef,
+			Push:                    false,
+			Envs:                    []string{
+				"FOO=foo-value",
+				"BAR=bar-value",
+				// Corner cases to verify that dockerfile-json and buildah handle them the same way
+				// Should be an env var without a name (causes an error when starting the container)
+				"=noname",
+				// Should be an empty string
+				"NOVALUE=",
+				// Shouldn't be set at all
+				"NOSUCHENV",
+			},
+			ContainerfileJsonOutput: containerfileJsonPath,
+		}
+
+		container := setupBuildContainerWithCleanup(t, buildParams, nil)
+
+		err := runBuild(container, buildParams)
+		Expect(err).ToNot(HaveOccurred())
+
+		expectedEnvs := []string{
+			"FOO=foo-value",
+			"BAR=bar-value",
+			"=noname",
+			"NOVALUE=",
+		}
+		expectedLabels := []string{
+			"foo=foo-value",
+			"bar=bar-value",
+		}
+
+		imageMeta := getImageMeta(container, outputRef)
+		containerfileMeta := getContainerfileMeta(container, containerfileJsonPath)
+
+		// Verify envs
+		imageEnvs := formatAsKeyValuePairs(imageMeta.envs)
+		Expect(imageEnvs).To(ContainElements(expectedEnvs))
+
+		containerfileEnvs := formatAsKeyValuePairs(containerfileMeta.envs)
+		Expect(containerfileEnvs).To(ContainElements(expectedEnvs))
+
+		Expect(imageMeta.envs).ToNot(HaveKey("NOSUCHENV"))
+		Expect(containerfileMeta.envs).ToNot(HaveKey("NOSUCHENV"))
+
+		// Verify labels
+		imageLabels := formatAsKeyValuePairs(imageMeta.labels)
+		Expect(imageLabels).To(ContainElements(expectedLabels))
+
+		containerfileLabels := formatAsKeyValuePairs(containerfileMeta.labels)
+		Expect(containerfileLabels).To(ContainElements(expectedLabels))
 	})
 }

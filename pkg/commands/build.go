@@ -81,6 +81,13 @@ var BuildParamsConfig = map[string]common.Parameter{
 		TypeKind:   reflect.String,
 		Usage:      "Path to a file with build arguments, see https://www.mankier.com/1/buildah-build#--build-arg-file",
 	},
+	"envs": {
+		Name:       "envs",
+		ShortName:  "",
+		EnvVarName: "KBC_BUILD_ENVS",
+		TypeKind:   reflect.Slice,
+		Usage:      "Environment variables to pass to the build using buildah's --env option.",
+	},
 	"containerfile-json-output": {
 		Name:       "containerfile-json-output",
 		ShortName:  "",
@@ -99,6 +106,7 @@ type BuildParams struct {
 	WorkdirMount            string   `paramName:"workdir-mount"`
 	BuildArgs               []string `paramName:"build-args"`
 	BuildArgsFile           string   `paramName:"build-args-file"`
+	Envs                    []string `paramName:"envs"`
 	ContainerfileJsonOutput string   `paramName:"containerfile-json-output"`
 	ExtraArgs               []string // Additional arguments to pass to buildah build
 }
@@ -222,6 +230,9 @@ func (c *Build) logParams() {
 	}
 	if c.Params.BuildArgsFile != "" {
 		l.Logger.Infof("[param] BuildArgsFile: %s", c.Params.BuildArgsFile)
+	}
+	if len(c.Params.Envs) > 0 {
+		l.Logger.Infof("[param] Envs: %v", c.Params.Envs)
 	}
 	if c.Params.ContainerfileJsonOutput != "" {
 		l.Logger.Infof("[param] ContainerfileJsonOutput: %s", c.Params.ContainerfileJsonOutput)
@@ -417,11 +428,14 @@ func (c *Build) parseContainerfile() (*dockerfile.Dockerfile, error) {
 		return nil, fmt.Errorf("failed to parse %s: %w", c.containerfilePath, err)
 	}
 
+	envs := processKeyValueEnvs(c.Params.Envs)
+
 	argExp, err := c.createBuildArgExpander()
 	if err != nil {
 		return nil, fmt.Errorf("failed to process build args: %w", err)
 	}
 
+	containerfile.InjectEnv(envs)
 	containerfile.Expand(argExp)
 	return containerfile, nil
 }
@@ -453,14 +467,8 @@ func (c *Build) createBuildArgExpander() (dockerfile.SingleWordExpander, error) 
 	}
 
 	// CLI --build-args take precedence over everything else
-	for _, arg := range c.Params.BuildArgs {
-		key, value, hasValue := strings.Cut(arg, "=")
-		if hasValue {
-			args[key] = value
-		} else if valueFromEnv, ok := os.LookupEnv(key); ok {
-			args[key] = valueFromEnv
-		}
-	}
+	cliArgs := processKeyValueEnvs(c.Params.BuildArgs)
+	maps.Copy(args, cliArgs)
 
 	// Return the kind of "expander" function expected by the dockerfile-json API
 	// (takes the name of a build arg, returns the value or error for undefined build args)
@@ -471,6 +479,21 @@ func (c *Build) createBuildArgExpander() (dockerfile.SingleWordExpander, error) 
 		return "", fmt.Errorf("not defined: $%s", word)
 	}
 	return argExp, nil
+}
+
+// Parse an array of key[=value] args. If '=' is missing, look up the value in
+// environment variables. This is how buildah handles --build-arg and --env values.
+func processKeyValueEnvs(args []string) map[string]string {
+	values := make(map[string]string)
+	for _, arg := range args {
+		key, value, hasValue := strings.Cut(arg, "=")
+		if hasValue {
+			values[key] = value
+		} else if valueFromEnv, ok := os.LookupEnv(key); ok {
+			values[key] = valueFromEnv
+		}
+	}
+	return values
 }
 
 func (c *Build) buildImage() error {
@@ -492,6 +515,7 @@ func (c *Build) buildImage() error {
 		Secrets:       c.buildahSecrets,
 		BuildArgs:     c.Params.BuildArgs,
 		BuildArgsFile: c.Params.BuildArgsFile,
+		Envs:          c.Params.Envs,
 		ExtraArgs:     c.Params.ExtraArgs,
 	}
 	if c.Params.WorkdirMount != "" {

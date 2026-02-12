@@ -8,6 +8,7 @@ require (
 	github.com/containerd/platforms v1.0.0-rc.2
 	github.com/containers/image/v5 v5.36.2
 	github.com/keilerkonzept/dockerfile-json v1.2.2
+	github.com/moby/buildkit v0.19.0
 	github.com/onsi/gomega v1.38.0
 	github.com/opencontainers/go-digest v1.0.0
 	github.com/opencontainers/image-spec v1.1.1
@@ -25,7 +26,6 @@ require (
 	github.com/google/go-cmp v0.7.0 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/kr/pretty v0.1.0 // indirect
-	github.com/moby/buildkit v0.19.0 // indirect
 	github.com/moby/docker-image-spec v1.3.1 // indirect
 	github.com/onsi/ginkgo/v2 v2.25.1 // indirect
 	github.com/pkg/errors v0.9.1 // indirect

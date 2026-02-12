@@ -45,6 +45,7 @@ type BuildahBuildArgs struct {
 	Volumes       []BuildahVolume
 	BuildArgs     []string
 	BuildArgsFile string
+	Envs          []string
 	ExtraArgs     []string
 }
 
@@ -157,6 +158,10 @@ func (b *BuildahCli) Build(args *BuildahBuildArgs) error {
 
 	if args.BuildArgsFile != "" {
 		buildahArgs = append(buildahArgs, "--build-arg-file="+args.BuildArgsFile)
+	}
+
+	for _, env := range args.Envs {
+		buildahArgs = append(buildahArgs, "--env="+env)
 	}
 
 	// Append extra arguments before the context directory

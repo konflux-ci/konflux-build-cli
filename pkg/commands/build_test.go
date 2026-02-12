@@ -8,6 +8,7 @@ import (
 
 	"github.com/konflux-ci/konflux-build-cli/pkg/cliwrappers"
 	"github.com/konflux-ci/konflux-build-cli/testutil"
+	"github.com/moby/buildkit/frontend/dockerfile/instructions"
 	. "github.com/onsi/gomega"
 )
 
@@ -516,6 +517,43 @@ func Test_Build_parseContainerfile(t *testing.T) {
 
 		g.Expect(err).ToNot(HaveOccurred())
 		g.Expect(result).ToNot(BeNil())
+	})
+
+	t.Run("should inject Envs", func(t *testing.T) {
+		tempDir := t.TempDir()
+		containerfilePath := filepath.Join(tempDir, "Containerfile")
+		os.WriteFile(containerfilePath, []byte("FROM scratch\n"), 0644)
+
+		os.Setenv("VAR_FROM_ENV", "from-env")
+		defer os.Unsetenv("VAR_FROM_ENV")
+
+		c := &Build{
+			containerfilePath: containerfilePath,
+			Params: &BuildParams{
+				Envs: []string{"FOO=bar", "VAR_FROM_ENV"},
+			},
+		}
+
+		result, err := c.parseContainerfile()
+		g.Expect(err).ToNot(HaveOccurred())
+
+		g.Expect(result.Stages).To(HaveLen(1))
+
+		expectedEnvs := []instructions.KeyValuePair{
+			{Key: "FOO", Value: "bar"},
+			{Key: "VAR_FROM_ENV", Value: "from-env"},
+		}
+		var actualEnvs []instructions.KeyValuePair
+
+		for _, cmd := range result.Stages[0].Commands {
+			if env, ok := cmd.Command.(*instructions.EnvCommand); ok {
+				actualEnvs = append(actualEnvs, env.Env...)
+			} else {
+				t.Fatalf("Expected an ENV instruction, got %#v", cmd)
+			}
+		}
+
+		g.Expect(actualEnvs).To(ConsistOf(expectedEnvs))
 	})
 
 	t.Run("should return error for non-existent file", func(t *testing.T) {
