@@ -258,7 +258,14 @@ func (c *TestRunnerContainer) StartWithRegistryIntegration(imageRegistry ImageRe
 }
 
 func (c *TestRunnerContainer) Delete() error {
-	stdout, stderr, _, err := c.executor.Execute(containerTool, "rm", "-f", c.name)
+	args := []string{"rm", "-f", c.name}
+	if containerTool != "docker" {
+		// By default, podman sends SIGTERM first and, if the container doesn't stop within
+		// 10 seconds, sends SIGKILL. Docker always sends SIGKILL right away and doesn't have
+		// a --time flag. Do the same thing for podman, for consistency and to speed up tests.
+		args = append(args, "--time=0")
+	}
+	stdout, stderr, _, err := c.executor.Execute(containerTool, args...)
 	if err == nil {
 		c.containerStatus = ContainerStatus_Deleted
 	} else {
