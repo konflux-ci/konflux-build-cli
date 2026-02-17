@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"strings"
 
 	cliWrappers "github.com/konflux-ci/konflux-build-cli/pkg/cliwrappers"
@@ -598,6 +599,9 @@ func (c *Build) mergeDefaultLabelsAndAnnotations() ([]string, []string) {
 	}
 
 	if c.Params.AddLegacyLabels {
+		arch := goArchToArchitectureLabel(runtime.GOARCH)
+		defaultLabels = append(defaultLabels, "architecture="+arch)
+
 		if c.Params.ImageSource != "" {
 			defaultLabels = append(defaultLabels, "vcs-url="+c.Params.ImageSource)
 		}
@@ -617,6 +621,21 @@ func (c *Build) mergeDefaultLabelsAndAnnotations() ([]string, []string) {
 	mergedLabels := append(defaultLabels, c.Params.Labels...)
 	mergedAnnotations := append(defaultAnnotations, c.Params.Annotations...)
 	return mergedLabels, mergedAnnotations
+}
+
+// Convert Go's GOARCH value to the value used for the 'architecture' label.
+//
+// Historically, the 'architecture' label used the RPM architecture names rather
+// than the GOARCH names. Keep that the same.
+func goArchToArchitectureLabel(goarch string) string {
+	switch goarch {
+	case "amd64":
+		return "x86_64"
+	case "arm64":
+		return "aarch64"
+	default:
+		return goarch
+	}
 }
 
 func (c *Build) buildImage() error {

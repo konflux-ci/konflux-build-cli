@@ -947,7 +947,17 @@ LABEL test.label="envs-test"
 
 		imageMeta := getImageMeta(container, outputRef)
 
+		// Get the expected architecture from 'uname -m' in the container
+		stdout, _, err := container.ExecuteCommandWithOutput("uname", "-m")
+		Expect(err).ToNot(HaveOccurred())
+		expectedArch := strings.TrimSpace(stdout)
+
 		imageLabels := formatAsKeyValuePairs(imageMeta.labels)
+
+		Expect(imageMeta.labels).To(HaveKey("architecture"))
+		Expect(imageMeta.labels["architecture"]).To(Equal(expectedArch),
+			"architecture label should match uname -m output")
+
 		Expect(imageLabels).To(ContainElements(
 			"org.opencontainers.image.source=https://github.com/konflux-ci/test",
 			"vcs-url=https://github.com/konflux-ci/test",
@@ -958,6 +968,7 @@ LABEL test.label="envs-test"
 
 		// Annotations should not include legacy labels
 		imageAnnotations := formatAsKeyValuePairs(imageMeta.annotations)
+		Expect(imageMeta.annotations).ToNot(HaveKey("architecture"))
 		Expect(imageMeta.annotations).ToNot(HaveKey("vcs-url"))
 		Expect(imageMeta.annotations).ToNot(HaveKey("vcs-ref"))
 		Expect(imageMeta.annotations).ToNot(HaveKey("vcs-type"))
