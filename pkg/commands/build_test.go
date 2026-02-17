@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/konflux-ci/konflux-build-cli/pkg/cliwrappers"
@@ -1058,6 +1059,26 @@ func Test_Build_Run(t *testing.T) {
 	})
 }
 
+func Test_goArchToArchitectureLabel(t *testing.T) {
+	g := NewWithT(t)
+
+	tests := []struct {
+		goarch   string
+		expected string
+	}{
+		{"amd64", "x86_64"},
+		{"arm64", "aarch64"},
+		{"ppc64le", "ppc64le"},
+		{"s390x", "s390x"},
+		{"unknown", "unknown"},
+	}
+
+	for _, tc := range tests {
+		result := goArchToArchitectureLabel(tc.goarch)
+		g.Expect(result).To(Equal(tc.expected), "goArchToUname(%s) should return %s", tc.goarch, tc.expected)
+	}
+}
+
 func Test_Build_mergeDefaultLabelsAndAnnotations(t *testing.T) {
 	g := NewWithT(t)
 
@@ -1135,7 +1156,9 @@ func Test_Build_mergeDefaultLabelsAndAnnotations(t *testing.T) {
 
 		labels, annotations := c.mergeDefaultLabelsAndAnnotations()
 
+		arch := goArchToArchitectureLabel(runtime.GOARCH)
 		g.Expect(labels).To(Equal([]string{
+			"architecture=" + arch,
 			"org.opencontainers.image.source=https://github.com/org/repo",
 			"vcs-url=https://github.com/org/repo",
 			"org.opencontainers.image.revision=abc123",
