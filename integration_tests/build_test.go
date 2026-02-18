@@ -10,6 +10,7 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 
 	. "github.com/onsi/gomega"
 
@@ -40,6 +41,7 @@ type BuildParams struct {
 	ImageRevision           string
 	LegacyBuildTimestamp    string
 	SourceDateEpoch         string
+	RewriteTimestamp        bool
 	QuayImageExpiresAfter   string
 	AddLegacyLabels         bool
 	ContainerfileJsonOutput string
@@ -191,6 +193,9 @@ func runBuildWithOutput(container *TestRunnerContainer, buildParams BuildParams)
 	if buildParams.SourceDateEpoch != "" {
 		args = append(args, "--source-date-epoch", buildParams.SourceDateEpoch)
 	}
+	if buildParams.RewriteTimestamp {
+		args = append(args, "--rewrite-timestamp")
+	}
 	if buildParams.QuayImageExpiresAfter != "" {
 		args = append(args, "--quay-image-expires-after", buildParams.QuayImageExpiresAfter)
 	}
@@ -241,6 +246,7 @@ func writeContainerfile(contextDir, content string) {
 }
 
 type containerImageMeta struct {
+	digest      string
 	created     string
 	labels      map[string]string
 	annotations map[string]string
@@ -260,6 +266,9 @@ func getImageMeta(container *TestRunnerContainer, imageRef string) containerImag
 			} `json:"config"`
 		}
 		ImageAnnotations map[string]string
+		// This field has the same value as the output of
+		// skopeo inspect --format '{{.Digest}}' containers-storage:<imageRef>
+		FromImageDigest string
 	}
 
 	err = json.Unmarshal([]byte(stdout), &inspect)
@@ -272,6 +281,7 @@ func getImageMeta(container *TestRunnerContainer, imageRef string) containerImag
 	}
 
 	return containerImageMeta{
+		digest:      inspect.FromImageDigest,
 		created:     inspect.OCIv1.Created,
 		labels:      inspect.OCIv1.Config.Labels,
 		annotations: inspect.ImageAnnotations,
@@ -1072,5 +1082,64 @@ LABEL source-date-epoch=$SOURCE_DATE_EPOCH
 			imageMeta := getImageMeta(container, outputRef)
 			checkSourceDateEpochEffects(imageMeta)
 		})
+	})
+
+	t.Run("Reproducibility", func(t *testing.T) {
+		buildImage := func() containerImageMeta {
+			contextDir := setupTestContext(t)
+			// The file is newly created for every test build, has a different timestamp every time
+			// and would normally break reproducibility. Try setting RewriteTimestamp to false and
+			// see that imageMeta.digest is different every time.
+			testutil.WriteFileTree(t, contextDir, map[string]string{
+				"hello.txt": "hello there\n",
+			})
+
+			writeContainerfile(contextDir, `
+FROM scratch
+
+COPY hello.txt /hello.txt
+`)
+
+			outputRef := "localhost/test-reproducibility:" + GenerateUniqueTag(t)
+
+			buildParams := BuildParams{
+				Context:   contextDir,
+				OutputRef: outputRef,
+				Push:      false,
+				// Thanks to the combination of --source-date-epoch and --rewrite-timestamp,
+				// the timestamp of /hello.txt inside the built image will be clamped to 2026-01-01
+				SourceDateEpoch:  "1767225600",
+				RewriteTimestamp: true,
+				ExtraArgs: []string{
+					// Ensure the image config will be exactly the same regardles of the host OS/architecture
+					"--platform", "linux/amd64",
+					// We want to build the image twice and verify reproducibility, avoid caching
+					"--no-cache",
+				},
+			}
+
+			container := setupBuildContainerWithCleanup(t, buildParams, nil)
+
+			err := runBuild(container, buildParams)
+			Expect(err).ToNot(HaveOccurred())
+
+			imageMeta := getImageMeta(container, outputRef)
+			return imageMeta
+		}
+
+		imageMeta1 := buildImage()
+
+		// Thanks to all time-related metadata being set to 2026-01-01, the build is fully reproducible
+		// and the digest will stay the same every time.
+		Expect(imageMeta1.digest).To(Equal("sha256:e0af303a3dea2d5339af66071540d35043b51889d1b770289405498b87dd9987"))
+		Expect(imageMeta1.created).To(Equal("2026-01-01T00:00:00Z"))
+
+		// Ensure the hello.txt file created for the second test really does get a different timestamp
+		time.Sleep(1 * time.Second)
+
+		// Build from the same inputs (just with different timestamps) twice.
+		// The built image should have the same digest both times.
+		imageMeta2 := buildImage()
+		Expect(imageMeta2.digest).To(Equal(imageMeta1.digest), "Digest unexpectedly changed after rebuild")
 	})
 }

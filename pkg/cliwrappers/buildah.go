@@ -38,18 +38,19 @@ func NewBuildahCli(executor CliExecutorInterface) (*BuildahCli, error) {
 }
 
 type BuildahBuildArgs struct {
-	Containerfile   string
-	ContextDir      string
-	OutputRef       string
-	Secrets         []BuildahSecret
-	Volumes         []BuildahVolume
-	BuildArgs       []string
-	BuildArgsFile   string
-	Envs            []string
-	Labels          []string
-	Annotations     []string
-	SourceDateEpoch string
-	ExtraArgs       []string
+	Containerfile    string
+	ContextDir       string
+	OutputRef        string
+	Secrets          []BuildahSecret
+	Volumes          []BuildahVolume
+	BuildArgs        []string
+	BuildArgsFile    string
+	Envs             []string
+	Labels           []string
+	Annotations      []string
+	SourceDateEpoch  string
+	RewriteTimestamp bool
+	ExtraArgs        []string
 }
 
 type BuildahSecret struct {
@@ -177,6 +178,10 @@ func (b *BuildahCli) Build(args *BuildahBuildArgs) error {
 
 	if args.SourceDateEpoch != "" {
 		buildahArgs = append(buildahArgs, "--source-date-epoch="+args.SourceDateEpoch)
+	}
+
+	if args.RewriteTimestamp {
+		buildahArgs = append(buildahArgs, "--rewrite-timestamp")
 	}
 
 	// Append extra arguments before the context directory
