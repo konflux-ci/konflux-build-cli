@@ -134,6 +134,13 @@ var BuildParamsConfig = map[string]common.Parameter{
 		TypeKind:   reflect.String,
 		Usage:      "See https://www.mankier.com/1/buildah-build#--source-date-epoch.\nThe timestamp will also be used for the org.opencontainers.image.created annotation and label.\nConflicts with --legacy-build-timestamp.",
 	},
+	"rewrite-timestamp": {
+		Name:       "rewrite-timestamp",
+		ShortName:  "",
+		EnvVarName: "KBC_BUILD_REWRITE_TIMESTAMP",
+		TypeKind:   reflect.Bool,
+		Usage:      "See https://www.mankier.com/1/buildah-build#--rewrite-timestamp. Has no effect if --source-date-epoch is not set.",
+	},
 	"quay-image-expires-after": {
 		Name:       "quay-image-expires-after",
 		ShortName:  "",
@@ -174,6 +181,7 @@ type BuildParams struct {
 	ImageRevision           string   `paramName:"image-revision"`
 	LegacyBuildTimestamp    string   `paramName:"legacy-build-timestamp"`
 	SourceDateEpoch         string   `paramName:"source-date-epoch"`
+	RewriteTimestamp        bool     `paramName:"rewrite-timestamp"`
 	QuayImageExpiresAfter   string   `paramName:"quay-image-expires-after"`
 	AddLegacyLabels         bool     `paramName:"add-legacy-labels"`
 	ContainerfileJsonOutput string   `paramName:"containerfile-json-output"`
@@ -323,6 +331,12 @@ func (c *Build) logParams() {
 	}
 	if c.Params.SourceDateEpoch != "" {
 		l.Logger.Infof("[param] SourceDateEpoch: %s", c.Params.SourceDateEpoch)
+	}
+	if c.Params.RewriteTimestamp {
+		l.Logger.Infof("[param] RewriteTimestamp: %t", c.Params.RewriteTimestamp)
+		if c.Params.SourceDateEpoch == "" {
+			l.Logger.Warn("RewriteTimestamp is enabled but SourceDateEpoch was not provided. Timestamps will not be re-written.")
+		}
 	}
 	if c.Params.AddLegacyLabels {
 		l.Logger.Infof("[param] AddLegacyLabels: %t", c.Params.AddLegacyLabels)
@@ -716,17 +730,18 @@ func (c *Build) buildImage() error {
 	}
 
 	buildArgs := &cliWrappers.BuildahBuildArgs{
-		Containerfile:   c.containerfilePath,
-		ContextDir:      c.Params.Context,
-		OutputRef:       c.Params.OutputRef,
-		Secrets:         c.buildahSecrets,
-		BuildArgs:       c.Params.BuildArgs,
-		BuildArgsFile:   c.Params.BuildArgsFile,
-		Envs:            c.Params.Envs,
-		Labels:          mergedLabels,
-		Annotations:     mergedAnnotations,
-		SourceDateEpoch: c.Params.SourceDateEpoch,
-		ExtraArgs:       c.Params.ExtraArgs,
+		Containerfile:    c.containerfilePath,
+		ContextDir:       c.Params.Context,
+		OutputRef:        c.Params.OutputRef,
+		Secrets:          c.buildahSecrets,
+		BuildArgs:        c.Params.BuildArgs,
+		BuildArgsFile:    c.Params.BuildArgsFile,
+		Envs:             c.Params.Envs,
+		Labels:           mergedLabels,
+		Annotations:      mergedAnnotations,
+		SourceDateEpoch:  c.Params.SourceDateEpoch,
+		RewriteTimestamp: c.Params.RewriteTimestamp,
+		ExtraArgs:        c.Params.ExtraArgs,
 	}
 	if c.Params.WorkdirMount != "" {
 		buildArgs.Volumes = []cliWrappers.BuildahVolume{
