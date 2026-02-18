@@ -124,7 +124,15 @@ var BuildParamsConfig = map[string]common.Parameter{
 		ShortName:  "",
 		EnvVarName: "KBC_BUILD_LEGACY_BUILD_TIMESTAMP",
 		TypeKind:   reflect.String,
-		Usage:      "Timestamp for the org.opencontainers.image.created annotation (and label). If not provided, uses the current time.\nThis does NOT behave like buildah's --timestamp option, it only sets the annotation and label.",
+		Usage:      "Timestamp for the org.opencontainers.image.created annotation (and label). If not provided, uses the current time.\nThis does NOT behave like buildah's --timestamp option, it only sets the annotation and label.\nConflicts with --source-date-epoch.",
+	},
+	"source-date-epoch": {
+		Name:      "source-date-epoch",
+		ShortName: "",
+		// Note: intentionally omits the KBC_BUILD_ prefix. SOURCE_DATE_EPOCH is a standard variable.
+		EnvVarName: "SOURCE_DATE_EPOCH",
+		TypeKind:   reflect.String,
+		Usage:      "See https://www.mankier.com/1/buildah-build#--source-date-epoch.\nThe timestamp will also be used for the org.opencontainers.image.created annotation and label.\nConflicts with --legacy-build-timestamp.",
 	},
 	"quay-image-expires-after": {
 		Name:       "quay-image-expires-after",
@@ -165,6 +173,7 @@ type BuildParams struct {
 	ImageSource             string   `paramName:"image-source"`
 	ImageRevision           string   `paramName:"image-revision"`
 	LegacyBuildTimestamp    string   `paramName:"legacy-build-timestamp"`
+	SourceDateEpoch         string   `paramName:"source-date-epoch"`
 	QuayImageExpiresAfter   string   `paramName:"quay-image-expires-after"`
 	AddLegacyLabels         bool     `paramName:"add-legacy-labels"`
 	ContainerfileJsonOutput string   `paramName:"containerfile-json-output"`
@@ -312,6 +321,9 @@ func (c *Build) logParams() {
 	if c.Params.LegacyBuildTimestamp != "" {
 		l.Logger.Infof("[param] LegacyBuildTimestamp: %s", c.Params.LegacyBuildTimestamp)
 	}
+	if c.Params.SourceDateEpoch != "" {
+		l.Logger.Infof("[param] SourceDateEpoch: %s", c.Params.SourceDateEpoch)
+	}
 	if c.Params.AddLegacyLabels {
 		l.Logger.Infof("[param] AddLegacyLabels: %t", c.Params.AddLegacyLabels)
 	}
@@ -335,6 +347,10 @@ func (c *Build) validateParams() error {
 		return fmt.Errorf("failed to stat context directory: %w", err)
 	} else if !stat.IsDir() {
 		return fmt.Errorf("context path '%s' is not a directory", c.Params.Context)
+	}
+
+	if c.Params.LegacyBuildTimestamp != "" && c.Params.SourceDateEpoch != "" {
+		return fmt.Errorf("legacy-build-timestamp and source-date-epoch are mutually exclusive")
 	}
 
 	return nil
@@ -649,7 +665,13 @@ func (c *Build) mergeDefaultLabelsAndAnnotations() ([]string, []string, error) {
 
 func (c *Build) getBuildTimeRFC3339() (string, error) {
 	var buildTime time.Time
-	if c.Params.LegacyBuildTimestamp != "" {
+	if c.Params.SourceDateEpoch != "" {
+		timestamp, err := strconv.ParseInt(c.Params.SourceDateEpoch, 10, 64)
+		if err != nil {
+			return "", fmt.Errorf("parsing source-date-epoch: %w", err)
+		}
+		buildTime = time.Unix(timestamp, 0).UTC()
+	} else if c.Params.LegacyBuildTimestamp != "" {
 		timestamp, err := strconv.ParseInt(c.Params.LegacyBuildTimestamp, 10, 64)
 		if err != nil {
 			return "", fmt.Errorf("parsing legacy-build-timestamp: %w", err)
@@ -694,16 +716,17 @@ func (c *Build) buildImage() error {
 	}
 
 	buildArgs := &cliWrappers.BuildahBuildArgs{
-		Containerfile: c.containerfilePath,
-		ContextDir:    c.Params.Context,
-		OutputRef:     c.Params.OutputRef,
-		Secrets:       c.buildahSecrets,
-		BuildArgs:     c.Params.BuildArgs,
-		BuildArgsFile: c.Params.BuildArgsFile,
-		Envs:          c.Params.Envs,
-		Labels:        mergedLabels,
-		Annotations:   mergedAnnotations,
-		ExtraArgs:     c.Params.ExtraArgs,
+		Containerfile:   c.containerfilePath,
+		ContextDir:      c.Params.Context,
+		OutputRef:       c.Params.OutputRef,
+		Secrets:         c.buildahSecrets,
+		BuildArgs:       c.Params.BuildArgs,
+		BuildArgsFile:   c.Params.BuildArgsFile,
+		Envs:            c.Params.Envs,
+		Labels:          mergedLabels,
+		Annotations:     mergedAnnotations,
+		SourceDateEpoch: c.Params.SourceDateEpoch,
+		ExtraArgs:       c.Params.ExtraArgs,
 	}
 	if c.Params.WorkdirMount != "" {
 		buildArgs.Volumes = []cliWrappers.BuildahVolume{

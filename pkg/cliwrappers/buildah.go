@@ -38,17 +38,18 @@ func NewBuildahCli(executor CliExecutorInterface) (*BuildahCli, error) {
 }
 
 type BuildahBuildArgs struct {
-	Containerfile string
-	ContextDir    string
-	OutputRef     string
-	Secrets       []BuildahSecret
-	Volumes       []BuildahVolume
-	BuildArgs     []string
-	BuildArgsFile string
-	Envs          []string
-	Labels        []string
-	Annotations   []string
-	ExtraArgs     []string
+	Containerfile   string
+	ContextDir      string
+	OutputRef       string
+	Secrets         []BuildahSecret
+	Volumes         []BuildahVolume
+	BuildArgs       []string
+	BuildArgsFile   string
+	Envs            []string
+	Labels          []string
+	Annotations     []string
+	SourceDateEpoch string
+	ExtraArgs       []string
 }
 
 type BuildahSecret struct {
@@ -172,6 +173,10 @@ func (b *BuildahCli) Build(args *BuildahBuildArgs) error {
 
 	for _, annotation := range args.Annotations {
 		buildahArgs = append(buildahArgs, "--annotation="+annotation)
+	}
+
+	if args.SourceDateEpoch != "" {
+		buildahArgs = append(buildahArgs, "--source-date-epoch="+args.SourceDateEpoch)
 	}
 
 	// Append extra arguments before the context directory

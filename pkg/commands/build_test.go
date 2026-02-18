@@ -74,6 +74,17 @@ func Test_Build_validateParams(t *testing.T) {
 			errExpected:  true,
 			errSubstring: "is not a directory",
 		},
+		{
+			name: "should fail when when legacy-build-timestamp and source-date-epoch are used together",
+			params: BuildParams{
+				OutputRef:            "quay.io/org/image:tag",
+				Context:              tempDir,
+				LegacyBuildTimestamp: "1",
+				SourceDateEpoch:      "1",
+			},
+			errExpected:  true,
+			errSubstring: "are mutually exclusive",
+		},
 	}
 
 	for _, tc := range tests {
@@ -1199,6 +1210,26 @@ func Test_Build_mergeDefaultLabelsAndAnnotations(t *testing.T) {
 		}))
 	})
 
+	t.Run("should use source-date-epoch value for timestamps", func(t *testing.T) {
+		c := &Build{
+			Params: &BuildParams{
+				LegacyBuildTimestamp: "1767225600", // 2026-01-01
+				AddLegacyLabels:      true,
+			},
+		}
+
+		labels, annotations, err := c.mergeDefaultLabelsAndAnnotations()
+		g.Expect(err).ToNot(HaveOccurred())
+
+		g.Expect(labels).To(ContainElements(
+			"org.opencontainers.image.created=2026-01-01T00:00:00Z",
+			"build-date=2026-01-01T00:00:00Z",
+		))
+		g.Expect(annotations).To(ContainElements(
+			"org.opencontainers.image.created=2026-01-01T00:00:00Z",
+		))
+	})
+
 	t.Run("should add quay.expires-after label when provided", func(t *testing.T) {
 		c := &Build{
 			Params: &BuildParams{
@@ -1223,5 +1254,17 @@ func Test_Build_mergeDefaultLabelsAndAnnotations(t *testing.T) {
 		_, _, err := c.mergeDefaultLabelsAndAnnotations()
 		g.Expect(err).To(HaveOccurred())
 		g.Expect(err.Error()).To(ContainSubstring("determining build timestamp: parsing legacy-build-timestamp:"))
+	})
+
+	t.Run("should return error for invalid source-date-epoch", func(t *testing.T) {
+		c := &Build{
+			Params: &BuildParams{
+				SourceDateEpoch: "1767225600.5",
+			},
+		}
+
+		_, _, err := c.mergeDefaultLabelsAndAnnotations()
+		g.Expect(err).To(HaveOccurred())
+		g.Expect(err.Error()).To(ContainSubstring("determining build timestamp: parsing source-date-epoch:"))
 	})
 }
