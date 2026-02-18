@@ -39,6 +39,7 @@ type BuildParams struct {
 	ImageSource             string
 	ImageRevision           string
 	LegacyBuildTimestamp    string
+	SourceDateEpoch         string
 	QuayImageExpiresAfter   string
 	AddLegacyLabels         bool
 	ContainerfileJsonOutput string
@@ -187,6 +188,9 @@ func runBuildWithOutput(container *TestRunnerContainer, buildParams BuildParams)
 	if buildParams.LegacyBuildTimestamp != "" {
 		args = append(args, "--legacy-build-timestamp", buildParams.LegacyBuildTimestamp)
 	}
+	if buildParams.SourceDateEpoch != "" {
+		args = append(args, "--source-date-epoch", buildParams.SourceDateEpoch)
+	}
 	if buildParams.QuayImageExpiresAfter != "" {
 		args = append(args, "--quay-image-expires-after", buildParams.QuayImageExpiresAfter)
 	}
@@ -237,6 +241,7 @@ func writeContainerfile(contextDir, content string) {
 }
 
 type containerImageMeta struct {
+	created     string
 	labels      map[string]string
 	annotations map[string]string
 	envs        map[string]string
@@ -248,7 +253,8 @@ func getImageMeta(container *TestRunnerContainer, imageRef string) containerImag
 
 	var inspect struct {
 		OCIv1 struct {
-			Config struct {
+			Created string `json:"created"`
+			Config  struct {
 				Labels map[string]string
 				Env    []string
 			} `json:"config"`
@@ -266,6 +272,7 @@ func getImageMeta(container *TestRunnerContainer, imageRef string) containerImag
 	}
 
 	return containerImageMeta{
+		created:     inspect.OCIv1.Created,
 		labels:      inspect.OCIv1.Config.Labels,
 		annotations: inspect.ImageAnnotations,
 		envs:        envs,
@@ -988,5 +995,82 @@ LABEL test.label="envs-test"
 			"org.opencontainers.image.revision=abc123",
 			"org.opencontainers.image.created=2026-01-01T00:00:00Z",
 		))
+	})
+
+	t.Run("SourceDateEpoch", func(t *testing.T) {
+		contextDir := setupTestContext(t)
+
+		writeContainerfile(contextDir, `
+FROM scratch
+
+ARG SOURCE_DATE_EPOCH
+
+LABEL source-date-epoch=$SOURCE_DATE_EPOCH
+`)
+
+		sourceDateEpoch := "1767225600" // 2026-01-01
+
+		checkSourceDateEpochEffects := func(imageMeta containerImageMeta) {
+			imageAnnotations := formatAsKeyValuePairs(imageMeta.annotations)
+			imageLabels := formatAsKeyValuePairs(imageMeta.labels)
+
+			// Should set the 'created' attribute
+			Expect(imageMeta.created).To(Equal("2026-01-01T00:00:00Z"))
+			Expect(imageAnnotations).To(ContainElements(
+				// Should set the org.opencontainers.image.created annotation
+				"org.opencontainers.image.created=2026-01-01T00:00:00Z",
+			))
+			Expect(imageLabels).To(ContainElements(
+				// Should set the org.opencontainers.image.created label
+				"org.opencontainers.image.created=2026-01-01T00:00:00Z",
+				// With --add-legacy-labels, should also set the build-date label
+				"build-date=2026-01-01T00:00:00Z",
+				// Should set the SOURCE_DATE_EPOCH build argument
+				"source-date-epoch=1767225600",
+			))
+		}
+
+		t.Run("FromCLI", func(t *testing.T) {
+			outputRef := "localhost/test-source-date-epoch-from-cli:" + GenerateUniqueTag(t)
+
+			buildParams := BuildParams{
+				Context:         contextDir,
+				OutputRef:       outputRef,
+				Push:            false,
+				SourceDateEpoch: sourceDateEpoch,
+				AddLegacyLabels: true,
+			}
+
+			container := setupBuildContainerWithCleanup(t, buildParams, nil)
+
+			err := runBuild(container, buildParams)
+			Expect(err).ToNot(HaveOccurred())
+
+			imageMeta := getImageMeta(container, outputRef)
+			checkSourceDateEpochEffects(imageMeta)
+		})
+
+		// Test the SOURCE_DATE_EPOCH environment variable as well, because unlike other env vars,
+		// it doesn't have the KBC_ prefix and we still want to handle it.
+		t.Run("FromEnv", func(t *testing.T) {
+			outputRef := "localhost/test-source-date-epoch-from-cli:" + GenerateUniqueTag(t)
+
+			buildParams := BuildParams{
+				Context:         contextDir,
+				OutputRef:       outputRef,
+				Push:            false,
+				AddLegacyLabels: true,
+			}
+
+			container := setupBuildContainerWithCleanup(
+				t, buildParams, nil, WithEnv("SOURCE_DATE_EPOCH", sourceDateEpoch),
+			)
+
+			err := runBuild(container, buildParams)
+			Expect(err).ToNot(HaveOccurred())
+
+			imageMeta := getImageMeta(container, outputRef)
+			checkSourceDateEpochEffects(imageMeta)
+		})
 	})
 }
