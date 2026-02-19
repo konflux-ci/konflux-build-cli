@@ -292,6 +292,8 @@ func (z *ZotRegistry) Prepare() error {
 	executor := cliWrappers.NewCliExecutor()
 
 	os.Setenv("DOCKER_CONFIG", z.dataDirPath)
+	// This is needed for docker CLI when requests are sent directly from the CLI to the registry.
+	os.Setenv("SSL_CERT_FILE", z.rootCertPath)
 
 	if err := EnsureDirectory(zotConfigDataDir); err != nil {
 		return err

@@ -3,12 +3,14 @@ package integration_tests_framework
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"os"
 	"path"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 
@@ -180,6 +182,8 @@ func CreateFileWithRandomContent(fileName string, size int64) error {
 type TestImageConfig struct {
 	// Image to create and push
 	ImageRef string
+	// Image platform, e.g. linux/amd64 or linux/arm64
+	Platform string
 	// Image to base onto.
 	// If empty string, scratch is used.
 	BaseImage string
@@ -236,13 +240,80 @@ func CreateTestImage(config TestImageConfig) error {
 		return err
 	}
 
-	stdout, stderr, _, err := executor.ExecuteInDir(testImageDir, containerTool, "build", "--tag", config.ImageRef, ".")
+	buildArgs := []string{"build", "--tag", config.ImageRef}
+	if config.Platform != "" {
+		buildArgs = append(buildArgs, "--platform", config.Platform)
+	}
+	buildArgs = append(buildArgs, ".")
+	stdout, stderr, _, err := executor.ExecuteInDir(testImageDir, containerTool, buildArgs...)
 	if err != nil {
 		fmt.Printf("failed to build test image: %s\n[stdout]:\n%s\n[stderr]:\n%s\n", err.Error(), stdout, stderr)
 		return err
 	}
 
 	return nil
+}
+
+// CreateAndPushImageIndex pushes image index that includes given images.
+// Returns digest of the pushed image index.
+func CreateAndPushImageIndex(indexRef string, images []string) (string, error) {
+	if indexRef == "" {
+		return "", errors.New("index reference should not be empty")
+	}
+	if len(images) < 1 {
+		return "", errors.New("index should contain at least one image")
+	}
+	if slices.Contains(images, "") {
+		return "", errors.New("image reference should not be empty")
+	}
+
+	executor := cliWrappers.NewCliExecutor()
+
+	// Create image index
+	createManifestArgs := []string{"manifest", "create"}
+	// Add --amend to prevent manifest already exist failure on test re-run.
+	createManifestArgs = append(createManifestArgs, "--amend")
+	createManifestArgs = append(createManifestArgs, indexRef)
+	createManifestArgs = append(createManifestArgs, images...)
+	if stdout, stderr, _, err := executor.Execute(containerTool, createManifestArgs...); err != nil {
+		fmt.Printf("failed to create image index: %s\n[stdout]:\n%s\n[stderr]:\n%s\n", err.Error(), stdout, stderr)
+		return "", err
+	}
+
+	// Push image index
+	digest := ""
+
+	switch containerTool {
+	case "docker":
+		stdout, stderr, _, err := executor.Execute(containerTool, "manifest", "push", indexRef)
+		if err != nil {
+			fmt.Printf("failed to push image index: %s\n[stdout]:\n%s\n[stderr]:\n%s\n", err.Error(), stdout, stderr)
+			return "", err
+		}
+		digest = digestRegex.FindString(stdout + "\n" + stderr)
+
+	case "podman":
+		const digestfilePath = "/tmp/index-digestfile"
+		stdout, stderr, _, err := executor.Execute("podman", "push", "--digestfile", digestfilePath, indexRef)
+		if err != nil {
+			fmt.Printf("failed to push image index: %s\n[stdout]:\n%s\n[stderr]:\n%s\n", err.Error(), stdout, stderr)
+			return "", err
+		}
+		defer os.Remove(digestfilePath)
+
+		digestBytes, err := os.ReadFile(digestfilePath)
+		if err != nil {
+			return "", fmt.Errorf("failed to read digest file: %s", err.Error())
+		}
+		digest = string(digestBytes)
+	}
+
+	// Clean up local image index
+	if _, _, _, err := executor.Execute(containerTool, "manifest", "rm", indexRef); err != nil {
+		return "", err
+	}
+
+	return digest, nil
 }
 
 func DeleteLocalImage(imageRef string) error {
