@@ -98,3 +98,63 @@ func TestApplyTags(t *testing.T) {
 		Expect(tagExists).To(BeTrue(), fmt.Sprintf("Expected %s:%s to exist", imageRepoUrl, tag))
 	}
 }
+
+func TestApplyTagsWithImageIndex(t *testing.T) {
+	SetupGomega(t)
+	var err error
+
+	// Setup registry
+	imageRegistry := NewImageRegistry()
+	err = imageRegistry.Prepare()
+	Expect(err).ToNot(HaveOccurred())
+	err = imageRegistry.Start()
+	Expect(err).ToNot(HaveOccurred())
+	defer imageRegistry.Stop()
+
+	// Create input data
+	imageRepoUrl := imageRegistry.GetTestNamespace() + "test-image-index"
+	newTag := time.Now().Format("2006-01-02_15-04-05")
+	newTagsFromLabel := []string{"arch-label-tag-" + newTag}
+	newTagsFromArg := []string{newTag}
+
+	// Do not create linux/amd64 to test foreign arch scenario
+	arches := []string{"linux/arm64", "linux/ppc64le"}
+	images := make([]string, 2)
+	for i, arch := range arches {
+		imageRef := fmt.Sprintf("%s:%s", imageRepoUrl, strings.ReplaceAll(arch, "/", "-"))
+		err := CreateTestImage(TestImageConfig{
+			ImageRef: imageRef,
+			Platform: arch,
+			Labels: map[string]string{
+				KonfluxAdditionalTagsLabelName: strings.Join(newTagsFromLabel, " "),
+				QuayExpiresAfterLabelName:      "1h",
+			},
+			RandomDataSize: 10 * 1024,
+		})
+		Expect(err).ToNot(HaveOccurred())
+		defer DeleteLocalImage(imageRef)
+		_, err = PushImage(imageRef)
+		Expect(err).ToNot(HaveOccurred())
+
+		images[i] = imageRef
+	}
+
+	indexRef := imageRepoUrl + ":index"
+	indexDigest, err := CreateAndPushImageIndex(indexRef, images)
+
+	// Run the command
+	applyTagsParams := ApplyTagsParams{
+		ImageRepoUrl: imageRepoUrl,
+		ImageDigest:  indexDigest,
+		Tags:         newTagsFromArg,
+	}
+	err = RunApplyTags(applyTagsParams, imageRegistry)
+	Expect(err).ToNot(HaveOccurred())
+
+	// Check the result
+	for _, tag := range append(newTagsFromArg, newTagsFromLabel...) {
+		tagExists, err := imageRegistry.CheckTagExistance(imageRepoUrl, tag)
+		Expect(err).ToNot(HaveOccurred(), fmt.Sprintf("failed to check for %s tag existance", tag))
+		Expect(tagExists).To(BeTrue(), fmt.Sprintf("Expected %s:%s to exist", imageRepoUrl, tag))
+	}
+}

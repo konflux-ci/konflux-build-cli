@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"encoding/json"
 	"fmt"
 	"reflect"
 	"regexp"
@@ -148,15 +149,74 @@ func (c *ApplyTags) logParams() {
 	}
 }
 
-// retrieveTagsFromImageLabel fetches list of tags from the given image label and interprets the results.
+// retrieveTagsFromImageLabel fetches list of tags from the given image label.
+// In fact, two skopeo invocations are needed (and this is optimal way):
+//  1. Read the raw reference data (light request) to see if we have image manifest or image index.
+//     In case of an image index, get image manifest for any architecture (we need only labels).
+//  2. Perform actual inspect request on the image manifest.
 func (c *ApplyTags) retrieveTagsFromImageLabel(labelName string) ([]string, error) {
+	type imageManifest struct {
+		MediaType string `json:"mediaType,omitempty"`
+		Digest    string `json:"digest,omitempty"`
+	}
+	type imageIndexManifest struct {
+		MediaType string          `json:"mediaType,omitempty"`
+		Manifests []imageManifest `json:"manifests,omitempty"`
+	}
+
 	if labelName == "" {
 		l.Logger.Debug("Label with additional tags is not set")
 		return nil, nil
 	}
 
-	inspectArgs := &cliWrappers.SkopeoInspectArgs{
+	// Do the raw inspect of the image to get image manifest digest for the inspection.
+	rawInspectArgs := &cliWrappers.SkopeoInspectArgs{
 		ImageRef:   c.imageByDigest,
+		Raw:        true,
+		RetryTimes: 3,
+	}
+	rawManifest, err := c.CliWrappers.SkopeoCli.Inspect(rawInspectArgs)
+	if err != nil {
+		l.Logger.Errorf("failed to inspect %s image manifest, cause: %s", c.imageByDigest, err.Error())
+		return nil, err
+	}
+	imageIndex := &imageIndexManifest{}
+	if err := json.Unmarshal([]byte(rawManifest), imageIndex); err != nil {
+		l.Logger.Errorf("failed to unmarshall image manifest for %s, cause: %s", c.imageByDigest, err.Error())
+		return nil, err
+	}
+
+	// Image reference to inspect labels onto.
+	targetImageReference := ""
+
+	if strings.Contains(imageIndex.MediaType, ".index.") || strings.Contains(imageIndex.MediaType, ".manifest.list.") {
+		// Provided by user reference is image index, e.g. "application/vnd.oci.image.index.v1+json"
+		// Pick image with arbitrary architecture for the target reference.
+		digest := ""
+		for _, manifest := range imageIndex.Manifests {
+			if strings.Contains(manifest.MediaType, ".manifest.") {
+				digest = manifest.Digest
+				break
+			}
+		}
+		if digest == "" {
+			// The index doesn't contain an image manifest, print warning and proceed.
+			l.Logger.Warnf("image index %s does not contain an image manifest", c.imageByDigest)
+			return nil, nil
+		}
+		targetImageReference = c.imageName + "@" + digest
+	} else if strings.Contains(imageIndex.MediaType, ".manifest.") {
+		// Provided by user reference is image manifest, e.g. "application/vnd.docker.distribution.manifest.v2+json"
+		targetImageReference = c.imageByDigest
+	} else {
+		// Not supported OCI image type, print warning and proceed.
+		l.Logger.Warnf("unsupported OCI image type: %s in %s", imageIndex.MediaType, c.imageByDigest)
+		return nil, nil
+	}
+
+	// Perform inspect on the target image manifest
+	inspectArgs := &cliWrappers.SkopeoInspectArgs{
+		ImageRef:   targetImageReference,
 		Format:     fmt.Sprintf(`{{ index .Labels "%s" }}`, labelName),
 		RetryTimes: 3,
 		NoTags:     true,
