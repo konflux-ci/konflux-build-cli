@@ -29,9 +29,9 @@ require (
 	github.com/moby/docker-image-spec v1.3.1 // indirect
 	github.com/onsi/ginkgo/v2 v2.25.1 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
-	github.com/planetscale/vtprotobuf v0.6.1-0.20240319094008-0393e58bdf10 // indirect
+	github.com/planetscale/vtprotobuf ba97887b0a25 // indirect
 	github.com/spf13/pflag v1.0.6 // indirect
-	github.com/tonistiigi/go-csvvalue v0.0.0-20240710180619-ddb21b71c0b4 // indirect
+	github.com/tonistiigi/go-csvvalue 030d3b2625d0 // indirect
 	golang.org/x/net v0.43.0 // indirect
 	golang.org/x/sys v0.35.0 // indirect
 	golang.org/x/text v0.28.0 // indirect
@@ -40,4 +40,4 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
-replace github.com/keilerkonzept/dockerfile-json => github.com/konflux-ci/dockerfile-json v0.0.0-20260211115307-8b6cecfd575e
+replace github.com/keilerkonzept/dockerfile-json => github.com/konflux-ci/dockerfile-json 2460bd5864ce
