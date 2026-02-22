@@ -114,6 +114,19 @@ func removeContainerStorageDir(containerStoragePath string) {
 // DeleteIfExists() on the container for cleanup.
 func setupBuildContainer(buildParams BuildParams, imageRegistry ImageRegistry, opts ...ContainerOption) (*TestRunnerContainer, error) {
 	container := NewBuildCliRunnerContainer("kbc-build", BuildImage, opts...)
+
+	if GetContainerTool() == "docker" {
+		// With docker, buildah fails with:
+		//   Error during unshare(CLONE_NEWUSER): Operation not permitted
+		//
+		// Making the test container privileged fixes this.
+		//
+		// For real use cases, we don't want to require a privileged container to run
+		// the 'image build' command. Limit privileged containers only to docker so that
+		// we can still test unprivileged ones with podman/buildah.
+		container.SetPrivileged(true)
+	}
+
 	container.AddVolumeWithOptions(buildParams.Context, "/workspace", "z")
 
 	var err error
