@@ -18,10 +18,7 @@ konflux-build-cli config cache-proxy --enable "true"
 To disable the cache proxy:
 konflux-build-cli config cache-proxy --enable "false"
 
-To read the config map from a manifest file:
-konflux-build-cli config cache-proxy --enable true --config-file config_map.yaml
-
-To change the default http proxy and default no proxy values:
+To set the default http proxy and default no proxy values:
 konflux-build-cli config cache-proxy --enable true --default-http-proxy "svc.local:3128" --default-no-proxy "docker.io,gcr.io"
 
 To change the default result path for http-proxy and no-proxy:

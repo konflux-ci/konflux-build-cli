@@ -13,16 +13,15 @@ import (
 	fakeclient "k8s.io/client-go/kubernetes/fake"
 )
 
-var (
-	testConfigMapFilePath = "../../testdata/cluster_config_config_map.yaml"
-)
-
 func Test_CacheProxy_Run(t *testing.T) {
 	g := NewWithT(t)
 
+	testPlatformConfigIniFilePath := "../../testdata/sample-platform-config.ini"
 	testHttpProxy := "test.caching:3323"
 	testNamespace := "test_namespace"
 	testConfigMapName := "test_name"
+	defaultHttpProxy := "test-proxy.io"
+	defaultNoProxy := "no-proxy.io"
 
 	var _mockResultsWriter *mockResultsWriter
 	var c *CacheProxy
@@ -95,21 +94,19 @@ func Test_CacheProxy_Run(t *testing.T) {
 		}
 	}
 
-	beforeEachWithConfigMapFile := func() {
+	beforeEachWithPlatformConfigFile := func() {
 		_mockResultsWriter = &mockResultsWriter{}
 
 		c = &CacheProxy{
-			Params: &CacheProxyParams{
-				ConfigFile: testConfigMapFilePath,
-			},
+			Params: &CacheProxyParams{},
 			Configs: CacheProxyConfigs{
-				ConfigReader: &config.YAMLFileReader{FilePath: testConfigMapFilePath},
+				ConfigReader: &config.IniFileReader{FilePath: testPlatformConfigIniFilePath},
 			},
 			ResultsWriter: _mockResultsWriter,
 		}
 	}
 
-	t.Run("enable cache-proxy when allow-cache-proxy in the ConfigMap is true", func(t *testing.T) {
+	t.Run("enable cache-proxy when allow-cache-proxy in the cluster ConfigMap is true", func(t *testing.T) {
 		beforeEachWithTrueInConfigMap()
 		c.Params.Enable = "true"
 
@@ -126,7 +123,7 @@ func Test_CacheProxy_Run(t *testing.T) {
 		g.Expect(isWriteResultsStringCalled).To(BeTrue())
 	})
 
-	t.Run("enable cache-proxy when allow-cache-proxy in the ConfigMap is false", func(t *testing.T) {
+	t.Run("enable cache-proxy when allow-cache-proxy in the cluster ConfigMap is false", func(t *testing.T) {
 		beforeEachWithFalseInConfigMap()
 		c.Params.Enable = "true"
 
@@ -143,7 +140,7 @@ func Test_CacheProxy_Run(t *testing.T) {
 		g.Expect(isWriteResultsStringCalled).To(BeTrue())
 	})
 
-	t.Run("disable cache-proxy when allow-cache-proxy in the ConfigMap is true", func(t *testing.T) {
+	t.Run("disable cache-proxy when allow-cache-proxy in the cluster ConfigMap is true", func(t *testing.T) {
 		beforeEachWithTrueInConfigMap()
 		c.Params.Enable = "false"
 
@@ -160,7 +157,7 @@ func Test_CacheProxy_Run(t *testing.T) {
 		g.Expect(isWriteResultsStringCalled).To(BeTrue())
 	})
 
-	t.Run("enable cache-proxy when ConfigMap does not exists", func(t *testing.T) {
+	t.Run("enable cache-proxy when cluster ConfigMap does not exists", func(t *testing.T) {
 		beforeEachWithoutConfigMap()
 		c.Params.Enable = "true"
 
@@ -177,7 +174,7 @@ func Test_CacheProxy_Run(t *testing.T) {
 		g.Expect(isWriteResultsStringCalled).To(BeTrue())
 	})
 
-	t.Run("disable cache-proxy when ConfigMap does not exists", func(t *testing.T) {
+	t.Run("disable cache-proxy when cluster ConfigMap does not exists", func(t *testing.T) {
 		beforeEachWithoutConfigMap()
 		c.Params.Enable = "false"
 
@@ -194,8 +191,8 @@ func Test_CacheProxy_Run(t *testing.T) {
 		g.Expect(isWriteResultsStringCalled).To(BeTrue())
 	})
 
-	t.Run("reading config file manifest is successful", func(t *testing.T) {
-		beforeEachWithConfigMapFile()
+	t.Run("reading config from the platform config ini is successful", func(t *testing.T) {
+		beforeEachWithPlatformConfigFile()
 		c.Params.Enable = "true"
 
 		isWriteResultsStringCalled := false
@@ -220,7 +217,6 @@ func Test_NewCacheProxy(t *testing.T) {
 		cmd.Flags().String("config-file", "", "config map file path")
 		parseErr := cmd.Flags().Parse([]string{
 			"--enable", "true",
-			"--config-file", testConfigMapFilePath,
 		})
 		g.Expect(parseErr).ToNot(HaveOccurred())
 

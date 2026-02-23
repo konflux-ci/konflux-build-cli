@@ -3,18 +3,10 @@ package commands
 import (
 	"reflect"
 
-	"github.com/konflux-ci/konflux-build-cli/pkg/clients"
 	"github.com/konflux-ci/konflux-build-cli/pkg/common"
 	"github.com/konflux-ci/konflux-build-cli/pkg/config"
 	l "github.com/konflux-ci/konflux-build-cli/pkg/logger"
 	"github.com/spf13/cobra"
-)
-
-var (
-	configMapNamespace = "cluster-config"
-	configMapName      = "konflux-info"
-	defaultHttpProxy   = "squid.caching.svc.cluster.local:3128"
-	defaultNoProxy     = "brew.registry.redhat.io,docker.io,gcr.io,ghcr.io,images.paas.redhat.com,mirror.gcr.io,nvcr.io,quay.io,registry-proxy.engineering.redhat.com,registry.access.redhat.com,registry.ci.openshift.org,registry.fedoraproject.org,registry.redhat.io,registry.stage.redhat.io,vault.habana.ai"
 )
 
 var CacheProxyParamsConfig = map[string]common.Parameter{
@@ -26,14 +18,6 @@ var CacheProxyParamsConfig = map[string]common.Parameter{
 		Usage:      "Whether to enable cache proxy or not. Required.",
 		Required:   true,
 	},
-	"config-file": {
-		Name:       "config-file",
-		ShortName:  "c",
-		EnvVarName: "CONFIG_FILE",
-		TypeKind:   reflect.String,
-		Usage:      "to use local config file. Optional.",
-		Required:   false,
-	},
 	"default-http-proxy": {
 		Name:         "default-http-proxy",
 		ShortName:    "p",
@@ -41,7 +25,7 @@ var CacheProxyParamsConfig = map[string]common.Parameter{
 		TypeKind:     reflect.String,
 		Usage:        "change the default http proxy value. Optional.",
 		Required:     false,
-		DefaultValue: defaultHttpProxy,
+		DefaultValue: "",
 	},
 	"default-no-proxy": {
 		Name:         "default-no-proxy",
@@ -50,7 +34,7 @@ var CacheProxyParamsConfig = map[string]common.Parameter{
 		TypeKind:     reflect.String,
 		Usage:        "change the default no proxy value. Optional.",
 		Required:     false,
-		DefaultValue: defaultNoProxy,
+		DefaultValue: "",
 	},
 	"http-proxy-result-path": {
 		Name:         "http-proxy-result-path",
@@ -74,7 +58,6 @@ var CacheProxyParamsConfig = map[string]common.Parameter{
 
 type CacheProxyParams struct {
 	Enable              string `paramName:"enable"`
-	ConfigFile          string `paramName:"config-file"`
 	DefaultHttpProxy    string `paramName:"default-http-proxy"`
 	DefaultNoProxy      string `paramName:"default-no-proxy"`
 	HttpProxyResultPath string `paramName:"http-proxy-result-path"`
@@ -123,17 +106,12 @@ func NewCacheProxy(cmd *cobra.Command) (*CacheProxy, error) {
 
 func (c *CacheProxy) initializeConfigs() error {
 
-	// If config map file is not set, use local kubenetes cluster
-	if c.Params.ConfigFile == "" {
-		clientset, err := clients.NewKubeClientSet()
-		if err != nil {
-			return err
-		}
-		c.Configs.ConfigReader = &config.K8sConfigMapReader{Name: configMapName, Namespace: configMapNamespace, Clientset: clientset}
-	} else {
-		l.Logger.Info("using config map file")
-		c.Configs.ConfigReader = &config.YAMLFileReader{FilePath: c.Params.ConfigFile}
+	// Initialize config reader
+	newConfigReader, err := config.NewConfigReader()
+	if err != nil {
+		return err
 	}
+	c.Configs.ConfigReader = newConfigReader
 
 	return nil
 }
@@ -145,8 +123,8 @@ func (c *CacheProxy) Run() error {
 
 	c.logParams()
 
-	l.Logger.Debug("Reading config-map data")
-	cmData, err := c.Configs.ConfigReader.ReadConfigData()
+	l.Logger.Debug("Reading config data")
+	cacheProxyConfig, err := c.Configs.ConfigReader.ReadConfigData()
 	if err != nil {
 		l.Logger.Warnf("Error while reading config map: %s", err.Error())
 		// ConfigMap missing, use defaults
@@ -154,22 +132,22 @@ func (c *CacheProxy) Run() error {
 		noProxy = c.Params.DefaultNoProxy
 		allowCache = "true"
 	} else {
-		l.Logger.Debugf("cluster-config config map data: %v", cmData)
-		allowCache = cmData["allow-cache-proxy"]
+		l.Logger.Debugf("cache proxy config: %v", cacheProxyConfig)
+		allowCache = cacheProxyConfig.AllowCacheProxy
 		if allowCache == "true" {
-			httpProxy = cmData["http-proxy"]
-			noProxy = cmData["no-proxy"]
+			httpProxy = cacheProxyConfig.HttpProxy
+			noProxy = cacheProxyConfig.NoProxy
 		} else { // allow-cache-proxy is false (or any other value != true)
 			httpProxy = ""
 			noProxy = ""
 		}
 	}
 
-	// Apply ENABLE_CACHE_PROXY check (from task param) ONLY if cluster allows it
+	// Apply ENABLE_CACHE_PROXY check from the param ONLY if backend allows it, for example, k8s cluster
 	if allowCache == "true" && c.Params.Enable == "true" {
-		l.Logger.Info("Cache proxy enabled in both cluster and task param")
+		l.Logger.Info("Cache proxy enabled in both backend and param")
 	} else {
-		l.Logger.Info("Cache proxy is disabled in task param or in cluster")
+		l.Logger.Info("Cache proxy is disabled in param or in backend")
 		httpProxy = ""
 		noProxy = ""
 	}
@@ -193,7 +171,6 @@ func (c *CacheProxy) Run() error {
 
 func (c *CacheProxy) logParams() {
 	l.Logger.Infof("[param] ENABLE: %s", c.Params.Enable)
-	l.Logger.Infof("[param] CONFIG MAP FILE: %s", c.Params.ConfigFile)
 	l.Logger.Infof("[param] DEFAULT HTTP PROXY: %s", c.Params.DefaultHttpProxy)
 	l.Logger.Infof("[param] DEFAULT NO PROXY: %s", c.Params.DefaultNoProxy)
 	l.Logger.Infof("[param] HTTP PROXY RESULT PATH: %s", c.Params.HttpProxyResultPath)
