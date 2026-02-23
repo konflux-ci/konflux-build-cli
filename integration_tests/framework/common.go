@@ -280,6 +280,13 @@ func CreateAndPushImageIndex(indexRef string, images []string) (string, error) {
 		return "", err
 	}
 
+	// Clean up local image index
+	defer func() {
+		if stdout, stderr, _, err := executor.Execute(containerTool, "manifest", "rm", indexRef); err != nil {
+			fmt.Printf("failed to clean up local image index: %s\n[stdout]:\n%s\n[stderr]:\n%s\n", err.Error(), stdout, stderr)
+		}
+	}()
+
 	// Push image index
 	digest := ""
 
@@ -306,11 +313,6 @@ func CreateAndPushImageIndex(indexRef string, images []string) (string, error) {
 			return "", fmt.Errorf("failed to read digest file: %s", err.Error())
 		}
 		digest = string(digestBytes)
-	}
-
-	// Clean up local image index
-	if _, _, _, err := executor.Execute(containerTool, "manifest", "rm", indexRef); err != nil {
-		return "", err
 	}
 
 	return digest, nil

@@ -28,6 +28,17 @@ type ImageRegistry interface {
 	GetCaCertPath() string
 	// Returns true if given image exists in the test namespace of the registry.
 	CheckTagExistance(imageName, tag string) (bool, error)
+	// Return image index information, primarily the list of included manifests.
+	GetImageIndexInfo(imageName, tag string) (*ImageIndexManifest, error)
+}
+
+type ImageIndexManifest struct {
+	MediaType string          `json:"mediaType,omitempty"`
+	Manifests []ImageManifest `json:"manifests,omitempty"`
+}
+type ImageManifest struct {
+	MediaType string `json:"mediaType,omitempty"`
+	Digest    string `json:"digest,omitempty"`
 }
 
 func GenerateDockerAuthContent(registry, login, password string) ([]byte, error) {
