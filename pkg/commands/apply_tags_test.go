@@ -187,7 +187,11 @@ func Test_retrieveTagsFromImageLabel(t *testing.T) {
 	g := NewWithT(t)
 
 	const labelName = "more-tags/label"
-	const imageRef = "image@sha256:abcdef12345"
+	const imageName = "image"
+	const imageDigest = "sha256:abcdef12345"
+	const imageRef = imageName + "@" + imageDigest
+	const indexDigest = "sha256:12345fedcba"
+	const indexRef = imageName + "@" + indexDigest
 
 	mockSkopeoCli := &mockSkopeoCli{}
 	c := &ApplyTags{
@@ -199,6 +203,9 @@ func Test_retrieveTagsFromImageLabel(t *testing.T) {
 	t.Run("should retrieve single tag from label value", func(t *testing.T) {
 		isScopeoInspectCalled := false
 		mockSkopeoCli.InspectFunc = func(args *cliwrappers.SkopeoInspectArgs) (string, error) {
+			if args.Raw {
+				return `{"mediaType":"application/vnd.docker.distribution.manifest.v2+json"}`, nil
+			}
 			isScopeoInspectCalled = true
 			g.Expect(args.ImageRef).To(Equal(imageRef))
 			g.Expect(args.Format).To(Equal(fmt.Sprintf(`{{ index .Labels "%s" }}`, labelName)))
@@ -214,6 +221,9 @@ func Test_retrieveTagsFromImageLabel(t *testing.T) {
 	t.Run("should retrieve tags from label value if they are space separated", func(t *testing.T) {
 		isScopeoInspectCalled := false
 		mockSkopeoCli.InspectFunc = func(args *cliwrappers.SkopeoInspectArgs) (string, error) {
+			if args.Raw {
+				return `{"mediaType":"application/vnd.docker.distribution.manifest.v2+json"}`, nil
+			}
 			isScopeoInspectCalled = true
 			g.Expect(args.ImageRef).To(Equal(imageRef))
 			g.Expect(args.Format).To(Equal(fmt.Sprintf(`{{ index .Labels "%s" }}`, labelName)))
@@ -229,6 +239,9 @@ func Test_retrieveTagsFromImageLabel(t *testing.T) {
 	t.Run("should retrieve tags from label value if they are comma separated", func(t *testing.T) {
 		isScopeoInspectCalled := false
 		mockSkopeoCli.InspectFunc = func(args *cliwrappers.SkopeoInspectArgs) (string, error) {
+			if args.Raw {
+				return `{"mediaType":"application/vnd.docker.distribution.manifest.v2+json"}`, nil
+			}
 			isScopeoInspectCalled = true
 			g.Expect(args.ImageRef).To(Equal(imageRef))
 			g.Expect(args.Format).To(Equal(fmt.Sprintf(`{{ index .Labels "%s" }}`, labelName)))
@@ -244,6 +257,9 @@ func Test_retrieveTagsFromImageLabel(t *testing.T) {
 	t.Run("should retrieve tags from label value if many whitespaces used", func(t *testing.T) {
 		isScopeoInspectCalled := false
 		mockSkopeoCli.InspectFunc = func(args *cliwrappers.SkopeoInspectArgs) (string, error) {
+			if args.Raw {
+				return `{"mediaType":"application/vnd.docker.distribution.manifest.v2+json"}`, nil
+			}
 			isScopeoInspectCalled = true
 			g.Expect(args.ImageRef).To(Equal(imageRef))
 			g.Expect(args.Format).To(Equal(fmt.Sprintf(`{{ index .Labels "%s" }}`, labelName)))
@@ -259,6 +275,9 @@ func Test_retrieveTagsFromImageLabel(t *testing.T) {
 	t.Run("should not fail if label value is empty", func(t *testing.T) {
 		isScopeoInspectCalled := false
 		mockSkopeoCli.InspectFunc = func(args *cliwrappers.SkopeoInspectArgs) (string, error) {
+			if args.Raw {
+				return `{"mediaType":"application/vnd.docker.distribution.manifest.v2+json"}`, nil
+			}
 			isScopeoInspectCalled = true
 			g.Expect(args.ImageRef).To(Equal(imageRef))
 			g.Expect(args.Format).To(Equal(fmt.Sprintf(`{{ index .Labels "%s" }}`, labelName)))
@@ -274,6 +293,9 @@ func Test_retrieveTagsFromImageLabel(t *testing.T) {
 	t.Run("should not fail if label value is newline", func(t *testing.T) {
 		isScopeoInspectCalled := false
 		mockSkopeoCli.InspectFunc = func(args *cliwrappers.SkopeoInspectArgs) (string, error) {
+			if args.Raw {
+				return `{"mediaType":"application/vnd.docker.distribution.manifest.v2+json"}`, nil
+			}
 			isScopeoInspectCalled = true
 			g.Expect(args.ImageRef).To(Equal(imageRef))
 			g.Expect(args.Format).To(Equal(fmt.Sprintf(`{{ index .Labels "%s" }}`, labelName)))
@@ -289,8 +311,28 @@ func Test_retrieveTagsFromImageLabel(t *testing.T) {
 	t.Run("should fail if scopeo failed to inspect image", func(t *testing.T) {
 		isScopeoInspectCalled := false
 		mockSkopeoCli.InspectFunc = func(args *cliwrappers.SkopeoInspectArgs) (string, error) {
+			if args.Raw {
+				return `{"mediaType":"application/vnd.docker.distribution.manifest.v2+json"}`, nil
+			}
 			isScopeoInspectCalled = true
 			return "", errors.New("failed to inspect image")
+		}
+
+		_, err := c.retrieveTagsFromImageLabel(labelName)
+		g.Expect(isScopeoInspectCalled).To(BeTrue())
+		g.Expect(err).To(HaveOccurred())
+	})
+
+	t.Run("should fail if a tag from label is invalid", func(t *testing.T) {
+		isScopeoInspectCalled := false
+		mockSkopeoCli.InspectFunc = func(args *cliwrappers.SkopeoInspectArgs) (string, error) {
+			if args.Raw {
+				return `{"mediaType":"application/vnd.docker.distribution.manifest.v2+json"}`, nil
+			}
+			isScopeoInspectCalled = true
+			g.Expect(args.ImageRef).To(Equal(imageRef))
+			g.Expect(args.Format).To(Equal(fmt.Sprintf(`{{ index .Labels "%s" }}`, labelName)))
+			return "tag1 tag!2", nil
 		}
 
 		_, err := c.retrieveTagsFromImageLabel(labelName)
@@ -301,6 +343,9 @@ func Test_retrieveTagsFromImageLabel(t *testing.T) {
 	t.Run("should skip tags from label if image has unknown media type in config", func(t *testing.T) {
 		isScopeoInspectCalled := false
 		mockSkopeoCli.InspectFunc = func(args *cliwrappers.SkopeoInspectArgs) (string, error) {
+			if args.Raw {
+				return `{"mediaType":"application/vnd.docker.distribution.manifest.v2+json"}`, nil
+			}
 			isScopeoInspectCalled = true
 			g.Expect(args.ImageRef).To(Equal(imageRef))
 			return "", errors.New("unsupported image-specific operation on artifact with type \"application/vnd.unknown.config.v1+json\"")
@@ -310,6 +355,183 @@ func Test_retrieveTagsFromImageLabel(t *testing.T) {
 		g.Expect(isScopeoInspectCalled).To(BeTrue())
 		g.Expect(err).ToNot(HaveOccurred())
 		g.Expect(tags).To(BeNil())
+	})
+
+	// Image index tests
+	c = &ApplyTags{
+		Params:        &ApplyTagsParams{LabelWithTags: "label"},
+		CliWrappers:   ApplyTagsCliWrappers{SkopeoCli: mockSkopeoCli},
+		imageName:     imageName,
+		imageByDigest: indexRef,
+	}
+
+	t.Run("should retrieve tags from label value for image index", func(t *testing.T) {
+		isScopeoRawInspectCalled := false
+		isScopeoInspectCalled := false
+		mockSkopeoCli.InspectFunc = func(args *cliwrappers.SkopeoInspectArgs) (string, error) {
+			if args.Raw {
+				isScopeoRawInspectCalled = true
+				g.Expect(args.ImageRef).To(Equal(indexRef))
+				imageIndexJson := fmt.Sprintf(`{
+				    "mediaType":"application/vnd.oci.image.index.v1+json",
+					"manifests": [
+						{
+							"mediaType": "application/vnd.oci.image.manifest.v1+json",
+							"digest": "%s"
+						}
+					]
+				}`, imageDigest)
+				return imageIndexJson, nil
+			}
+
+			isScopeoInspectCalled = true
+			g.Expect(args.ImageRef).To(Equal(imageRef))
+			g.Expect(args.Format).To(Equal(fmt.Sprintf(`{{ index .Labels "%s" }}`, labelName)))
+			return "tag1 tag2", nil
+		}
+
+		tags, err := c.retrieveTagsFromImageLabel(labelName)
+		g.Expect(isScopeoRawInspectCalled).To(BeTrue())
+		g.Expect(isScopeoInspectCalled).To(BeTrue())
+		g.Expect(err).ToNot(HaveOccurred())
+		g.Expect(tags).To(Equal([]string{"tag1", "tag2"}))
+	})
+
+	t.Run("should retrieve tags from label value for image index if the index has manifests list media type", func(t *testing.T) {
+		isScopeoRawInspectCalled := false
+		isScopeoInspectCalled := false
+		mockSkopeoCli.InspectFunc = func(args *cliwrappers.SkopeoInspectArgs) (string, error) {
+			if args.Raw {
+				isScopeoRawInspectCalled = true
+				g.Expect(args.ImageRef).To(Equal(indexRef))
+				imageIndexJson := fmt.Sprintf(`{
+				    "mediaType":"application/vnd.docker.distribution.manifest.list.v2+json",
+					"manifests": [
+						{
+							"mediaType": "application/vnd.oci.image.manifest.v1+json",
+							"digest": "%s"
+						}
+					]
+				}`, imageDigest)
+				return imageIndexJson, nil
+			}
+
+			isScopeoInspectCalled = true
+			g.Expect(args.ImageRef).To(Equal(imageRef))
+			g.Expect(args.Format).To(Equal(fmt.Sprintf(`{{ index .Labels "%s" }}`, labelName)))
+			return "tag1, tag2", nil
+		}
+
+		tags, err := c.retrieveTagsFromImageLabel(labelName)
+		g.Expect(isScopeoRawInspectCalled).To(BeTrue())
+		g.Expect(isScopeoInspectCalled).To(BeTrue())
+		g.Expect(err).ToNot(HaveOccurred())
+		g.Expect(tags).To(Equal([]string{"tag1", "tag2"}))
+	})
+
+	t.Run("should retrieve tags from label value for image index if image manifest is not first not last in the index manifests list", func(t *testing.T) {
+		isScopeoRawInspectCalled := false
+		isScopeoInspectCalled := false
+		mockSkopeoCli.InspectFunc = func(args *cliwrappers.SkopeoInspectArgs) (string, error) {
+			if args.Raw {
+				isScopeoRawInspectCalled = true
+				g.Expect(args.ImageRef).To(Equal(indexRef))
+				imageIndexJson := fmt.Sprintf(`{
+				    "mediaType":"application/vnd.oci.image.index.v1+json",
+					"manifests": [
+						{
+							"mediaType": "application/vnd.oci.layout.header.v1+json",
+							"digest": "sha256:a1b2c3d4e5f6g7"
+						},
+						{
+							"mediaType": "application/vnd.oci.image.manifest.v1+json",
+							"digest": "%s"
+						},
+						{
+							"mediaType": "application/vnd.oci.image.config.v1+json",
+							"digest": "sha256:1a2b3c4d5e6f7g"
+						}
+					]
+				}`, imageDigest)
+				return imageIndexJson, nil
+			}
+
+			isScopeoInspectCalled = true
+			g.Expect(args.ImageRef).To(Equal(imageRef))
+			g.Expect(args.Format).To(Equal(fmt.Sprintf(`{{ index .Labels "%s" }}`, labelName)))
+			return "tag1 tag2", nil
+		}
+
+		tags, err := c.retrieveTagsFromImageLabel(labelName)
+		g.Expect(isScopeoRawInspectCalled).To(BeTrue())
+		g.Expect(isScopeoInspectCalled).To(BeTrue())
+		g.Expect(err).ToNot(HaveOccurred())
+		g.Expect(tags).To(Equal([]string{"tag1", "tag2"}))
+	})
+
+	t.Run("should skip tags from label for image index if image index does not contain an image manifest", func(t *testing.T) {
+		isScopeoRawInspectCalled := false
+		isScopeoInspectCalled := false
+		mockSkopeoCli.InspectFunc = func(args *cliwrappers.SkopeoInspectArgs) (string, error) {
+			if args.Raw {
+				isScopeoRawInspectCalled = true
+				g.Expect(args.ImageRef).To(Equal(indexRef))
+				imageIndexJson := `{
+				    "mediaType":"application/vnd.oci.image.index.v1+json",
+					"manifests": [
+						{
+							"mediaType": "application/vnd.oci.image.config.v1+json",
+							"digest": "sha256:abcd1234efg567"
+						}
+					]
+				}`
+				return imageIndexJson, nil
+			}
+			isScopeoInspectCalled = true
+			return "", nil
+		}
+
+		tags, err := c.retrieveTagsFromImageLabel(labelName)
+		g.Expect(isScopeoRawInspectCalled).To(BeTrue())
+		g.Expect(isScopeoInspectCalled).To(BeFalse())
+		g.Expect(err).ToNot(HaveOccurred())
+		g.Expect(tags).To(HaveLen(0))
+	})
+
+	t.Run("should skip tags from label if provided reference is not image manifest or image index", func(t *testing.T) {
+		isScopeoRawInspectCalled := false
+		isScopeoInspectCalled := false
+		mockSkopeoCli.InspectFunc = func(args *cliwrappers.SkopeoInspectArgs) (string, error) {
+			if args.Raw {
+				isScopeoRawInspectCalled = true
+				g.Expect(args.ImageRef).To(Equal(indexRef))
+				imageIndexJson := `{"mediaType":"application/vnd.oci.image.config.v1+json"}`
+				return imageIndexJson, nil
+			}
+			isScopeoInspectCalled = true
+			return "", nil
+		}
+
+		tags, err := c.retrieveTagsFromImageLabel(labelName)
+		g.Expect(isScopeoRawInspectCalled).To(BeTrue())
+		g.Expect(isScopeoInspectCalled).To(BeFalse())
+		g.Expect(err).ToNot(HaveOccurred())
+		g.Expect(tags).To(HaveLen(0))
+	})
+
+	t.Run("should fail if scopeo failed to inspect image raw", func(t *testing.T) {
+		isScopeoInspectRawCalled := false
+		mockSkopeoCli.InspectFunc = func(args *cliwrappers.SkopeoInspectArgs) (string, error) {
+			if !args.Raw {
+				t.Fail() // should fail on inspect raw during previous invocation
+			}
+			isScopeoInspectRawCalled = true
+			return "", errors.New("failed to inspect image")
+		}
+
+		_, err := c.retrieveTagsFromImageLabel(labelName)
+		g.Expect(isScopeoInspectRawCalled).To(BeTrue())
+		g.Expect(err).To(HaveOccurred())
 	})
 }
 
@@ -458,6 +680,9 @@ func Test_Run(t *testing.T) {
 
 		isScopeoInspectCalled := false
 		_mockSkopeoCli.InspectFunc = func(args *cliwrappers.SkopeoInspectArgs) (string, error) {
+			if args.Raw {
+				return `{"mediaType":"application/vnd.docker.distribution.manifest.v2+json"}`, nil
+			}
 			isScopeoInspectCalled = true
 			g.Expect(args.ImageRef).To(Equal(c.Params.ImageUrl + "@" + c.Params.Digest))
 			g.Expect(args.Format).To(ContainSubstring(labelWithTagsName))
@@ -495,6 +720,9 @@ func Test_Run(t *testing.T) {
 
 		isScopeoInspectCalled := false
 		_mockSkopeoCli.InspectFunc = func(args *cliwrappers.SkopeoInspectArgs) (string, error) {
+			if args.Raw {
+				return `{"mediaType":"application/vnd.docker.distribution.manifest.v2+json"}`, nil
+			}
 			isScopeoInspectCalled = true
 			g.Expect(args.ImageRef).To(Equal(c.Params.ImageUrl + "@" + c.Params.Digest))
 			g.Expect(args.Format).To(ContainSubstring(labelWithTagsName))
@@ -531,6 +759,9 @@ func Test_Run(t *testing.T) {
 
 		isScopeoInspectCalled := false
 		_mockSkopeoCli.InspectFunc = func(args *cliwrappers.SkopeoInspectArgs) (string, error) {
+			if args.Raw {
+				return `{"mediaType":"application/vnd.docker.distribution.manifest.v2+json"}`, nil
+			}
 			isScopeoInspectCalled = true
 			g.Expect(args.ImageRef).To(Equal(c.Params.ImageUrl + "@" + c.Params.Digest))
 			g.Expect(args.Format).To(ContainSubstring(labelWithTagsName))
@@ -567,6 +798,9 @@ func Test_Run(t *testing.T) {
 
 		isScopeoInspectCalled := false
 		_mockSkopeoCli.InspectFunc = func(args *cliwrappers.SkopeoInspectArgs) (string, error) {
+			if args.Raw {
+				return `{"mediaType":"application/vnd.docker.distribution.manifest.v2+json"}`, nil
+			}
 			isScopeoInspectCalled = true
 			g.Expect(args.ImageRef).To(Equal(c.Params.ImageUrl + "@" + c.Params.Digest))
 			return "", errors.New("unsupported image-specific operation on artifact with type \"application/vnd.unknown.config.v1+json\"")

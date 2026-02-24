@@ -192,3 +192,43 @@ func (q *QuayRegistry) CheckTagExistance(repo string, tag string) (bool, error) 
 	}
 	return false, nil
 }
+
+func (z *QuayRegistry) GetImageIndexInfo(repo, tag string) (*ImageIndexManifest, error) {
+	repoParts := strings.Split(repo, "/")
+	if len(repoParts) != 3 {
+		return nil, fmt.Errorf("invalid image format, expected quay.io/namespace/repo")
+	}
+	namespace := repoParts[1]
+	repository := repoParts[2]
+
+	url := fmt.Sprintf("https://%s/v2/%s/%s/manifests/%s", z.GetRegistryDomain(), namespace, repository, tag)
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Accept", "application/vnd.oci.image.index.v1+json")
+	req.Header.Add("Accept", "application/vnd.docker.distribution.manifest.list.v2+json")
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("received non-200 response status: %s", resp.Status)
+	}
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("error reading response body: %v", err)
+	}
+
+	imageIndexInfo := &ImageIndexManifest{}
+	if err := json.Unmarshal(body, imageIndexInfo); err != nil {
+		return nil, fmt.Errorf("error unmarshaling response JSON: %v", err)
+	}
+
+	return imageIndexInfo, nil
+}

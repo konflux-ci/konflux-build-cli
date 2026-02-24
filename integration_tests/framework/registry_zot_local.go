@@ -267,6 +267,52 @@ func (z *ZotRegistry) CheckTagExistance(imageName, tag string) (bool, error) {
 	return false, nil
 }
 
+func (z *ZotRegistry) GetImageIndexInfo(imageName, tag string) (*ImageIndexManifest, error) {
+	// Remove registry domain, e.g. localhost:5000/image -> image
+	repoParts := strings.Split(imageName, "/")
+	if len(repoParts) > 1 {
+		repoParts = repoParts[1:]
+	}
+	imageName = strings.Join(repoParts, "/")
+
+	url := fmt.Sprintf("https://%s/v2/%s/manifests/%s", z.GetRegistryDomain(), imageName, tag)
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, err
+	}
+	username, password := z.GetCredentials()
+	req.SetBasicAuth(username, password)
+
+	req.Header.Add("Accept", "application/vnd.oci.image.index.v1+json")
+	req.Header.Add("Accept", "application/vnd.docker.distribution.manifest.list.v2+json")
+
+	client, err := z.createHttpClient()
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("received non-200 response status: %s", resp.Status)
+	}
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("error reading response body: %v", err)
+	}
+
+	imageIndexInfo := &ImageIndexManifest{}
+	if err := json.Unmarshal(body, imageIndexInfo); err != nil {
+		return nil, fmt.Errorf("error unmarshaling response JSON: %v", err)
+	}
+
+	return imageIndexInfo, nil
+}
+
 func (z *ZotRegistry) createHttpClient() (*http.Client, error) {
 	caCert, err := os.ReadFile(z.rootCertPath)
 	if err != nil {
@@ -292,6 +338,8 @@ func (z *ZotRegistry) Prepare() error {
 	executor := cliWrappers.NewCliExecutor()
 
 	os.Setenv("DOCKER_CONFIG", z.dataDirPath)
+	// This is needed for docker CLI when requests are sent directly from the CLI to the registry.
+	os.Setenv("SSL_CERT_FILE", z.rootCertPath)
 
 	if err := EnsureDirectory(zotConfigDataDir); err != nil {
 		return err
