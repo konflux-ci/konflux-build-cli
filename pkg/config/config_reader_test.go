@@ -38,12 +38,12 @@ func Test_GetConfigData(t *testing.T) {
 		_, err := fakeClient.CoreV1().ConfigMaps(testNamespace).Create(ctx, configMap1, metav1.CreateOptions{})
 		g.Expect(err).ToNot(HaveOccurred())
 
-		cacheProxyConfig, err := newK8sConfigMapReader.ReadConfigData()
+		konfluxInfo, err := newK8sConfigMapReader.ReadConfigData()
 
 		g.Expect(err).ShouldNot(HaveOccurred())
-		g.Expect(cacheProxyConfig.AllowCacheProxy).Should(Equal("true"))
-		g.Expect(cacheProxyConfig.HttpProxy).Should(Equal("test-proxy.io"))
-		g.Expect(cacheProxyConfig.NoProxy).Should(Equal("test.io"))
+		g.Expect(konfluxInfo.AllowCacheProxy).Should(Equal("true"))
+		g.Expect(konfluxInfo.HttpProxy).Should(Equal("test-proxy.io"))
+		g.Expect(konfluxInfo.NoProxy).Should(Equal("test.io"))
 
 	})
 
@@ -61,11 +61,11 @@ func Test_GetConfigData(t *testing.T) {
 		g.Expect(err).ShouldNot(HaveOccurred())
 
 		newIniFileReader := IniFileReader{FilePath: tempFile.Name()}
-		cacheProxyConfig, err := newIniFileReader.ReadConfigData()
+		konfluxInfo, err := newIniFileReader.ReadConfigData()
 
 		g.Expect(err).ShouldNot(HaveOccurred())
-		g.Expect(cacheProxyConfig.AllowCacheProxy).Should(Equal("true"))
-		g.Expect(cacheProxyConfig.HttpProxy).Should(Equal("testproxy.local:3128"))
-		g.Expect(cacheProxyConfig.NoProxy).Should(Equal("test.io"))
+		g.Expect(konfluxInfo.AllowCacheProxy).Should(Equal("true"))
+		g.Expect(konfluxInfo.HttpProxy).Should(Equal("testproxy.local:3128"))
+		g.Expect(konfluxInfo.NoProxy).Should(Equal("test.io"))
 	})
 }

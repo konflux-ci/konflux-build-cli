@@ -11,7 +11,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 )
 
-type CacheProxyConfig struct {
+type KonfluxInfo struct {
 	AllowCacheProxy string
 	HttpProxy       string
 	NoProxy         string
@@ -19,7 +19,7 @@ type CacheProxyConfig struct {
 
 // ConfigReader defines the interface for reading config data.
 type ConfigReader interface {
-	ReadConfigData() (*CacheProxyConfig, error)
+	ReadConfigData() (*KonfluxInfo, error)
 }
 
 // K8sConfigMapReader reads configuration from a Kubernetes cluster.
@@ -48,13 +48,13 @@ func NewConfigReader() (ConfigReader, error) {
 }
 
 // ReadConfigData reads platform config from the INI file
-func (y *IniFileReader) ReadConfigData() (*CacheProxyConfig, error) {
+func (y *IniFileReader) ReadConfigData() (*KonfluxInfo, error) {
 	cfg, err := ini.Load(y.FilePath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load ini file: %v", err)
 	}
 
-	newCacheProxy := &CacheProxyConfig{
+	newCacheProxy := &KonfluxInfo{
 		AllowCacheProxy: cfg.Section("cache-proxy").Key("allow-cache-proxy").String(),
 		HttpProxy:       cfg.Section("cache-proxy").Key("http-proxy").String(),
 		NoProxy:         cfg.Section("cache-proxy").Key("no-proxy").String(),
@@ -64,13 +64,13 @@ func (y *IniFileReader) ReadConfigData() (*CacheProxyConfig, error) {
 }
 
 // ReadConfigData reads the config from the ConfigMap data of a Kubernetes cluster.
-func (k *K8sConfigMapReader) ReadConfigData() (*CacheProxyConfig, error) {
+func (k *K8sConfigMapReader) ReadConfigData() (*KonfluxInfo, error) {
 	ctx := context.Background()
 	configMap, err := k.Clientset.CoreV1().ConfigMaps(k.Namespace).Get(ctx, k.Name, metav1.GetOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("failed to get configmap %s/%s: %w", k.Namespace, k.Name, err)
 	}
-	newCacheProxy := &CacheProxyConfig{
+	newCacheProxy := &KonfluxInfo{
 		AllowCacheProxy: configMap.Data["allow-cache-proxy"],
 		HttpProxy:       configMap.Data["http-proxy"],
 		NoProxy:         configMap.Data["no-proxy"],
