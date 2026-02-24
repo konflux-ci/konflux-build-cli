@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	. "github.com/onsi/gomega"
 
@@ -405,6 +406,150 @@ func TestBuildahCli_Pull(t *testing.T) {
 		err := buildahCli.Pull(pullArgs)
 		g.Expect(err).To(HaveOccurred())
 		g.Expect(err.Error()).To(ContainSubstring("image arg is empty"))
+	})
+}
+
+func TestBuildahCli_Inspect(t *testing.T) {
+	g := NewWithT(t)
+
+	const imageName = "localhost/image:tag"
+
+	t.Run("should execute buildah inspect correctly", func(t *testing.T) {
+		buildahCli, executor := setupBuildahCli()
+		var capturedArgs []string
+		executor.executeFunc = func(command string, args ...string) (string, string, int, error) {
+			g.Expect(command).To(Equal("buildah"))
+			capturedArgs = args
+			return `{"OCIv1": {}}`, "", 0, nil
+		}
+
+		inspectArgs := &cliwrappers.BuildahInspectArgs{
+			Name: imageName,
+			Type: "image",
+		}
+
+		jsonOutput, err := buildahCli.Inspect(inspectArgs)
+
+		g.Expect(err).ToNot(HaveOccurred())
+		g.Expect(jsonOutput).To(ContainSubstring("OCIv1"))
+		g.Expect(capturedArgs[0]).To(Equal("inspect"))
+		expectArgAndValue(g, capturedArgs, "--type", "image")
+		g.Expect(capturedArgs[len(capturedArgs)-1]).To(Equal(imageName))
+	})
+
+	t.Run("should error when name is empty", func(t *testing.T) {
+		buildahCli, executor := setupBuildahCli()
+		executorCalled := false
+		executor.executeFunc = func(command string, args ...string) (string, string, int, error) {
+			executorCalled = true
+			return "", "", 0, nil
+		}
+
+		inspectArgs := &cliwrappers.BuildahInspectArgs{
+			Name: "",
+			Type: "image",
+		}
+
+		_, err := buildahCli.Inspect(inspectArgs)
+
+		g.Expect(err).To(HaveOccurred())
+		g.Expect(err.Error()).To(ContainSubstring("name is empty"))
+		g.Expect(executorCalled).To(BeFalse())
+	})
+
+	t.Run("should error when type is empty", func(t *testing.T) {
+		buildahCli, executor := setupBuildahCli()
+		executorCalled := false
+		executor.executeFunc = func(command string, args ...string) (string, string, int, error) {
+			executorCalled = true
+			return "", "", 0, nil
+		}
+
+		inspectArgs := &cliwrappers.BuildahInspectArgs{
+			Name: imageName,
+			Type: "",
+		}
+
+		_, err := buildahCli.Inspect(inspectArgs)
+
+		g.Expect(err).To(HaveOccurred())
+		g.Expect(err.Error()).To(ContainSubstring("type is empty"))
+		g.Expect(executorCalled).To(BeFalse())
+	})
+
+	t.Run("should error when buildah execution fails", func(t *testing.T) {
+		buildahCli, executor := setupBuildahCli()
+		executor.executeFunc = func(command string, args ...string) (string, string, int, error) {
+			return "", "", 1, errors.New("buildah inspect failed")
+		}
+
+		inspectArgs := &cliwrappers.BuildahInspectArgs{
+			Name: imageName,
+			Type: "image",
+		}
+
+		_, err := buildahCli.Inspect(inspectArgs)
+
+		g.Expect(err).To(HaveOccurred())
+		g.Expect(err.Error()).To(Equal("buildah inspect failed"))
+	})
+}
+
+func TestBuildahCli_InspectImage(t *testing.T) {
+	g := NewWithT(t)
+
+	const imageName = "quay.io/org/image:tag"
+
+	t.Run("should parse valid JSON successfully", func(t *testing.T) {
+		buildahCli, executor := setupBuildahCli()
+
+		sampleJSON := `{
+			"OCIv1": {
+				"created": "2024-01-01T00:00:00Z",
+				"config": {
+					"Env": ["PATH=/usr/bin", "HOME=/root"],
+					"Labels": {"version": "1.0", "maintainer": "test"}
+				}
+			}
+		}`
+
+		executor.executeFunc = func(command string, args ...string) (string, string, int, error) {
+			return sampleJSON, "", 0, nil
+		}
+
+		imageInfo, err := buildahCli.InspectImage(imageName)
+
+		g.Expect(err).ToNot(HaveOccurred())
+		g.Expect(imageInfo.OCIv1.Created).ToNot(BeNil())
+		g.Expect(imageInfo.OCIv1.Created.Format(time.RFC3339)).To(Equal("2024-01-01T00:00:00Z"))
+		g.Expect(imageInfo.OCIv1.Config.Env).To(Equal([]string{"PATH=/usr/bin", "HOME=/root"}))
+		g.Expect(imageInfo.OCIv1.Config.Labels).To(Equal(map[string]string{"version": "1.0", "maintainer": "test"}))
+	})
+
+	t.Run("should error when Inspect fails", func(t *testing.T) {
+		buildahCli, executor := setupBuildahCli()
+
+		executor.executeFunc = func(command string, args ...string) (string, string, int, error) {
+			return "", "", 1, errors.New("buildah inspect failed")
+		}
+
+		_, err := buildahCli.InspectImage(imageName)
+
+		g.Expect(err).To(HaveOccurred())
+		g.Expect(err.Error()).To(Equal("buildah inspect failed"))
+	})
+
+	t.Run("should error when JSON parsing fails", func(t *testing.T) {
+		buildahCli, executor := setupBuildahCli()
+
+		executor.executeFunc = func(command string, args ...string) (string, string, int, error) {
+			return `{invalid json}`, "", 0, nil
+		}
+
+		_, err := buildahCli.InspectImage(imageName)
+
+		g.Expect(err).To(HaveOccurred())
+		g.Expect(err.Error()).To(ContainSubstring("parsing inspect output"))
 	})
 }
 

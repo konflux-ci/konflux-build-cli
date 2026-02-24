@@ -1,6 +1,7 @@
 package cliwrappers
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -8,6 +9,7 @@ import (
 	"strings"
 
 	l "github.com/konflux-ci/konflux-build-cli/pkg/logger"
+	ociv1 "github.com/opencontainers/image-spec/specs-go/v1"
 )
 
 var buildahLog = l.Logger.WithField("logger", "BuildahCli")
@@ -16,6 +18,8 @@ type BuildahCliInterface interface {
 	Build(args *BuildahBuildArgs) error
 	Push(args *BuildahPushArgs) (string, error)
 	Pull(args *BuildahPullArgs) error
+	Inspect(args *BuildahInspectArgs) (string, error)
+	InspectImage(name string) (BuildahImageInfo, error)
 }
 
 var _ BuildahCliInterface = &BuildahCli{}
@@ -282,4 +286,62 @@ func (b *BuildahCli) Pull(args *BuildahPullArgs) error {
 	buildahLog.Debug("Pull completed successfully")
 
 	return nil
+}
+
+type BuildahInspectArgs struct {
+	// Name of object to inspect, required
+	Name string
+	// container | image | manifest, required
+	// Note: Buildah does not require this one, but the behavior is not fully specified
+	// if two objects of different Type have the same Name. Make it required to be safe.
+	Type string
+}
+
+func (b *BuildahCli) Inspect(args *BuildahInspectArgs) (string, error) {
+	if args.Name == "" {
+		return "", errors.New("name is empty")
+	}
+	if args.Type == "" {
+		return "", errors.New("type is empty")
+	}
+
+	buildahArgs := []string{"inspect", "--type", args.Type, args.Name}
+
+	buildahLog.Debugf("Running command:\nbuildah %s", strings.Join(buildahArgs, " "))
+
+	stdout, stderr, _, err := b.Executor.Execute("buildah", buildahArgs...)
+	if err != nil {
+		buildahLog.Errorf("buildah inspect failed: %s", err.Error())
+		if stderr != "" {
+			buildahLog.Errorf("stderr:\n%s", stderr)
+		}
+		return "", err
+	}
+
+	return stdout, nil
+}
+
+// The default output of Inspect() for the 'image' Type (a single image, not an image index).
+// Includes a subset of the attributes that buildah returns.
+type BuildahImageInfo struct {
+	OCIv1 ociv1.Image
+}
+
+func (b *BuildahCli) InspectImage(name string) (BuildahImageInfo, error) {
+	jsonOutput, err := b.Inspect(&BuildahInspectArgs{
+		Name: name,
+		Type: "image",
+	})
+	if err != nil {
+		return BuildahImageInfo{}, err
+	}
+
+	var imageInfo BuildahImageInfo
+
+	err = json.Unmarshal([]byte(jsonOutput), &imageInfo)
+	if err != nil {
+		return BuildahImageInfo{}, fmt.Errorf("parsing inspect output: %w", err)
+	}
+
+	return imageInfo, nil
 }
