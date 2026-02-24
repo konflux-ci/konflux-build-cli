@@ -2,6 +2,7 @@ package config
 
 import (
 	"context"
+	"os"
 	"testing"
 
 	. "github.com/onsi/gomega"
@@ -48,8 +49,18 @@ func Test_GetConfigData(t *testing.T) {
 
 	t.Run("successfully retrieves config data from platform config ini file", func(t *testing.T) {
 
-		newIniFileReader := IniFileReader{FilePath: "../../testdata/sample-platform-config.ini"}
+		tempFile, err := os.CreateTemp("", "*-platform-config.ini")
+		if err != nil {
+			t.Fatalf("failed to create temporary file: %v", err)
+		}
 
+		defer os.Remove(tempFile.Name())
+		defer tempFile.Close()
+
+		_, err = tempFile.Write([]byte("[cache-proxy]\nallow-cache-proxy=true\nhttp-proxy=testproxy.local:3128\nno-proxy=test.io"))
+		g.Expect(err).ShouldNot(HaveOccurred())
+
+		newIniFileReader := IniFileReader{FilePath: tempFile.Name()}
 		cacheProxyConfig, err := newIniFileReader.ReadConfigData()
 
 		g.Expect(err).ShouldNot(HaveOccurred())

@@ -2,6 +2,7 @@ package commands
 
 import (
 	"context"
+	"os"
 	"testing"
 
 	"github.com/konflux-ci/konflux-build-cli/pkg/config"
@@ -16,7 +17,6 @@ import (
 func Test_CacheProxy_Run(t *testing.T) {
 	g := NewWithT(t)
 
-	testPlatformConfigIniFilePath := "../../testdata/sample-platform-config.ini"
 	testHttpProxy := "test.caching:3323"
 	testNamespace := "test_namespace"
 	testConfigMapName := "test_name"
@@ -94,13 +94,13 @@ func Test_CacheProxy_Run(t *testing.T) {
 		}
 	}
 
-	beforeEachWithPlatformConfigFile := func() {
+	beforeEachWithPlatformConfigFile := func(iniFilePath string) {
 		_mockResultsWriter = &mockResultsWriter{}
 
 		c = &CacheProxy{
 			Params: &CacheProxyParams{},
 			Configs: CacheProxyConfigs{
-				ConfigReader: &config.IniFileReader{FilePath: testPlatformConfigIniFilePath},
+				ConfigReader: &config.IniFileReader{FilePath: iniFilePath},
 			},
 			ResultsWriter: _mockResultsWriter,
 		}
@@ -192,7 +192,19 @@ func Test_CacheProxy_Run(t *testing.T) {
 	})
 
 	t.Run("reading config from the platform config ini is successful", func(t *testing.T) {
-		beforeEachWithPlatformConfigFile()
+		tempFile, err := os.CreateTemp("", "*-platform-config.ini")
+		if err != nil {
+			t.Fatalf("failed to create temporary file: %v", err)
+		}
+
+		defer os.Remove(tempFile.Name())
+		defer tempFile.Close()
+
+		_, err = tempFile.Write([]byte("[cache-proxy]\nallow-cache-proxy=true\nhttp-proxy=testproxy.local:3128\nno-proxy=test.io"))
+		g.Expect(err).ShouldNot(HaveOccurred())
+
+		beforeEachWithPlatformConfigFile(tempFile.Name())
+
 		c.Params.Enable = "true"
 
 		isWriteResultsStringCalled := false
@@ -201,7 +213,8 @@ func Test_CacheProxy_Run(t *testing.T) {
 			return nil
 		}
 
-		err := c.Run()
+		err = c.Run()
+
 		g.Expect(err).ToNot(HaveOccurred())
 		g.Expect(c.Results.HttpProxy).To(Equal("testproxy.local:3128"))
 		g.Expect(c.Results.NoProxy).To(Equal("test.io"))

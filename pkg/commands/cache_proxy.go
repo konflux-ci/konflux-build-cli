@@ -90,30 +90,16 @@ func NewCacheProxy(cmd *cobra.Command) (*CacheProxy, error) {
 	}
 	cacheProxy.Params = params
 
-	// Initialize Configs
-	if err := cacheProxy.initializeConfigs(); err != nil {
-		return nil, err
-	}
-
+	// Initialize Config Reader
+	newConfigReader, err := config.NewConfigReader()
 	if err != nil {
 		return nil, err
 	}
+	cacheProxy.Configs.ConfigReader = newConfigReader
 
 	cacheProxy.ResultsWriter = common.NewResultsWriter()
 
 	return cacheProxy, nil
-}
-
-func (c *CacheProxy) initializeConfigs() error {
-
-	// Initialize config reader
-	newConfigReader, err := config.NewConfigReader()
-	if err != nil {
-		return err
-	}
-	c.Configs.ConfigReader = newConfigReader
-
-	return nil
 }
 
 // Run executes the command logic.
@@ -126,8 +112,8 @@ func (c *CacheProxy) Run() error {
 	l.Logger.Debug("Reading config data")
 	cacheProxyConfig, err := c.Configs.ConfigReader.ReadConfigData()
 	if err != nil {
-		l.Logger.Warnf("Error while reading config map: %s", err.Error())
-		// ConfigMap missing, use defaults
+		l.Logger.Warnf("Error while reading config data: %s", err.Error())
+		// failed to read config data, use defaults
 		httpProxy = c.Params.DefaultHttpProxy
 		noProxy = c.Params.DefaultNoProxy
 		allowCache = "true"
