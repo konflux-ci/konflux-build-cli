@@ -744,10 +744,10 @@ LABEL test.label="envs-test"
 		containerfileJsonPath := "/workspace/parsed-containerfile.json"
 
 		buildParams := BuildParams{
-			Context:                 contextDir,
-			OutputRef:               outputRef,
-			Push:                    false,
-			Envs:                    []string{
+			Context:   contextDir,
+			OutputRef: outputRef,
+			Push:      false,
+			Envs: []string{
 				"FOO=foo-value",
 				"BAR=bar-value",
 				// Corner cases to verify that dockerfile-json and buildah handle them the same way
