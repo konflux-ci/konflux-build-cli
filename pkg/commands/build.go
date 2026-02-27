@@ -181,6 +181,14 @@ var BuildParamsConfig = map[string]common.Parameter{
 		DefaultValue: "false",
 		Usage:        "Do not inject anything into /usr/share/buildinfo/.",
 	},
+	"include-legacy-buildinfo-path": {
+		Name:         "include-legacy-buildinfo-path",
+		ShortName:    "",
+		EnvVarName:   "KBC_BUILD_INCLUDE_LEGACY_BUILDINFO_PATH",
+		TypeKind:     reflect.Bool,
+		DefaultValue: "false",
+		Usage:        "When injecting files to /usr/share/buildinfo/, also inject them to /root/buildinfo/.",
+	},
 	"inherit-labels": {
 		Name:         "inherit-labels",
 		ShortName:    "",
@@ -192,29 +200,30 @@ var BuildParamsConfig = map[string]common.Parameter{
 }
 
 type BuildParams struct {
-	Containerfile           string   `paramName:"containerfile"`
-	Context                 string   `paramName:"context"`
-	OutputRef               string   `paramName:"output-ref"`
-	Push                    bool     `paramName:"push"`
-	SecretDirs              []string `paramName:"secret-dirs"`
-	WorkdirMount            string   `paramName:"workdir-mount"`
-	BuildArgs               []string `paramName:"build-args"`
-	BuildArgsFile           string   `paramName:"build-args-file"`
-	Envs                    []string `paramName:"envs"`
-	Labels                  []string `paramName:"labels"`
-	Annotations             []string `paramName:"annotations"`
-	AnnotationsFile         string   `paramName:"annotations-file"`
-	ImageSource             string   `paramName:"image-source"`
-	ImageRevision           string   `paramName:"image-revision"`
-	LegacyBuildTimestamp    string   `paramName:"legacy-build-timestamp"`
-	SourceDateEpoch         string   `paramName:"source-date-epoch"`
-	RewriteTimestamp        bool     `paramName:"rewrite-timestamp"`
-	QuayImageExpiresAfter   string   `paramName:"quay-image-expires-after"`
-	AddLegacyLabels         bool     `paramName:"add-legacy-labels"`
-	ContainerfileJsonOutput string   `paramName:"containerfile-json-output"`
-	SkipInjections          bool     `paramName:"skip-injections"`
-	InheritLabels           bool     `paramName:"inherit-labels"`
-	ExtraArgs               []string // Additional arguments to pass to buildah build
+	Containerfile              string   `paramName:"containerfile"`
+	Context                    string   `paramName:"context"`
+	OutputRef                  string   `paramName:"output-ref"`
+	Push                       bool     `paramName:"push"`
+	SecretDirs                 []string `paramName:"secret-dirs"`
+	WorkdirMount               string   `paramName:"workdir-mount"`
+	BuildArgs                  []string `paramName:"build-args"`
+	BuildArgsFile              string   `paramName:"build-args-file"`
+	Envs                       []string `paramName:"envs"`
+	Labels                     []string `paramName:"labels"`
+	Annotations                []string `paramName:"annotations"`
+	AnnotationsFile            string   `paramName:"annotations-file"`
+	ImageSource                string   `paramName:"image-source"`
+	ImageRevision              string   `paramName:"image-revision"`
+	LegacyBuildTimestamp       string   `paramName:"legacy-build-timestamp"`
+	SourceDateEpoch            string   `paramName:"source-date-epoch"`
+	RewriteTimestamp           bool     `paramName:"rewrite-timestamp"`
+	QuayImageExpiresAfter      string   `paramName:"quay-image-expires-after"`
+	AddLegacyLabels            bool     `paramName:"add-legacy-labels"`
+	ContainerfileJsonOutput    string   `paramName:"containerfile-json-output"`
+	SkipInjections             bool     `paramName:"skip-injections"`
+	InheritLabels              bool     `paramName:"inherit-labels"`
+	IncludeLegacyBuildinfoPath bool     `paramName:"include-legacy-buildinfo-path"`
+	ExtraArgs                  []string // Additional arguments to pass to buildah build
 }
 
 type BuildCliWrappers struct {
@@ -445,6 +454,9 @@ func (c *Build) logParams() {
 	}
 	if c.Params.SkipInjections {
 		l.Logger.Infof("[param] SkipInjections: %t", c.Params.SkipInjections)
+	}
+	if c.Params.IncludeLegacyBuildinfoPath {
+		l.Logger.Infof("[param] IncludeLegacyBuildinfoPath: %t", c.Params.IncludeLegacyBuildinfoPath)
 	}
 	// Defaults to true, so log only if false
 	if !c.Params.InheritLabels {
@@ -879,6 +891,9 @@ func (c *Build) injectBuildinfo(df *dockerfile.Dockerfile, userLabels []string) 
 	c.containerfileCopyPath = containerfileCopy
 
 	appendLines := []string{"COPY --from=.konflux-buildinfo . /usr/share/buildinfo/"}
+	if c.Params.IncludeLegacyBuildinfoPath {
+		appendLines = append(appendLines, "COPY --from=.konflux-buildinfo . /root/buildinfo/")
+	}
 	for _, line := range appendLines {
 		l.Logger.Debugf("Appending to containerfile: %s", line)
 	}

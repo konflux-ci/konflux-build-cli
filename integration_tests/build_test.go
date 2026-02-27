@@ -49,8 +49,9 @@ type BuildParams struct {
 	ContainerfileJsonOutput string
 	SkipInjections          bool
 	// Defaults to true in the CLI, need a way to distinguish between explicitly false and unset
-	InheritLabels *bool
-	ExtraArgs     []string
+	InheritLabels              *bool
+	IncludeLegacyBuildinfoPath bool
+	ExtraArgs                  []string
 }
 
 func boolptr(v bool) *bool {
@@ -230,6 +231,9 @@ func runBuildWithOutput(container *TestRunnerContainer, buildParams BuildParams)
 	if buildParams.SkipInjections {
 		args = append(args, "--skip-injections")
 	}
+	if buildParams.IncludeLegacyBuildinfoPath {
+		args = append(args, "--include-legacy-buildinfo-path")
+	}
 	if buildParams.InheritLabels != nil {
 		args = append(args, fmt.Sprintf("--inherit-labels=%t", *buildParams.InheritLabels))
 	}
@@ -366,6 +370,16 @@ func getContainerfileMeta(container *TestRunnerContainer, containerfileJsonPath 
 
 func getLabelsFromLabelsJson(container *TestRunnerContainer, imageRef string) map[string]string {
 	labelsJSON := getFileContentFromOutputImage(container, imageRef, "/usr/share/buildinfo/labels.json")
+
+	var labels map[string]string
+	err := json.Unmarshal([]byte(labelsJSON), &labels)
+	Expect(err).ToNot(HaveOccurred())
+
+	return labels
+}
+
+func getLegacyLabelsJson(container *TestRunnerContainer, imageRef string) map[string]string {
+	labelsJSON := getFileContentFromOutputImage(container, imageRef, "/root/buildinfo/labels.json")
 
 	var labels map[string]string
 	err := json.Unmarshal([]byte(labelsJSON), &labels)
@@ -1398,6 +1412,22 @@ RUN echo "this instruction also creates an intermediate layer" > /tmp/bar.txt
 			stat := statFileInOutputImage(container, outputRef, "/usr/share/buildinfo/labels.json")
 			Expect(stat).To(ContainSubstring("Access: (0644/-rw-r--r--)"),
 				"The injected labels.json file should have mode 0644")
+
+			// The image WILL have /root/buildinfo/labels.json even though we don't inject it by default.
+			// It comes from the base image, which already has the file.
+			legacyLabels := getLegacyLabelsJson(container, outputRef)
+			Expect(legacyLabels).To(SatisfyAll(
+				// Has base image labels
+				HaveKeyWithValue("com.redhat.component", "ubi10-micro-container"),
+				HaveKeyWithValue("name", "ubi10/ubi-micro"),
+				HaveKeyWithValue("vendor", "Red Hat, Inc."),
+				// But not any of the new labels
+				Not(HaveKey("build.os")),
+				Not(HaveKey("buildarg.label")),
+				Not(HaveKey("env.label")),
+				Not(HaveKey("static.label")),
+				Not(HaveKey("cli.label")),
+			))
 		})
 
 		t.Run("LabelsFromEarlierStages", func(t *testing.T) {
@@ -1506,6 +1536,9 @@ LABEL containerfile.label=label-from-containerfile
 			imageMeta := getImageMeta(container, outputRef)
 			expectEqualMaps(injectedLabels, imageMeta.labels,
 				"Expected labels.json (top) to match the actual image labels (bottom)")
+
+			legacyPathExists := fileExistsInOutputImage(container, outputRef, "/root/buildinfo/labels.json")
+			Expect(legacyPathExists).To(BeFalse(), "Should not have injected /root/buildinfo/labels.json by default")
 		})
 
 		t.Run("AvoidsContainerignore", func(t *testing.T) {
@@ -1621,7 +1654,44 @@ LABEL io.buildah.version=0.0.1
 			Expect(err).ToNot(HaveOccurred())
 
 			exists := fileExistsInOutputImage(container, outputRef, "/usr/share/buildinfo/labels.json")
-			Expect(exists).To(BeFalse(), "Should not have injected labels.json")
+			Expect(exists).To(BeFalse(), "Should not have injected /usr/share/buildinfo/labels.json")
+
+			exists2 := fileExistsInOutputImage(container, outputRef, "/root/buildinfo/labels.json")
+			Expect(exists2).To(BeFalse(), "Should not have injected /root/buildinfo/labels.json")
+		})
+
+		t.Run("LegacyBuildinfoPath", func(t *testing.T) {
+			contextDir := setupTestContext(t)
+
+			writeContainerfile(contextDir, `FROM scratch`)
+
+			outputRef := "localhost/test-injecting-buildinfo-legacy-buildinfo-path:" + GenerateUniqueTag(t)
+
+			buildParams := BuildParams{
+				Context:                    contextDir,
+				OutputRef:                  outputRef,
+				Push:                       false,
+				IncludeLegacyBuildinfoPath: true,
+				Labels:                     []string{"foo=bar"},
+			}
+
+			container := setupBuildContainerWithCleanup(t, buildParams, nil)
+
+			err := runBuild(container, buildParams)
+			Expect(err).ToNot(HaveOccurred())
+
+			labelsContent := getFileContentFromOutputImage(container, outputRef, "/usr/share/buildinfo/labels.json")
+			legacyLabelsContent := getFileContentFromOutputImage(container, outputRef, "/root/buildinfo/labels.json")
+
+			// The files should be byte-for-byte equal, compare the actual content
+			Expect(labelsContent).To(Equal(legacyLabelsContent),
+				"/usr/share/buildinfo/labels.json (top) does not match /root/buildinfo/labels.json (bottom)")
+
+			Expect(labelsContent).To(ContainSubstring(`"foo": "bar"`))
+
+			stat := statFileInOutputImage(container, outputRef, "/root/buildinfo/labels.json")
+			Expect(stat).To(ContainSubstring("Access: (0644/-rw-r--r--)"),
+				"The injected labels.json file should have mode 0644")
 		})
 
 		t.Run("KnownIssues", func(t *testing.T) {
