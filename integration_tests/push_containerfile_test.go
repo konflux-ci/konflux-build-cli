@@ -46,13 +46,14 @@ func setupPushContainerfileContainerWithCleanup(t *testing.T, imageRegistry Imag
 }
 
 type PushContainerfileParams struct {
-	source             string
-	context            string
-	containerfile      string
-	digest             string
-	tagSuffix          string
-	artifactType       string
-	resultPathImageRef string
+	source              string
+	context             string
+	containerfile       string
+	digest              string
+	tagSuffix           string
+	artifactType        string
+	resultPathImageRef  string
+	alternativeFilename string
 }
 
 func TestPushContainerfile(t *testing.T) {
@@ -152,6 +153,18 @@ func TestPushContainerfile(t *testing.T) {
 			expectedContainerfileDigest:  sourceContainerfileContentDigest,
 			expectedTitleAnnotationValue: "Containerfile",
 		},
+		{
+			name: "Push with an alternative file name",
+			params: PushContainerfileParams{
+				source:              "source",
+				digest:              "sha256:2788b272a5a7c0071906a9c6b654760e44a1fc8226f8268c70848148f19c35b0",
+				containerfile:       "./containerfiles/operator",
+				alternativeFilename: "Dockerfile",
+			},
+			expectedTaggedDigest:         "sha256-2788b272a5a7c0071906a9c6b654760e44a1fc8226f8268c70848148f19c35b0",
+			expectedContainerfileDigest:  sourceContainerfileContentDigest,
+			expectedTitleAnnotationValue: "Dockerfile",
+		},
 	}
 
 	for _, tc := range testCases {
@@ -176,6 +189,9 @@ func TestPushContainerfile(t *testing.T) {
 			}
 			if tc.params.context != "" {
 				cmd = append(cmd, "--context", tc.params.context)
+			}
+			if tc.params.alternativeFilename != "" {
+				cmd = append(cmd, "--alternative-filename", tc.params.alternativeFilename)
 			}
 
 			err := container.ExecuteBuildCli(cmd...)
