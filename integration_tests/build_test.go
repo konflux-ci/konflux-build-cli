@@ -51,6 +51,7 @@ type BuildParams struct {
 	InheritLabels              *bool
 	IncludeLegacyBuildinfoPath bool
 	Target                     string
+	Hermetic                   bool
 	ExtraArgs                  []string
 }
 
@@ -285,6 +286,9 @@ func runBuildWithOutput(container *TestRunnerContainer, buildParams BuildParams)
 	if buildParams.Target != "" {
 		args = append(args, "--target", buildParams.Target)
 	}
+	if buildParams.Hermetic {
+		args = append(args, "--hermetic")
+	}
 	// Add separator and extra args if provided
 	if len(buildParams.ExtraArgs) > 0 {
 		args = append(args, "--")
@@ -503,6 +507,11 @@ func TestBuild(t *testing.T) {
 	t.Cleanup(func() { removeContainerStorageDir(storagePath) })
 	Expect(err).ToNot(HaveOccurred())
 
+	// Need two separate storage dirs, one for tests that run as root, one for non-root
+	rootStoragePath, err := createContainerStorageDir()
+	t.Cleanup(func() { removeContainerStorageDir(rootStoragePath) })
+	Expect(err).ToNot(HaveOccurred())
+
 	defaultOpts := []ContainerOption{WithUser("taskuser"), maybeMountContainerStorage(storagePath, "taskuser")}
 
 	setupBuildContainerWithCleanup := func(
@@ -630,14 +639,8 @@ RUN echo hi
 				Push:      false,
 			}
 
-			// Most other tests run as "taskuser". They may have already taken ownership of the
-			// shared storage dir, so root will not have permissions to write there. Use a new one.
-			storagePath, err := createContainerStorageDir()
-			t.Cleanup(func() { removeContainerStorageDir(storagePath) })
-			Expect(err).ToNot(HaveOccurred())
-
 			container := setupBuildContainerWithCleanup(t, buildParams, nil,
-				WithUser("root"), maybeMountContainerStorage(storagePath, "root"))
+				WithUser("root"), maybeMountContainerStorage(rootStoragePath, "root"))
 
 			err = runBuild(container, buildParams)
 			Expect(err).ToNot(HaveOccurred())
@@ -2077,5 +2080,59 @@ LABEL common.label=common-stage2
 			HaveKeyWithValue("common.label", "common-stage1"),
 			Not(HaveKey("stage2.label")),
 		))
+	})
+
+	t.Run("Hermetic", func(t *testing.T) {
+		SetupGomega(t)
+
+		t.Run("BlocksAddInstructions", func(t *testing.T) {
+			SetupGomega(t)
+
+			contextDir := setupTestContext(t)
+			writeContainerfile(contextDir, `
+FROM scratch
+
+# Use an IP directly to prove network is unreachable and the failure isn't just broken DNS.
+# (As can happen with e.g. 'BUILDAH_ISOLATION=chroot buildah build --network=none'.)
+ADD https://1.1.1.1 /cloudflare-1111.html
+`)
+
+			runTest := func(t *testing.T, user string) {
+				SetupGomega(t)
+
+				outputRef := "localhost/test-hermetic-blocks-add:" + GenerateUniqueTag(t)
+
+				buildParams := BuildParams{
+					Context:   contextDir,
+					OutputRef: outputRef,
+					Push:      false,
+					Hermetic:  true,
+					// Disable retries for ADD instructions to make the build fail faster
+					ExtraArgs: []string{"--retry=0"},
+				}
+
+				var opts []ContainerOption
+				if user == "root" {
+					opts = append(opts, WithUser("root"), maybeMountContainerStorage(rootStoragePath, "root"))
+				}
+
+				container := setupBuildContainerWithCleanup(t, buildParams, nil, opts...)
+
+				stdout, _, err := runBuildWithOutput(container, buildParams)
+				Expect(err).To(HaveOccurred())
+
+				// kbc prints the error to stderr, but we run it via 'podman exec -t',
+				// which prints everything to stdout
+				Expect(stdout).To(ContainSubstring("dial tcp 1.1.1.1:443: connect: network is unreachable"))
+			}
+
+			t.Run("AsNonRoot", func(t *testing.T) {
+				runTest(t, "taskuser")
+			})
+
+			t.Run("AsRoot", func(t *testing.T) {
+				runTest(t, "root")
+			})
+		})
 	})
 }
