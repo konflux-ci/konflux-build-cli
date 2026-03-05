@@ -49,6 +49,7 @@ spec:
               set -ex
               microdnf install -y go
               cd /source
+              export GOMAXPROCS=32
               go test ./pkg/...
             volumeMounts:
             - name: source
