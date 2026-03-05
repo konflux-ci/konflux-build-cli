@@ -140,6 +140,32 @@ func TestBuildahCli_Build(t *testing.T) {
 		g.Expect(capturedArgs).To(ContainElement("--volume=/host/dir2:/container/dir2:ro"))
 	})
 
+	t.Run("should turn BuildContextx into --build-context params", func(t *testing.T) {
+		buildahCli, executor := setupBuildahCli()
+		var capturedArgs []string
+		executor.executeWithOutput = func(command string, args ...string) (string, string, int, error) {
+			g.Expect(command).To(Equal("buildah"))
+			capturedArgs = args
+			return "", "", 0, nil
+		}
+
+		buildArgs := &cliwrappers.BuildahBuildArgs{
+			Containerfile: containerfile,
+			ContextDir:    contextDir,
+			OutputRef:     outputRef,
+			BuildContexts: []cliwrappers.BuildahBuildContext{
+				{Name: "context1", Location: "context/dir/a"},
+				{Name: "context2", Location: "/absolute/context/dir/b"},
+			},
+		}
+
+		err := buildahCli.Build(buildArgs)
+		g.Expect(err).ToNot(HaveOccurred())
+
+		g.Expect(capturedArgs).To(ContainElement("--build-context=context1=context/dir/a"))
+		g.Expect(capturedArgs).To(ContainElement("--build-context=context2=/absolute/context/dir/b"))
+	})
+
 	t.Run("should turn BuildArgs(File) into --build-arg(-file) params", func(t *testing.T) {
 		buildahCli, executor := setupBuildahCli()
 		var capturedArgs []string
@@ -599,6 +625,9 @@ func TestBuildahBuildArgs_MakePathsAbsolute(t *testing.T) {
 			Volumes: []cliwrappers.BuildahVolume{
 				{HostDir: "/absolute/path/volume", ContainerDir: "/container/dir", Options: ""},
 			},
+			BuildContexts: []cliwrappers.BuildahBuildContext{
+				{Name: "additional-context", Location: "/absolute/additional-context"},
+			},
 			BuildArgsFile: "/absolute/path/build-args-file",
 		}
 
@@ -608,6 +637,7 @@ func TestBuildahBuildArgs_MakePathsAbsolute(t *testing.T) {
 		g.Expect(args.ContextDir).To(Equal("/absolute/path/context"))
 		g.Expect(args.Secrets[0].Src).To(Equal("/absolute/path/secret"))
 		g.Expect(args.Volumes[0].HostDir).To(Equal("/absolute/path/volume"))
+		g.Expect(args.BuildContexts[0].Location).To(Equal("/absolute/additional-context"))
 		g.Expect(args.BuildArgsFile).To(Equal("/absolute/path/build-args-file"))
 	})
 
@@ -621,6 +651,9 @@ func TestBuildahBuildArgs_MakePathsAbsolute(t *testing.T) {
 			Volumes: []cliwrappers.BuildahVolume{
 				{HostDir: "relative/volume", ContainerDir: "/container/dir", Options: ""},
 			},
+			BuildContexts: []cliwrappers.BuildahBuildContext{
+				{Name: "additional-context", Location: "relative/additional-context"},
+			},
 			BuildArgsFile: "relative/build-args-file",
 		}
 
@@ -630,6 +663,7 @@ func TestBuildahBuildArgs_MakePathsAbsolute(t *testing.T) {
 		g.Expect(args.ContextDir).To(Equal("/base/dir"))
 		g.Expect(args.Secrets[0].Src).To(Equal("/base/dir/relative/secret"))
 		g.Expect(args.Volumes[0].HostDir).To(Equal("/base/dir/relative/volume"))
+		g.Expect(args.BuildContexts[0].Location).To(Equal("/base/dir/relative/additional-context"))
 		g.Expect(args.BuildArgsFile).To(Equal("/base/dir/relative/build-args-file"))
 	})
 
@@ -645,6 +679,10 @@ func TestBuildahBuildArgs_MakePathsAbsolute(t *testing.T) {
 				{HostDir: "volume1/dir", ContainerDir: "/container/dir1", Options: ""},
 				{HostDir: "/absolute/volume2/dir", ContainerDir: "/container/dir2", Options: "ro"},
 			},
+			BuildContexts: []cliwrappers.BuildahBuildContext{
+				{Name: "additional-context", Location: "/absolute/additional-context"},
+				{Name: "additional-context", Location: "relative/additional-context"},
+			},
 		}
 
 		err := args.MakePathsAbsolute("/base/dir")
@@ -655,6 +693,8 @@ func TestBuildahBuildArgs_MakePathsAbsolute(t *testing.T) {
 		g.Expect(args.Secrets[1].Src).To(Equal("/absolute/secret2/file"))
 		g.Expect(args.Volumes[0].HostDir).To(Equal("/base/dir/volume1/dir"))
 		g.Expect(args.Volumes[1].HostDir).To(Equal("/absolute/volume2/dir"))
+		g.Expect(args.BuildContexts[0].Location).To(Equal("/absolute/additional-context"))
+		g.Expect(args.BuildContexts[1].Location).To(Equal("/base/dir/relative/additional-context"))
 	})
 
 	t.Run("should use current working directory when baseDir is relative", func(t *testing.T) {

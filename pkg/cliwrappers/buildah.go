@@ -49,6 +49,7 @@ type BuildahBuildArgs struct {
 	OutputRef        string
 	Secrets          []BuildahSecret
 	Volumes          []BuildahVolume
+	BuildContexts    []BuildahBuildContext
 	BuildArgs        []string
 	BuildArgsFile    string
 	Envs             []string
@@ -69,6 +70,13 @@ type BuildahVolume struct {
 	HostDir      string
 	ContainerDir string
 	Options      string
+}
+
+// Represents a buildah --build-context argument: name=path
+// (buildah also supports other sources for contexts, but we only support paths for now)
+type BuildahBuildContext struct {
+	Name     string
+	Location string
 }
 
 // Check that the build arguments are valid, e.g. required arguments are set.
@@ -132,6 +140,13 @@ func (args *BuildahBuildArgs) MakePathsAbsolute(baseDir string) error {
 		}
 	}
 
+	for i := range args.BuildContexts {
+		err := ensureAbsolute(&args.BuildContexts[i].Location)
+		if err != nil {
+			return err
+		}
+	}
+
 	if args.BuildArgsFile != "" {
 		err = ensureAbsolute(&args.BuildArgsFile)
 		if err != nil {
@@ -160,6 +175,10 @@ func (b *BuildahCli) Build(args *BuildahBuildArgs) error {
 			volumeArg += ":" + volume.Options
 		}
 		buildahArgs = append(buildahArgs, "--volume="+volumeArg)
+	}
+
+	for _, buildcontext := range args.BuildContexts {
+		buildahArgs = append(buildahArgs, "--build-context="+buildcontext.Name+"="+buildcontext.Location)
 	}
 
 	for _, buildArg := range args.BuildArgs {
