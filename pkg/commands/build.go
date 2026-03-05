@@ -204,6 +204,14 @@ var BuildParamsConfig = map[string]common.Parameter{
 		TypeKind:   reflect.String,
 		Usage:      "Target stage in the Containerfile to build. By default, the target stage is the last stage.",
 	},
+	"hermetic": {
+		Name:         "hermetic",
+		ShortName:    "",
+		EnvVarName:   "KBC_BUILD_HERMETIC",
+		TypeKind:     reflect.Bool,
+		DefaultValue: "false",
+		Usage:        "Prevent network access while building the containerfile.",
+	},
 }
 
 type BuildParams struct {
@@ -231,11 +239,15 @@ type BuildParams struct {
 	InheritLabels              bool     `paramName:"inherit-labels"`
 	IncludeLegacyBuildinfoPath bool     `paramName:"include-legacy-buildinfo-path"`
 	Target                     string   `paramName:"target"`
+	Hermetic                   bool     `paramName:"hermetic"`
 	ExtraArgs                  []string // Additional arguments to pass to buildah build
 }
 
 type BuildCliWrappers struct {
-	BuildahCli cliWrappers.BuildahCliInterface
+	BuildahCli          cliWrappers.BuildahCliInterface
+	BuildahUnshare      cliWrappers.WrapperCmd
+	Unshare             cliWrappers.WrapperCmd
+	SelfInUserNamespace cliWrappers.WrapperCmd
 }
 
 type BuildResults struct {
@@ -298,6 +310,17 @@ func (c *Build) initCliWrappers() error {
 		return err
 	}
 	c.CliWrappers.BuildahCli = buildahCli
+
+	c.CliWrappers.BuildahUnshare = cliWrappers.NewWrapperCmd("buildah", "unshare")
+
+	c.CliWrappers.Unshare = cliWrappers.NewWrapperCmd("unshare")
+
+	selfPath, err := os.Executable()
+	if err != nil {
+		return err
+	}
+	c.CliWrappers.SelfInUserNamespace = cliWrappers.NewWrapperCmd(selfPath, "internal", "in-user-namespace")
+
 	return nil
 }
 
@@ -471,6 +494,9 @@ func (c *Build) logParams() {
 	// Defaults to true, so log only if false
 	if !c.Params.InheritLabels {
 		l.Logger.Infof("[param] InheritLabels: %t", c.Params.InheritLabels)
+	}
+	if c.Params.Hermetic {
+		l.Logger.Infof("[param] Hermetic: %t", c.Params.Hermetic)
 	}
 	if len(c.Params.ExtraArgs) > 0 {
 		l.Logger.Infof("[param] ExtraArgs: %v", c.Params.ExtraArgs)
@@ -1160,6 +1186,7 @@ func (c *Build) buildImage() error {
 		ExtraArgs:        c.Params.ExtraArgs,
 		InheritLabels:    &c.Params.InheritLabels,
 		Target:           c.Params.Target,
+		Wrapper:          c.chooseBuildahWrappers(),
 	}
 	if c.Params.WorkdirMount != "" {
 		buildArgs.Volumes = []cliWrappers.BuildahVolume{
@@ -1180,6 +1207,60 @@ func (c *Build) buildImage() error {
 
 	l.Logger.Info("Build completed successfully")
 	return nil
+}
+
+// Choose how to wrap the 'buildah build' command.
+//
+// Rather than executing buildah directly, we wrap it in commands that manipulate user namespaces.
+// These are the main reasons:
+//
+//  1. Hermetic builds
+//
+//     We want the build to be executed entirely without network access, including ADD instructions.
+//     Buildah has a --network=none flag, but it only affects RUN instructions, not ADD.
+//     And it doesn't work with BUILDAH_ISOLATION=chroot, which is the typical setup in Konflux.
+//     Instead, we create a network namespace manually using 'unshare --net'.
+//
+//  2. Running as root with BUILDAH_ISOLATION=chroot
+//
+//     When running as root, chroot isolation skips creating a user namespace,
+//     so the root inside the container build is the actual root from the host.
+//     Creating a user namespace manually slightly improves security.
+func (c *Build) chooseBuildahWrappers() *cliWrappers.WrapperCmd {
+	var wrapper cliWrappers.WrapperCmd
+
+	if os.Getuid() == 0 {
+		// 'buildah unshare' doesn't work as root, use regular unshare.
+		// --map-root-user: Need to stay root, by default unshare would map to a non-root UID.
+		// --map-auto: Map subordinate UIDs and GIDs based on /etc/subuid and /etc/subgid.
+		//             By default, the namespace would only have 1 UID available.
+		//             Buildah needs more UIDs available to manipulate container filesystems.
+		// --mount: Create a new mount namespace.
+		//          Without this, buildah would fail to mount /var/lib/containers/storage/overlay.
+		wrapper = c.CliWrappers.Unshare.WithArgs("--map-root-user", "--map-auto", "--mount")
+	} else {
+		// Buildah doesn't work under regular unshare as non-root, use 'buildah unshare'.
+		// It does mostly the same things as the raw unshare that we use for root,
+		// but also some buildah-specific magic that makes it work rootless. E.g. this:
+		// https://github.com/containers/storage/blob/83cf57466529353aced8f1803f2302698e0b5cb7/pkg/unshare/unshare_linux.go#L462-L465
+
+		// Unlike the root case, 'buildah unshare' doesn't provide any meaningful security benefits;
+		// buildah always creates a userns for non-root users.
+		// But becoming root in this outer namespace is necessary for 'unshare --net' to work.
+		wrapper = c.CliWrappers.BuildahUnshare
+	}
+
+	if c.Params.Hermetic {
+		wrapper = cliWrappers.JoinWrappers(
+			wrapper,
+			// Create an isolated network namespace
+			c.CliWrappers.Unshare.WithArgs("--net"),
+			// But bring up the loopback interface inside this namespace.
+			// Mainly needed for Bazel builds, Bazel runs a server on localhost.
+			c.CliWrappers.SelfInUserNamespace.WithArgs("--loopback-up"))
+	}
+
+	return &wrapper
 }
 
 func (c *Build) pushImage() (string, error) {
