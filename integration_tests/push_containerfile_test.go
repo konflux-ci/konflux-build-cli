@@ -79,7 +79,7 @@ func TestPushContainerfile(t *testing.T) {
 	for i := 0; i < len(files); i += 2 {
 		fileContent := files[i]
 		fileName := files[i+1]
-		script := fmt.Sprintf(`echo "%s" >%s`, fileContent, fileName)
+		script := fmt.Sprintf(`echo -n "%s" >%s`, fileContent, fileName)
 		err := container.ExecuteCommand("bash", "-c", script)
 		g.Expect(err).ShouldNot(HaveOccurred())
 	}
@@ -218,7 +218,7 @@ func TestPushContainerfile(t *testing.T) {
 			if title, exists := layerAnnotations["org.opencontainers.image.title"]; exists {
 				g.Expect(title).Should(Equal(tc.expectedTitleAnnotationValue))
 			}
-			g.Expect(layerDescriptor.Digest, tc.expectedContainerfileDigest)
+			g.Expect(string(layerDescriptor.Digest)).Should(Equal("sha256:"+tc.expectedContainerfileDigest))
 
 			expectedArtifactType := tc.params.artifactType
 			if expectedArtifactType == "" {
