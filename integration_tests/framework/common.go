@@ -68,6 +68,10 @@ func init() {
 	}
 }
 
+func GetContainerTool() string {
+	return containerTool
+}
+
 func NewImageRegistry() ImageRegistry {
 	if LocalRegistry {
 		return NewZotRegistry()
