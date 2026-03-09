@@ -3,7 +3,6 @@ package integration_tests
 import (
 	"encoding/json"
 	"fmt"
-	"io/fs"
 	"os"
 	"path"
 	"path/filepath"
@@ -124,19 +123,46 @@ func removeContainerStorageDir(containerStoragePath string) {
 		return
 	}
 
-	// 1. 'chmod -R' to ensure write permissions (container storage often includes read-only files)
-	_ = filepath.WalkDir(containerStoragePath, func(path string, d fs.DirEntry, err error) error {
-		// Ignore errors, try to chmod everything if possible
-		os.Chmod(path, 0777)
-		return nil
-	})
-	// 2. 'rm -r'
-	_ = os.RemoveAll(containerStoragePath)
+	warnIfErr := func(err error) {
+		if err != nil {
+			fmt.Printf("WARNING: cleanup error: %s\n", err)
+		}
+	}
+
+	// Try to clean up from inside a container
+	err := cleanupContainerStorageDir(containerStoragePath)
+	warnIfErr(err)
+
+	// Container storage path should be an empty directory at this point
+	err = os.Remove(containerStoragePath)
+	warnIfErr(err)
 
 	// Try to remove the parent .test-containers-storage directory. Will fail if it's not
 	// empty (e.g. a different test process is running in parallel). This is fine. The last
 	// test process that finishes should clean it up successfully.
 	_ = os.Remove(filepath.Dir(containerStoragePath))
+}
+
+// Clean up the container storage dir from inside a container.
+//
+// We can't always clean up directly from the host, because the files in the containerStoragePath
+// may be owned by a different UID than the host UID. They're owned by the container user UID,
+// which may or may not be the same as the host UID depending on userns mapping.
+func cleanupContainerStorageDir(containerStoragePath string) error {
+	container := NewBuildCliRunnerContainer("kbc-build-cleanup", BuildImage)
+	defer container.DeleteIfExists()
+
+	// Clean up as root, which works regardless of whether the tests had run as root or as taskuser
+	// (root can delete files owned by taskuser but not vice-versa).
+	container.SetUser("root")
+	container.AddVolumeWithOptions(containerStoragePath, "/var/lib/containers", "z")
+
+	err := container.Start()
+	if err != nil {
+		return err
+	}
+
+	return container.ExecuteCommand("bash", "-c", "rm -rf /var/lib/containers/*")
 }
 
 // Creates and starts a container for running builds.
