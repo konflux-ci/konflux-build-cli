@@ -516,6 +516,8 @@ func TestBuild(t *testing.T) {
 	}
 
 	t.Run("BuildOnly", func(t *testing.T) {
+		SetupGomega(t)
+
 		contextDir := setupTestContext(t)
 		writeContainerfile(contextDir, `
 FROM scratch
@@ -542,6 +544,8 @@ LABEL test.label="build-test"
 	})
 
 	t.Run("BuildAndPush", func(t *testing.T) {
+		SetupGomega(t)
+
 		imageRegistry := setupImageRegistry(t)
 
 		contextDir := setupTestContext(t)
@@ -574,6 +578,8 @@ LABEL %s="1h"
 	})
 
 	t.Run("WithExtraArgs", func(t *testing.T) {
+		SetupGomega(t)
+
 		contextDir := setupTestContext(t)
 
 		writeContainerfile(contextDir, `
@@ -605,6 +611,8 @@ LABEL test.label="extra-args-test"
 	})
 
 	t.Run("UsesRunInstruction", func(t *testing.T) {
+		SetupGomega(t)
+
 		contextDir := setupTestContext(t)
 		writeContainerfile(contextDir, fmt.Sprintf(`
 FROM %s
@@ -612,6 +620,8 @@ RUN echo hi
 `, baseImage))
 
 		t.Run("AsRoot", func(t *testing.T) {
+			SetupGomega(t)
+
 			outputRef := "localhost/test-use-run-instruction-root:" + GenerateUniqueTag(t)
 
 			buildParams := BuildParams{
@@ -637,6 +647,8 @@ RUN echo hi
 		})
 
 		t.Run("AsNonRoot", func(t *testing.T) {
+			SetupGomega(t)
+
 			outputRef := "localhost/test-use-run-instruction-nonroot:" + GenerateUniqueTag(t)
 
 			buildParams := BuildParams{
@@ -658,6 +670,8 @@ RUN echo hi
 	})
 
 	t.Run("WithSecretDirs", func(t *testing.T) {
+		SetupGomega(t)
+
 		secretsBaseDir := t.TempDir()
 		testutil.WriteFileTree(t, secretsBaseDir, map[string]string{
 			"secret1/token":   "secret-token-value",
@@ -720,6 +734,8 @@ LABEL test.label="secret-dirs-test"
 	})
 
 	t.Run("WorkdirMount", func(t *testing.T) {
+		SetupGomega(t)
+
 		contextDir := setupTestContext(t)
 
 		outputRef := "localhost/test-image-workdir-mount:" + GenerateUniqueTag(t)
@@ -769,6 +785,8 @@ RUN --mount=type=bind,from=builder,src=.,target=/var/tmp \
 	})
 
 	t.Run("WithBuildArgs", func(t *testing.T) {
+		SetupGomega(t)
+
 		contextDir := setupTestContext(t)
 
 		writeContainerfile(contextDir, `
@@ -839,6 +857,8 @@ LABEL test.label="build-args-test"
 	})
 
 	t.Run("PlatformBuildArgs", func(t *testing.T) {
+		SetupGomega(t)
+
 		contextDir := setupTestContext(t)
 
 		writeContainerfile(contextDir, `
@@ -911,6 +931,8 @@ LABEL test.label="platform-build-args-test"
 	})
 
 	t.Run("ContainerfileJsonOutput", func(t *testing.T) {
+		SetupGomega(t)
+
 		contextDir := setupTestContext(t)
 
 		writeContainerfile(contextDir, `FROM scratch`)
@@ -965,6 +987,8 @@ LABEL test.label="platform-build-args-test"
 	})
 
 	t.Run("WithEnvs", func(t *testing.T) {
+		SetupGomega(t)
+
 		contextDir := setupTestContext(t)
 
 		writeContainerfile(contextDir, `
@@ -1039,6 +1063,8 @@ LABEL test.label="envs-test"
 	})
 
 	t.Run("WithLabelsAndAnnotations", func(t *testing.T) {
+		SetupGomega(t)
+
 		contextDir := setupTestContext(t)
 
 		writeContainerfile(contextDir, `FROM scratch`)
@@ -1100,6 +1126,8 @@ LABEL test.label="envs-test"
 	})
 
 	t.Run("AnnotationsFile", func(t *testing.T) {
+		SetupGomega(t)
+
 		contextDir := setupTestContext(t)
 
 		writeContainerfile(contextDir, `FROM scratch`)
@@ -1147,6 +1175,8 @@ common.annotation=overriden-by-cli-annotation
 	})
 
 	t.Run("OverrideDefaultLabelsAndAnnotations", func(t *testing.T) {
+		SetupGomega(t)
+
 		contextDir := setupTestContext(t)
 
 		writeContainerfile(contextDir, `FROM scratch`)
@@ -1195,6 +1225,8 @@ common.annotation=overriden-by-cli-annotation
 	})
 
 	t.Run("WithLegacyLabels", func(t *testing.T) {
+		SetupGomega(t)
+
 		contextDir := setupTestContext(t)
 
 		writeContainerfile(contextDir, `FROM scratch`)
@@ -1262,6 +1294,8 @@ common.annotation=overriden-by-cli-annotation
 	})
 
 	t.Run("SourceDateEpoch", func(t *testing.T) {
+		SetupGomega(t)
+
 		contextDir := setupTestContext(t)
 
 		writeContainerfile(contextDir, `
@@ -1295,6 +1329,8 @@ LABEL source-date-epoch=$SOURCE_DATE_EPOCH
 		}
 
 		t.Run("FromCLI", func(t *testing.T) {
+			SetupGomega(t)
+
 			outputRef := "localhost/test-source-date-epoch-from-cli:" + GenerateUniqueTag(t)
 
 			buildParams := BuildParams{
@@ -1317,6 +1353,8 @@ LABEL source-date-epoch=$SOURCE_DATE_EPOCH
 		// Test the SOURCE_DATE_EPOCH environment variable as well, because unlike other env vars,
 		// it doesn't have the KBC_ prefix and we still want to handle it.
 		t.Run("FromEnv", func(t *testing.T) {
+			SetupGomega(t)
+
 			outputRef := "localhost/test-source-date-epoch-from-cli:" + GenerateUniqueTag(t)
 
 			buildParams := BuildParams{
@@ -1339,6 +1377,8 @@ LABEL source-date-epoch=$SOURCE_DATE_EPOCH
 	})
 
 	t.Run("Reproducibility", func(t *testing.T) {
+		SetupGomega(t)
+
 		buildImage := func() containerImageMeta {
 			contextDir := setupTestContext(t)
 			// The file is newly created for every test build, has a different timestamp every time
@@ -1402,7 +1442,11 @@ COPY hello.txt /hello.txt
 	})
 
 	t.Run("InjectingBuildinfo", func(t *testing.T) {
+		SetupGomega(t)
+
 		t.Run("LabelsJSON", func(t *testing.T) {
+			SetupGomega(t)
+
 			contextDir := setupTestContext(t)
 
 			writeContainerfile(contextDir, fmt.Sprintf(`
@@ -1504,6 +1548,8 @@ RUN echo "this instruction also creates an intermediate layer" > /tmp/bar.txt
 		})
 
 		t.Run("LabelsFromEarlierStages", func(t *testing.T) {
+			SetupGomega(t)
+
 			contextDir := setupTestContext(t)
 
 			writeContainerfile(contextDir, fmt.Sprintf(`
@@ -1577,6 +1623,8 @@ LABEL common.label=common-final-stage
 		})
 
 		t.Run("LabelsFromScratch", func(t *testing.T) {
+			SetupGomega(t)
+
 			contextDir := setupTestContext(t)
 
 			writeContainerfile(contextDir, `
@@ -1615,6 +1663,8 @@ LABEL containerfile.label=label-from-containerfile
 		})
 
 		t.Run("AvoidsContainerignore", func(t *testing.T) {
+			SetupGomega(t)
+
 			contextDir := setupTestContext(t)
 
 			writeContainerfile(contextDir, `FROM scratch`)
@@ -1647,6 +1697,8 @@ LABEL containerfile.label=label-from-containerfile
 		})
 
 		t.Run("BuildahVersionPrecedence", func(t *testing.T) {
+			SetupGomega(t)
+
 			contextDir := setupTestContext(t)
 
 			writeContainerfile(contextDir, `
@@ -1680,6 +1732,8 @@ LABEL io.buildah.version=0.0.1
 		})
 
 		t.Run("NoBuildahVersion", func(t *testing.T) {
+			SetupGomega(t)
+
 			contextDir := setupTestContext(t)
 
 			writeContainerfile(contextDir, `FROM scratch`)
@@ -1708,6 +1762,8 @@ LABEL io.buildah.version=0.0.1
 		})
 
 		t.Run("SkipInjections", func(t *testing.T) {
+			SetupGomega(t)
+
 			contextDir := setupTestContext(t)
 
 			writeContainerfile(contextDir, `FROM scratch`)
@@ -1734,6 +1790,8 @@ LABEL io.buildah.version=0.0.1
 		})
 
 		t.Run("LegacyBuildinfoPath", func(t *testing.T) {
+			SetupGomega(t)
+
 			contextDir := setupTestContext(t)
 
 			writeContainerfile(contextDir, `FROM scratch`)
@@ -1768,7 +1826,11 @@ LABEL io.buildah.version=0.0.1
 		})
 
 		t.Run("KnownIssues", func(t *testing.T) {
+			SetupGomega(t)
+
 			t.Run("UnsupportedBaseImage", func(t *testing.T) {
+				SetupGomega(t)
+
 				contextDir := setupTestContext(t)
 
 				writeContainerfile(contextDir, `
@@ -1826,6 +1888,8 @@ LABEL containerfile.label=containerfile-label
 			})
 
 			t.Run("UnsupportedWithTarget", func(t *testing.T) {
+				SetupGomega(t)
+
 				contextDir := setupTestContext(t)
 
 				writeContainerfile(contextDir, `
@@ -1860,6 +1924,8 @@ LABEL final.stage.label=label-from-final-stage
 			})
 
 			t.Run("LabelsWithQuotes", func(t *testing.T) {
+				SetupGomega(t)
+
 				contextDir := setupTestContext(t)
 
 				writeContainerfile(contextDir, `
@@ -1925,6 +1991,8 @@ LABEL literal.argname.2='$DOUBLE_QUOTED_ARG'
 	})
 
 	t.Run("DisinheritLabels", func(t *testing.T) {
+		SetupGomega(t)
+
 		contextDir := setupTestContext(t)
 
 		writeContainerfile(contextDir, fmt.Sprintf(`
@@ -1973,6 +2041,8 @@ LABEL final.stage.label=label-from-final-stage
 	})
 
 	t.Run("WithTarget", func(t *testing.T) {
+		SetupGomega(t)
+
 		contextDir := setupTestContext(t)
 
 		writeContainerfile(contextDir, `
