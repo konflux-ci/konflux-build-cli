@@ -1,7 +1,7 @@
 # Build the Konflux Build CLI binary.
 # For more details and updates, refer to
 # https://catalog.redhat.com/en/software/containers/rhel10/go-toolset/6707d40f27f63a06f78743c4
-FROM registry.access.redhat.com/ubi10/go-toolset:1.25@sha256:182645783ad0a0af4a78d928f2d9167815d59c12cc156aa3c229cf3a49d636d9 AS builder
+FROM registry.access.redhat.com/ubi10/go-toolset:1.25.7-1773232111@sha256:b7f71131f21be923baaaf952309b7940ae7c6a55ca44a7a91460adc6c8afd4de AS builder
 ARG TARGETOS
 ARG TARGETARCH
 
