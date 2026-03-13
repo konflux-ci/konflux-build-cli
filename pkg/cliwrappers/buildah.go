@@ -225,7 +225,7 @@ func (b *BuildahCli) Build(args *BuildahBuildArgs) error {
 	// Context directory must be the last argument
 	buildahArgs = append(buildahArgs, args.ContextDir)
 
-	buildahLog.Debugf("Running command:\nbuildah %s", strings.Join(buildahArgs, " "))
+	buildahLog.Debugf("Running command:\n%s", shellJoin("buildah", buildahArgs...))
 
 	_, _, _, err := b.Executor.ExecuteWithOutput("buildah", buildahArgs...)
 	if err != nil {
@@ -263,7 +263,7 @@ func (b *BuildahCli) Push(args *BuildahPushArgs) (string, error) {
 		buildahArgs = append(buildahArgs, args.Destination)
 	}
 
-	buildahLog.Debugf("Running command:\nbuildah %s", strings.Join(buildahArgs, " "))
+	buildahLog.Debugf("Running command:\n%s", shellJoin("buildah", buildahArgs...))
 
 	retryer := NewRetryer(func() (string, string, int, error) {
 		return b.Executor.ExecuteWithOutput("buildah", buildahArgs...)
@@ -300,7 +300,7 @@ func (b *BuildahCli) Pull(args *BuildahPullArgs) error {
 
 	buildahArgs := []string{"pull", args.Image}
 
-	buildahLog.Debugf("Running command:\nbuildah %s", strings.Join(buildahArgs, " "))
+	buildahLog.Debugf("Running command:\n%s", shellJoin("buildah", buildahArgs...))
 
 	retryer := NewRetryer(func() (string, string, int, error) {
 		return b.Executor.ExecuteWithOutput("buildah", buildahArgs...)
@@ -338,7 +338,7 @@ func (b *BuildahCli) Inspect(args *BuildahInspectArgs) (string, error) {
 
 	buildahArgs := []string{"inspect", "--type", args.Type, args.Name}
 
-	buildahLog.Debugf("Running command:\nbuildah %s", strings.Join(buildahArgs, " "))
+	buildahLog.Debugf("Running command:\n%s", shellJoin("buildah", buildahArgs...))
 
 	stdout, stderr, _, err := b.Executor.Execute("buildah", buildahArgs...)
 	if err != nil {
@@ -384,7 +384,7 @@ type BuildahVersionInfo struct {
 func (b *BuildahCli) Version() (BuildahVersionInfo, error) {
 	buildahArgs := []string{"version", "--json"}
 
-	buildahLog.Debugf("Running command:\nbuildah %s", strings.Join(buildahArgs, " "))
+	buildahLog.Debugf("Running command:\n%s", shellJoin("buildah", buildahArgs...))
 
 	stdout, stderr, _, err := b.Executor.Execute("buildah", buildahArgs...)
 	if err != nil {
