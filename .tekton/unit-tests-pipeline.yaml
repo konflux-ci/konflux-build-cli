@@ -15,7 +15,7 @@ spec:
       taskSpec:
         steps:
           - name: clone
-            image: quay.io/konflux-ci/task-runner:1.4.1@sha256:d9feec6f2ce9b10cfb76b45ea14f83b5ed9f231de7d6083291550aebe8eb09ea
+            image: quay.io/konflux-ci/task-runner:1.5.0@sha256:200019314a50be5b6dd06f362c794c92a700583a522c5eee9a41e3eab7f706c5
             env:
               - name: PARAM_SNAPSHOT
                 value: "$(params.SNAPSHOT)"
@@ -36,7 +36,7 @@ spec:
             - name: source
               mountPath: /source
           - name: run-tests
-            image: quay.io/konflux-ci/task-runner:1.4.1@sha256:d9feec6f2ce9b10cfb76b45ea14f83b5ed9f231de7d6083291550aebe8eb09ea
+            image: quay.io/konflux-ci/task-runner:1.5.0@sha256:200019314a50be5b6dd06f362c794c92a700583a522c5eee9a41e3eab7f706c5
             securityContext:
               runAsUser: 0
             computeResources:
