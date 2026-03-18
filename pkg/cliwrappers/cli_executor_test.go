@@ -291,6 +291,30 @@ func TestCliExecutor_ExecuteWithLogOutput(t *testing.T) {
 		g.Expect(logOutput).To(ContainSubstring("[stdout] output"))
 	})
 
+	t.Run("should allow overwriting command name in logs", func(t *testing.T) {
+		g := NewWithT(t)
+
+		executor := cliwrappers.NewCliExecutor()
+
+		var stdout, stderr string
+		var exitCode int
+		var err error
+		logOutput := captureLogOutput(func() {
+			cmd := cliwrappers.Command("echo", "%s", "hello")
+			cmd.LogOutput = true
+			cmd.NameInLogs = "printf"
+			stdout, stderr, exitCode, err = executor.Execute(cmd)
+		})
+
+		g.Expect(err).ToNot(HaveOccurred())
+		g.Expect(exitCode).To(Equal(0))
+		// %s shouldn't get substituted, the command is still echo, not printf
+		g.Expect(strings.TrimSpace(stdout)).To(Equal("%s hello"))
+		g.Expect(stderr).To(BeEmpty())
+
+		g.Expect(logOutput).To(ContainSubstring("printf [stdout] %s hello"))
+	})
+
 	t.Run("should handle command not found", func(t *testing.T) {
 		g := NewWithT(t)
 

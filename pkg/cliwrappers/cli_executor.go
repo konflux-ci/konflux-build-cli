@@ -15,10 +15,11 @@ import (
 var executorLog = l.Logger.WithField("logger", "CliExecutor")
 
 type Cmd struct {
-	Name      string   // the name passed to [exec.Command]
-	Args      []string // the args passed to [exec.Command]
-	Dir       string   // same as [exec.Cmd.Dir]
-	LogOutput bool     // log stdout/stderr lines in real time
+	Name       string   // the name passed to [exec.Command]
+	Args       []string // the args passed to [exec.Command]
+	Dir        string   // same as [exec.Cmd.Dir]
+	LogOutput  bool     // log stdout/stderr lines in real time
+	NameInLogs string   // when logging stdout/stderr, prefix lines with this name (defaults to Name)
 }
 
 // Command creates a Cmd. Mirrors exec.Command().
@@ -78,13 +79,18 @@ func (e *CliExecutor) Execute(c Cmd) (string, string, int, error) {
 		}
 	}
 
+	nameInLogs := c.NameInLogs
+	if nameInLogs == "" {
+		nameInLogs = c.Name
+	}
+
 	done := make(chan struct{}, 2)
 	go func() {
-		readStream(c.Name+" [stdout] ", stdoutPipe, &stdoutBuf)
+		readStream(nameInLogs+" [stdout] ", stdoutPipe, &stdoutBuf)
 		done <- struct{}{}
 	}()
 	go func() {
-		readStream(c.Name+" [stderr] ", stderrPipe, &stderrBuf)
+		readStream(nameInLogs+" [stderr] ", stderrPipe, &stderrBuf)
 		done <- struct{}{}
 	}()
 

@@ -238,7 +238,11 @@ func (b *BuildahCli) Build(args *BuildahBuildArgs) error {
 
 	buildahLog.Debugf("Running command:\n%s %s", executable, strings.Join(buildahArgs, " "))
 
-	_, _, _, err := b.Executor.Execute(Cmd{Name: executable, Args: buildahArgs, LogOutput: true})
+	_, _, _, err := b.Executor.Execute(Cmd{
+		Name: executable, Args: buildahArgs,
+		// Prefix logs with "buildah" regardless of the wrappers used
+		NameInLogs: "buildah", LogOutput: true,
+	})
 	if err != nil {
 		buildahLog.Errorf("buildah build failed: %s", err.Error())
 		return err
