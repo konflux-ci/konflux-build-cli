@@ -238,7 +238,7 @@ func (b *BuildahCli) Build(args *BuildahBuildArgs) error {
 
 	buildahLog.Debugf("Running command:\n%s %s", executable, strings.Join(buildahArgs, " "))
 
-	_, _, _, err := b.Executor.ExecuteWithOutput(executable, buildahArgs...)
+	_, _, _, err := b.Executor.Execute(Cmd{Name: executable, Args: buildahArgs, LogOutput: true})
 	if err != nil {
 		buildahLog.Errorf("buildah build failed: %s", err.Error())
 		return err
@@ -277,7 +277,7 @@ func (b *BuildahCli) Push(args *BuildahPushArgs) (string, error) {
 	buildahLog.Debugf("Running command:\nbuildah %s", strings.Join(buildahArgs, " "))
 
 	retryer := NewRetryer(func() (string, string, int, error) {
-		return b.Executor.ExecuteWithOutput("buildah", buildahArgs...)
+		return b.Executor.Execute(Cmd{Name: "buildah", Args: buildahArgs, LogOutput: true})
 	}).WithImageRegistryPreset().
 		StopIfOutputContains("unauthorized").
 		StopIfOutputContains("authentication required")
@@ -314,7 +314,7 @@ func (b *BuildahCli) Pull(args *BuildahPullArgs) error {
 	buildahLog.Debugf("Running command:\nbuildah %s", strings.Join(buildahArgs, " "))
 
 	retryer := NewRetryer(func() (string, string, int, error) {
-		return b.Executor.ExecuteWithOutput("buildah", buildahArgs...)
+		return b.Executor.Execute(Cmd{Name: "buildah", Args: buildahArgs, LogOutput: true})
 	}).WithImageRegistryPreset().
 		StopIfOutputContains("unauthorized").
 		StopIfOutputContains("authentication required")
@@ -351,7 +351,7 @@ func (b *BuildahCli) Inspect(args *BuildahInspectArgs) (string, error) {
 
 	buildahLog.Debugf("Running command:\nbuildah %s", strings.Join(buildahArgs, " "))
 
-	stdout, stderr, _, err := b.Executor.Execute("buildah", buildahArgs...)
+	stdout, stderr, _, err := b.Executor.Execute(Command("buildah", buildahArgs...))
 	if err != nil {
 		buildahLog.Errorf("buildah inspect failed: %s", err.Error())
 		if stderr != "" {
@@ -397,7 +397,7 @@ func (b *BuildahCli) Version() (BuildahVersionInfo, error) {
 
 	buildahLog.Debugf("Running command:\nbuildah %s", strings.Join(buildahArgs, " "))
 
-	stdout, stderr, _, err := b.Executor.Execute("buildah", buildahArgs...)
+	stdout, stderr, _, err := b.Executor.Execute(Command("buildah", buildahArgs...))
 	if err != nil {
 		buildahLog.Errorf("buildah version failed: %s", err.Error())
 		if stderr != "" {

@@ -37,9 +37,9 @@ func TestSkopeoCli_Copy(t *testing.T) {
 	t.Run("should copy tag with no options", func(t *testing.T) {
 		skopeoCli, executor := setupSkopeoCli()
 		var capturedArgs []string
-		executor.executeFunc = func(command string, args ...string) (string, string, int, error) {
-			g.Expect(command).To(Equal("skopeo"))
-			capturedArgs = args
+		executor.executeFunc = func(cmd cliwrappers.Cmd) (string, string, int, error) {
+			g.Expect(cmd.Name).To(Equal("skopeo"))
+			capturedArgs = cmd.Args
 			return "", "", 0, nil
 		}
 
@@ -60,9 +60,9 @@ func TestSkopeoCli_Copy(t *testing.T) {
 	t.Run("should copy tag with all supported options", func(t *testing.T) {
 		skopeoCli, executor := setupSkopeoCli()
 		var capturedArgs []string
-		executor.executeFunc = func(command string, args ...string) (string, string, int, error) {
-			g.Expect(command).To(Equal("skopeo"))
-			capturedArgs = args
+		executor.executeFunc = func(cmd cliwrappers.Cmd) (string, string, int, error) {
+			g.Expect(cmd.Name).To(Equal("skopeo"))
+			capturedArgs = cmd.Args
 			return "", "", 0, nil
 		}
 
@@ -87,9 +87,9 @@ func TestSkopeoCli_Copy(t *testing.T) {
 	t.Run("should copy tag with extra options", func(t *testing.T) {
 		skopeoCli, executor := setupSkopeoCli()
 		var capturedArgs []string
-		executor.executeFunc = func(command string, args ...string) (string, string, int, error) {
-			g.Expect(command).To(Equal("skopeo"))
-			capturedArgs = args
+		executor.executeFunc = func(cmd cliwrappers.Cmd) (string, string, int, error) {
+			g.Expect(cmd.Name).To(Equal("skopeo"))
+			capturedArgs = cmd.Args
 			return "", "", 0, nil
 		}
 
@@ -117,7 +117,7 @@ func TestSkopeoCli_Copy(t *testing.T) {
 	t.Run("should error if skopeo execution fails", func(t *testing.T) {
 		skopeoCli, executor := setupSkopeoCli()
 		isExecuteCalled := false
-		executor.executeFunc = func(command string, args ...string) (string, string, int, error) {
+		executor.executeFunc = func(cmd cliwrappers.Cmd) (string, string, int, error) {
 			isExecuteCalled = true
 			return "", "", 0, errors.New("failed to execute skopeo copy")
 		}
@@ -167,9 +167,9 @@ func TestSkopeoCli_Inspect(t *testing.T) {
 	t.Run("should inspect image with no options", func(t *testing.T) {
 		skopeoCli, executor := setupSkopeoCli()
 		var capturedArgs []string
-		executor.executeFunc = func(command string, args ...string) (string, string, int, error) {
-			g.Expect(command).To(Equal("skopeo"))
-			capturedArgs = args
+		executor.executeFunc = func(cmd cliwrappers.Cmd) (string, string, int, error) {
+			g.Expect(cmd.Name).To(Equal("skopeo"))
+			capturedArgs = cmd.Args
 			return output, "", 0, nil
 		}
 
@@ -189,9 +189,9 @@ func TestSkopeoCli_Inspect(t *testing.T) {
 	t.Run("should inspect image with all supported options", func(t *testing.T) {
 		skopeoCli, executor := setupSkopeoCli()
 		var capturedArgs []string
-		executor.executeFunc = func(command string, args ...string) (string, string, int, error) {
-			g.Expect(command).To(Equal("skopeo"))
-			capturedArgs = args
+		executor.executeFunc = func(cmd cliwrappers.Cmd) (string, string, int, error) {
+			g.Expect(cmd.Name).To(Equal("skopeo"))
+			capturedArgs = cmd.Args
 			return output, "", 0, nil
 		}
 
@@ -219,9 +219,9 @@ func TestSkopeoCli_Inspect(t *testing.T) {
 	t.Run("should inspect image with with extra options", func(t *testing.T) {
 		skopeoCli, executor := setupSkopeoCli()
 		var capturedArgs []string
-		executor.executeFunc = func(command string, args ...string) (string, string, int, error) {
-			g.Expect(command).To(Equal("skopeo"))
-			capturedArgs = args
+		executor.executeFunc = func(cmd cliwrappers.Cmd) (string, string, int, error) {
+			g.Expect(cmd.Name).To(Equal("skopeo"))
+			capturedArgs = cmd.Args
 			return output, "", 0, nil
 		}
 
@@ -252,7 +252,7 @@ func TestSkopeoCli_Inspect(t *testing.T) {
 	t.Run("should error if skopeo execution fails", func(t *testing.T) {
 		skopeoCli, executor := setupSkopeoCli()
 		isExecuteCalled := false
-		executor.executeFunc = func(command string, args ...string) (string, string, int, error) {
+		executor.executeFunc = func(cmd cliwrappers.Cmd) (string, string, int, error) {
 			isExecuteCalled = true
 			return "", "", 0, errors.New("failed to execute skopeo inspect")
 		}

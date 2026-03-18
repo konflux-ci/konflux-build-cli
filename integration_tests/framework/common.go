@@ -98,7 +98,7 @@ func CompileKonfluxCli() error {
 		compileArgs = append(compileArgs, "-gcflags", "all=-N -l")
 	}
 	compileArgs = append(compileArgs, "-o", cliBinPath, mainGoPath)
-	stdout, stderr, _, err := executor.Execute("go", compileArgs...)
+	stdout, stderr, _, err := executor.Execute(cliWrappers.Command("go", compileArgs...))
 	if err != nil {
 		fmt.Printf("failed to build CLI: %s\n[stdout]:\n%s\n[stderr]:\n%s\n", err.Error(), stdout, stderr)
 	}
@@ -208,7 +208,7 @@ func CreateTestImage(config TestImageConfig) error {
 	for filePathInContainer, filePathOnHost := range config.Files {
 		fileNameInContextDir := filepath.Base(filePathOnHost)
 		dockerfileContent = append(dockerfileContent, fmt.Sprintf("COPY %s %s", fileNameInContextDir, filePathInContainer))
-		stdout, stderr, _, err := executor.Execute("cp", filePathOnHost, path.Join(testImageDir, fileNameInContextDir))
+		stdout, stderr, _, err := executor.Execute(cliWrappers.Command("cp", filePathOnHost, path.Join(testImageDir, fileNameInContextDir)))
 		if err != nil {
 			fmt.Printf("failed to copy test file: %s\n[stdout]:\n%s\n[stderr]:\n%s\n", err.Error(), stdout, stderr)
 			return err
@@ -232,7 +232,7 @@ func CreateTestImage(config TestImageConfig) error {
 		buildArgs = append(buildArgs, "--platform", config.Platform)
 	}
 	buildArgs = append(buildArgs, ".")
-	stdout, stderr, _, err := executor.ExecuteInDir(testImageDir, containerTool, buildArgs...)
+	stdout, stderr, _, err := executor.Execute(cliWrappers.Cmd{Name: containerTool, Args: buildArgs, Dir: testImageDir})
 	if err != nil {
 		fmt.Printf("failed to build test image: %s\n[stdout]:\n%s\n[stderr]:\n%s\n", err.Error(), stdout, stderr)
 		return err
@@ -262,14 +262,14 @@ func CreateAndPushImageIndex(indexRef string, images []string) (string, error) {
 	createManifestArgs = append(createManifestArgs, "--amend")
 	createManifestArgs = append(createManifestArgs, indexRef)
 	createManifestArgs = append(createManifestArgs, images...)
-	if stdout, stderr, _, err := executor.Execute(containerTool, createManifestArgs...); err != nil {
+	if stdout, stderr, _, err := executor.Execute(cliWrappers.Command(containerTool, createManifestArgs...)); err != nil {
 		fmt.Printf("failed to create image index: %s\n[stdout]:\n%s\n[stderr]:\n%s\n", err.Error(), stdout, stderr)
 		return "", err
 	}
 
 	// Clean up local image index
 	defer func() {
-		if stdout, stderr, _, err := executor.Execute(containerTool, "manifest", "rm", indexRef); err != nil {
+		if stdout, stderr, _, err := executor.Execute(cliWrappers.Command(containerTool, "manifest", "rm", indexRef)); err != nil {
 			fmt.Printf("failed to clean up local image index: %s\n[stdout]:\n%s\n[stderr]:\n%s\n", err.Error(), stdout, stderr)
 		}
 	}()
@@ -279,7 +279,7 @@ func CreateAndPushImageIndex(indexRef string, images []string) (string, error) {
 
 	switch containerTool {
 	case "docker":
-		stdout, stderr, _, err := executor.Execute(containerTool, "manifest", "push", indexRef)
+		stdout, stderr, _, err := executor.Execute(cliWrappers.Command(containerTool, "manifest", "push", indexRef))
 		if err != nil {
 			fmt.Printf("failed to push image index: %s\n[stdout]:\n%s\n[stderr]:\n%s\n", err.Error(), stdout, stderr)
 			return "", err
@@ -288,7 +288,7 @@ func CreateAndPushImageIndex(indexRef string, images []string) (string, error) {
 
 	case "podman":
 		const digestfilePath = "/tmp/index-digestfile"
-		stdout, stderr, _, err := executor.Execute("podman", "push", "--digestfile", digestfilePath, indexRef)
+		stdout, stderr, _, err := executor.Execute(cliWrappers.Command("podman", "push", "--digestfile", digestfilePath, indexRef))
 		if err != nil {
 			fmt.Printf("failed to push image index: %s\n[stdout]:\n%s\n[stderr]:\n%s\n", err.Error(), stdout, stderr)
 			return "", err
@@ -307,7 +307,7 @@ func CreateAndPushImageIndex(indexRef string, images []string) (string, error) {
 
 func DeleteLocalImage(imageRef string) error {
 	executor := cliWrappers.NewCliExecutor()
-	stdout, stderr, _, err := executor.Execute(containerTool, "rmi", imageRef)
+	stdout, stderr, _, err := executor.Execute(cliWrappers.Command(containerTool, "rmi", imageRef))
 	if err != nil {
 		fmt.Printf("failed to remove test image: %s\n[stdout]:\n%s\n[stderr]:\n%s\n", err.Error(), stdout, stderr)
 	}
@@ -322,7 +322,7 @@ func PushImage(imageRef string) (string, error) {
 
 	switch containerTool {
 	case "docker":
-		stdout, stderr, _, err := executor.Execute("docker", "push", imageRef)
+		stdout, stderr, _, err := executor.Execute(cliWrappers.Command("docker", "push", imageRef))
 		if err != nil {
 			fmt.Printf("failed to push test image: %s\n[stdout]:\n%s\n[stderr]:\n%s\n", err.Error(), stdout, stderr)
 			return "", err
@@ -331,7 +331,7 @@ func PushImage(imageRef string) (string, error) {
 
 	case "podman":
 		const digestfilePath = "/tmp/digestfile"
-		stdout, stderr, _, err := executor.Execute("podman", "push", "--digestfile", digestfilePath, imageRef)
+		stdout, stderr, _, err := executor.Execute(cliWrappers.Command("podman", "push", "--digestfile", digestfilePath, imageRef))
 		if err != nil {
 			fmt.Printf("failed to push test image: %s\n[stdout]:\n%s\n[stderr]:\n%s\n", err.Error(), stdout, stderr)
 			return "", err

@@ -21,9 +21,9 @@ func TestHermetoCliVersionOutput(t *testing.T) {
 	var capturedArgs []string
 	var capturedStdout string
 
-	executor.executeWithOutput = func(command string, args ...string) (string, string, int, error) {
-		g.Expect(command).To(Equal("hermeto"))
-		capturedArgs = args
+	executor.executeFunc = func(cmd cliwrappers.Cmd) (string, string, int, error) {
+		g.Expect(cmd.Name).To(Equal("hermeto"))
+		capturedArgs = cmd.Args
 		capturedStdout = "hermeto 0.1.0"
 		// mock stdout, stderr, exit code and error
 		return capturedStdout, "", 0, nil
@@ -42,9 +42,9 @@ func TestHermetoCliFetchDepsArgs(t *testing.T) {
 	hermetoCli, executor := setupHermetoCli()
 	var capturedArgs []string
 
-	executor.executeWithOutput = func(command string, args ...string) (string, string, int, error) {
-		g.Expect(command).To(Equal("hermeto"))
-		capturedArgs = args
+	executor.executeFunc = func(cmd cliwrappers.Cmd) (string, string, int, error) {
+		g.Expect(cmd.Name).To(Equal("hermeto"))
+		capturedArgs = cmd.Args
 		// mock stdout, stderr, exit code and error
 		return "", "", 0, nil
 	}
@@ -84,9 +84,9 @@ func TestHermetoCliGenerateEnvArgs(t *testing.T) {
 	hermetoCli, executor := setupHermetoCli()
 	var capturedArgs []string
 
-	executor.executeWithOutput = func(command string, args ...string) (string, string, int, error) {
-		g.Expect(command).To(Equal("hermeto"))
-		capturedArgs = args
+	executor.executeFunc = func(cmd cliwrappers.Cmd) (string, string, int, error) {
+		g.Expect(cmd.Name).To(Equal("hermeto"))
+		capturedArgs = cmd.Args
 		// mock stdout, stderr, exit code and error
 		return "", "", 0, nil
 	}
@@ -120,9 +120,9 @@ func TestHermetoCliInjectFilesArgs(t *testing.T) {
 	hermetoCli, executor := setupHermetoCli()
 	var capturedArgs []string
 
-	executor.executeWithOutput = func(command string, args ...string) (string, string, int, error) {
-		g.Expect(command).To(Equal("hermeto"))
-		capturedArgs = args
+	executor.executeFunc = func(cmd cliwrappers.Cmd) (string, string, int, error) {
+		g.Expect(cmd.Name).To(Equal("hermeto"))
+		capturedArgs = cmd.Args
 		// mock stdout, stderr, exit code and error
 		return "", "", 0, nil
 	}

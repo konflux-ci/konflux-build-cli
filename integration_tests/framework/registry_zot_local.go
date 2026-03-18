@@ -384,7 +384,7 @@ func (z *ZotRegistry) generateCerts(executor *cliWrappers.CliExecutor) error {
 	opensslCreateCaKeyArgs := []string{
 		"genrsa", "-out", z.rootKeyPath, "4096",
 	}
-	if stdout, stderr, _, err := executor.Execute("openssl", opensslCreateCaKeyArgs...); err != nil {
+	if stdout, stderr, _, err := executor.Execute(cliWrappers.Command("openssl", opensslCreateCaKeyArgs...)); err != nil {
 		z.logger.Errorf("failed to generate root CA key: %s\n%s", stdout, stderr)
 		return err
 	}
@@ -398,7 +398,7 @@ func (z *ZotRegistry) generateCerts(executor *cliWrappers.CliExecutor) error {
 		"-addext",
 		"basicConstraints=CA:TRUE",
 	}
-	if stdout, stderr, _, err := executor.Execute("openssl", opensslCreateCaCertArgs...); err != nil {
+	if stdout, stderr, _, err := executor.Execute(cliWrappers.Command("openssl", opensslCreateCaCertArgs...)); err != nil {
 		z.logger.Errorf("failed to generate root CA cert: %s\n%s", stdout, stderr)
 		return err
 	}
@@ -415,7 +415,7 @@ func (z *ZotRegistry) generateCerts(executor *cliWrappers.CliExecutor) error {
 		"-addext",
 		fmt.Sprintf("subjectAltName=DNS:localhost,IP:127.0.0.1,DNS:%s", zotRegistryContainerName),
 	}
-	if stdout, stderr, _, err := executor.Execute("openssl", opensslCreateServerCertArgs...); err != nil {
+	if stdout, stderr, _, err := executor.Execute(cliWrappers.Command("openssl", opensslCreateServerCertArgs...)); err != nil {
 		z.logger.Errorf("failed to generate zot registry cert: %s\n%s", stdout, stderr)
 		return err
 	}
@@ -458,8 +458,8 @@ func (z *ZotRegistry) createZotConfig(zotConfigFilePath string) error {
 }
 
 func (z *ZotRegistry) createHtpasswdFile(executor *cliWrappers.CliExecutor) error {
-	stdout, stderr, _, err := executor.Execute(
-		"htpasswd", "-bBn", zotRegistryUser, zotRegistryPassword)
+	stdout, stderr, _, err := executor.Execute(cliWrappers.Command(
+		"htpasswd", "-bBn", zotRegistryUser, zotRegistryPassword))
 	if err != nil {
 		z.logger.Errorf("failed to generate htpasswd file content: %s\n%s", stdout, stderr)
 		return err
@@ -507,7 +507,7 @@ func (z *ZotRegistry) ensureZotCaCertInPodmanConfig(executor *cliWrappers.CliExe
 	}
 
 	// Copy the CA cert into Podman config directory.
-	if stdout, stderr, _, err := executor.Execute("cp", z.rootCertPath, zotRegistryPodmanCaCertPath); err != nil {
+	if stdout, stderr, _, err := executor.Execute(cliWrappers.Command("cp", z.rootCertPath, zotRegistryPodmanCaCertPath)); err != nil {
 		z.logger.Errorf("failed to copy root CA cert into podman config dir: %s\n%s", stdout, stderr)
 		return err
 	}
@@ -523,7 +523,7 @@ func (z *ZotRegistry) ensureZotCaCertInPodmanConfig(executor *cliWrappers.CliExe
 }
 
 func isPodmanMachineRunning(executor *cliWrappers.CliExecutor) bool {
-	_, _, exitCode, _ := executor.Execute("podman", "machine", "inspect")
+	_, _, exitCode, _ := executor.Execute(cliWrappers.Command("podman", "machine", "inspect"))
 	return exitCode == 0
 }
 
@@ -533,7 +533,7 @@ func (z *ZotRegistry) ensureZotCaCertInPodmanMachine(executor *cliWrappers.CliEx
 	vmCertPath := vmCertsDir + "/" + zotRootCertFileName
 
 	// Create the directory in the VM
-	if stdout, stderr, _, err := executor.Execute("podman", "machine", "ssh", "sudo", "mkdir", "-p", vmCertsDir); err != nil {
+	if stdout, stderr, _, err := executor.Execute(cliWrappers.Command("podman", "machine", "ssh", "sudo", "mkdir", "-p", vmCertsDir)); err != nil {
 		z.logger.Errorf("failed to create certs dir in podman machine: %s\n%s", stdout, stderr)
 		return err
 	}
@@ -547,7 +547,7 @@ func (z *ZotRegistry) ensureZotCaCertInPodmanMachine(executor *cliWrappers.CliEx
 
 	// Use base64 decode in the VM to write the cert
 	sshCmd := fmt.Sprintf("echo '%s' | base64 -d | sudo tee %s > /dev/null", certBase64, vmCertPath)
-	if stdout, stderr, _, err := executor.Execute("podman", "machine", "ssh", sshCmd); err != nil {
+	if stdout, stderr, _, err := executor.Execute(cliWrappers.Command("podman", "machine", "ssh", sshCmd)); err != nil {
 		z.logger.Errorf("failed to copy CA cert into podman machine: %s\n%s", stdout, stderr)
 		return err
 	}

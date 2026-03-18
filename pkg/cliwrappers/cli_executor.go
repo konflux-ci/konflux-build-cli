@@ -14,11 +14,20 @@ import (
 
 var executorLog = l.Logger.WithField("logger", "CliExecutor")
 
+type Cmd struct {
+	Name      string   // the name passed to [exec.Command]
+	Args      []string // the args passed to [exec.Command]
+	Dir       string   // same as [exec.Cmd.Dir]
+	LogOutput bool     // log stdout/stderr lines in real time
+}
+
+// Command creates a Cmd. Mirrors exec.Command().
+func Command(name string, args ...string) Cmd {
+	return Cmd{Name: name, Args: args}
+}
+
 type CliExecutorInterface interface {
-	Execute(command string, args ...string) (stdout, stderr string, exitCode int, err error)
-	ExecuteInDir(workdir, command string, args ...string) (stdout, stderr string, exitCode int, err error)
-	ExecuteWithOutput(command string, args ...string) (stdout, stderr string, exitCode int, err error)
-	ExecuteInDirWithOutput(workdir, command string, args ...string) (stdout, stderr string, exitCode int, err error)
+	Execute(cmd Cmd) (stdout, stderr string, exitCode int, err error)
 }
 
 var _ CliExecutorInterface = &CliExecutor{}
@@ -31,39 +40,18 @@ func NewCliExecutor() *CliExecutor {
 
 // Execute runs specified command with given arguments.
 // Returns stdout, stderr, exit code, error
-func (e *CliExecutor) Execute(command string, args ...string) (string, string, int, error) {
-	return e.ExecuteInDir("", command, args...)
-}
+func (e *CliExecutor) Execute(c Cmd) (string, string, int, error) {
+	cmd := exec.Command(c.Name, c.Args...)
+	cmd.Dir = c.Dir
 
-// ExecuteInDir runs specified command in the given directory.
-// Returns stdout, stderr, exit code, error
-func (e *CliExecutor) ExecuteInDir(workdir, command string, args ...string) (string, string, int, error) {
-	cmd := exec.Command(command, args...)
-	if workdir != "" {
-		cmd.Dir = workdir
-	}
+	if !c.LogOutput {
+		var stdoutBuf, stderrBuf bytes.Buffer
+		cmd.Stdout = &stdoutBuf
+		cmd.Stderr = &stderrBuf
 
-	var stdoutBuf, stderrBuf bytes.Buffer
-	cmd.Stdout = &stdoutBuf
-	cmd.Stderr = &stderrBuf
+		err := cmd.Run()
 
-	err := cmd.Run()
-
-	return stdoutBuf.String(), stderrBuf.String(), getExitCodeFromError(err), err
-}
-
-// ExecuteWithOutput runs specified command with args while printing stdout and stderr in real time.
-// Returns stdout, stderr, exit code, error
-func (e *CliExecutor) ExecuteWithOutput(command string, args ...string) (string, string, int, error) {
-	return e.ExecuteInDirWithOutput("", command, args...)
-}
-
-// ExecuteInDirWithOutput runs specified command with args in given directory while printing stdout and stderr in real time.
-// Returns stdout, stderr, exit code, error
-func (e *CliExecutor) ExecuteInDirWithOutput(workdir, command string, args ...string) (stdout, stderr string, exitCode int, err error) {
-	cmd := exec.Command(command, args...)
-	if workdir != "" {
-		cmd.Dir = workdir
+		return stdoutBuf.String(), stderrBuf.String(), getExitCodeFromError(err), err
 	}
 
 	stdoutPipe, err := cmd.StdoutPipe()
@@ -92,11 +80,11 @@ func (e *CliExecutor) ExecuteInDirWithOutput(workdir, command string, args ...st
 
 	done := make(chan struct{}, 2)
 	go func() {
-		readStream(command+" [stdout] ", stdoutPipe, &stdoutBuf)
+		readStream(c.Name+" [stdout] ", stdoutPipe, &stdoutBuf)
 		done <- struct{}{}
 	}()
 	go func() {
-		readStream(command+" [stderr] ", stderrPipe, &stderrBuf)
+		readStream(c.Name+" [stderr] ", stderrPipe, &stderrBuf)
 		done <- struct{}{}
 	}()
 

@@ -38,7 +38,7 @@ func NewHermetoCli(executor CliExecutorInterface) (*HermetoCli, error) {
 // Print the Hermeto version.
 func (hc *HermetoCli) Version() error {
 	args := []string{"--version"}
-	_, _, _, err := hc.Executor.ExecuteWithOutput("hermeto", args...)
+	_, _, _, err := hc.Executor.Execute(Cmd{Name: "hermeto", Args: args, LogOutput: true})
 	return err
 }
 
@@ -80,7 +80,7 @@ func (hc *HermetoCli) FetchDeps(params *HermetoFetchDepsParams) error {
 	)
 
 	log.Debugf("Executing hermeto %s", strings.Join(args, " "))
-	_, _, _, err := hc.Executor.ExecuteWithOutput("hermeto", args...)
+	_, _, _, err := hc.Executor.Execute(Cmd{Name: "hermeto", Args: args, LogOutput: true})
 	return err
 }
 
@@ -109,7 +109,7 @@ func (hc *HermetoCli) GenerateEnv(params *HermetoGenerateEnvParams) error {
 	}
 
 	log.Debugf("Executing hermeto %s", strings.Join(args, " "))
-	_, _, _, err := hc.Executor.ExecuteWithOutput("hermeto", args...)
+	_, _, _, err := hc.Executor.Execute(Cmd{Name: "hermeto", Args: args, LogOutput: true})
 	return err
 }
 
@@ -132,6 +132,6 @@ func (hc *HermetoCli) InjectFiles(params *HermetoInjectFilesParams) error {
 	}
 
 	log.Debugf("Executing hermeto %s", strings.Join(args, " "))
-	_, _, _, err := hc.Executor.ExecuteWithOutput("hermeto", args...)
+	_, _, _, err := hc.Executor.Execute(Cmd{Name: "hermeto", Args: args, LogOutput: true})
 	return err
 }

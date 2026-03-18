@@ -183,7 +183,7 @@ func (c *TestRunnerContainer) ContainerExists(isRunning bool) (bool, error) {
 	}
 	args = append(args, "-f", "name="+c.name)
 
-	stdout, stderr, _, err := c.executor.Execute(containerTool, args...)
+	stdout, stderr, _, err := c.executor.Execute(cliWrappers.Command(containerTool, args...))
 	if err != nil {
 		l.Logger.Infof("[stdout]:\n%s\n", stdout)
 		l.Logger.Infof("[stderr]:\n%s\n", stderr)
@@ -245,7 +245,7 @@ func (c *TestRunnerContainer) Start() error {
 		args = append(args, c.image)
 	}
 
-	stdout, stderr, _, err := c.executor.Execute(containerTool, args...)
+	stdout, stderr, _, err := c.executor.Execute(cliWrappers.Command(containerTool, args...))
 	if err != nil {
 		l.Logger.Infof("[stdout]:\n%s\n", stdout)
 		l.Logger.Infof("[stderr]:\n%s\n", stderr)
@@ -280,7 +280,7 @@ func (c *TestRunnerContainer) Delete() error {
 		// a --time flag. Do the same thing for podman, for consistency and to speed up tests.
 		args = append(args, "--time=0")
 	}
-	stdout, stderr, _, err := c.executor.Execute(containerTool, args...)
+	stdout, stderr, _, err := c.executor.Execute(cliWrappers.Command(containerTool, args...))
 	if err == nil {
 		c.containerStatus = ContainerStatus_Deleted
 	} else {
@@ -299,7 +299,7 @@ func (c *TestRunnerContainer) DeleteIfExists() error {
 
 func (c *TestRunnerContainer) CopyFileIntoContainer(hostPath, containerPath string) error {
 	c.ensureContainerRunning()
-	stdout, stderr, _, err := c.executor.Execute(containerTool, "cp", hostPath, c.name+":"+containerPath)
+	stdout, stderr, _, err := c.executor.Execute(cliWrappers.Command(containerTool, "cp", hostPath, c.name+":"+containerPath))
 	if err != nil {
 		l.Logger.Infof("[stdout]:\n%s\n", stdout)
 		l.Logger.Infof("[stderr]:\n%s\n", stderr)
@@ -310,7 +310,7 @@ func (c *TestRunnerContainer) CopyFileIntoContainer(hostPath, containerPath stri
 // GetFileContent reads file inside the container.
 func (c *TestRunnerContainer) GetFileContent(path string) (string, error) {
 	c.ensureContainerRunning()
-	stdout, stderr, _, err := c.executor.Execute(containerTool, "exec", c.name, "cat", path)
+	stdout, stderr, _, err := c.executor.Execute(cliWrappers.Command(containerTool, "exec", c.name, "cat", path))
 	if err != nil {
 		l.Logger.Infof("[stdout]:\n%s\n", stdout)
 		l.Logger.Infof("[stderr]:\n%s\n", stderr)
@@ -337,7 +337,7 @@ func (c *TestRunnerContainer) ExecuteCommandWithOutput(command string, args ...s
 	execArgs = append(execArgs, command)
 	execArgs = append(execArgs, args...)
 
-	stdout, stderr, _, err := c.executor.ExecuteWithOutput(containerTool, execArgs...)
+	stdout, stderr, _, err := c.executor.Execute(cliWrappers.Cmd{Name: containerTool, Args: execArgs, LogOutput: true})
 	if err != nil {
 		l.Logger.Infof("[stdout]:\n%s\n", stdout)
 		l.Logger.Infof("[stderr]:\n%s\n", stderr)
@@ -369,7 +369,7 @@ func (c *TestRunnerContainer) debugBuildCli(cliArgs ...string) error {
 		execArgs = append(execArgs, cliArgs...)
 	}
 
-	stdout, stderr, _, err := c.executor.ExecuteWithOutput(containerTool, execArgs...)
+	stdout, stderr, _, err := c.executor.Execute(cliWrappers.Cmd{Name: containerTool, Args: execArgs, LogOutput: true})
 	if err != nil {
 		l.Logger.Infof("[stdout]:\n%s\n", stdout)
 		l.Logger.Infof("[stderr]:\n%s\n", stderr)
@@ -407,7 +407,7 @@ func (c *TestRunnerContainer) GetTaskResultValue(resultFilePath string) (string,
 
 func (c *TestRunnerContainer) GetHomeDir() (string, error) {
 	execCmd := []string{"exec", "-t", c.name, "bash", "-c", "echo -n $HOME"}
-	homeDir, _, _, err := c.executor.Execute(containerTool, execCmd...)
+	homeDir, _, _, err := c.executor.Execute(cliWrappers.Command(containerTool, execCmd...))
 	if err != nil {
 		return "", err
 	}

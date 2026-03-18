@@ -173,9 +173,14 @@ func TestGetHostnameFromRemoteOriginURL(t *testing.T) {
 		tempDir := t.TempDir()
 		executor := cliwrappers.NewCliExecutor()
 
-		_, _, _, err := executor.ExecuteInDir(tempDir, "git", "init")
+		gitInit := cliwrappers.Command("git", "init")
+		gitInit.Dir = tempDir
+		gitRemoteAdd := cliwrappers.Command("git", "remote", "add", "origin", "https://github.com/user/repo.git")
+		gitRemoteAdd.Dir = tempDir
+
+		_, _, _, err := executor.Execute(gitInit)
 		g.Expect(err).ToNot(HaveOccurred())
-		_, _, _, err = executor.ExecuteInDir(tempDir, "git", "remote", "add", "origin", "https://github.com/user/repo.git")
+		_, _, _, err = executor.Execute(gitRemoteAdd)
 		g.Expect(err).ToNot(HaveOccurred())
 
 		hostname, err := getHostnameFromRemoteOriginURL(tempDir)

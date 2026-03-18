@@ -36,9 +36,9 @@ func TestBuildahCli_Build(t *testing.T) {
 	t.Run("should execute buildah correctly", func(t *testing.T) {
 		buildahCli, executor := setupBuildahCli()
 		var capturedArgs []string
-		executor.executeWithOutput = func(command string, args ...string) (string, string, int, error) {
-			g.Expect(command).To(Equal("buildah"))
-			capturedArgs = args
+		executor.executeFunc = func(cmd cliwrappers.Cmd) (string, string, int, error) {
+			g.Expect(cmd.Name).To(Equal("buildah"))
+			capturedArgs = cmd.Args
 			return "", "", 0, nil
 		}
 
@@ -60,7 +60,7 @@ func TestBuildahCli_Build(t *testing.T) {
 
 	t.Run("should error if buildah execution fails", func(t *testing.T) {
 		buildahCli, executor := setupBuildahCli()
-		executor.executeWithOutput = func(command string, args ...string) (string, string, int, error) {
+		executor.executeFunc = func(cmd cliwrappers.Cmd) (string, string, int, error) {
 			return "", "", 1, errors.New("failed to execute buildah build")
 		}
 
@@ -91,9 +91,9 @@ func TestBuildahCli_Build(t *testing.T) {
 	t.Run("should turn Secrets into --secret params", func(t *testing.T) {
 		buildahCli, executor := setupBuildahCli()
 		var capturedArgs []string
-		executor.executeWithOutput = func(command string, args ...string) (string, string, int, error) {
-			g.Expect(command).To(Equal("buildah"))
-			capturedArgs = args
+		executor.executeFunc = func(cmd cliwrappers.Cmd) (string, string, int, error) {
+			g.Expect(cmd.Name).To(Equal("buildah"))
+			capturedArgs = cmd.Args
 			return "", "", 0, nil
 		}
 
@@ -117,9 +117,9 @@ func TestBuildahCli_Build(t *testing.T) {
 	t.Run("should turn Volumes into --volume params", func(t *testing.T) {
 		buildahCli, executor := setupBuildahCli()
 		var capturedArgs []string
-		executor.executeWithOutput = func(command string, args ...string) (string, string, int, error) {
-			g.Expect(command).To(Equal("buildah"))
-			capturedArgs = args
+		executor.executeFunc = func(cmd cliwrappers.Cmd) (string, string, int, error) {
+			g.Expect(cmd.Name).To(Equal("buildah"))
+			capturedArgs = cmd.Args
 			return "", "", 0, nil
 		}
 
@@ -143,9 +143,9 @@ func TestBuildahCli_Build(t *testing.T) {
 	t.Run("should turn BuildContextx into --build-context params", func(t *testing.T) {
 		buildahCli, executor := setupBuildahCli()
 		var capturedArgs []string
-		executor.executeWithOutput = func(command string, args ...string) (string, string, int, error) {
-			g.Expect(command).To(Equal("buildah"))
-			capturedArgs = args
+		executor.executeFunc = func(cmd cliwrappers.Cmd) (string, string, int, error) {
+			g.Expect(cmd.Name).To(Equal("buildah"))
+			capturedArgs = cmd.Args
 			return "", "", 0, nil
 		}
 
@@ -169,9 +169,9 @@ func TestBuildahCli_Build(t *testing.T) {
 	t.Run("should turn BuildArgs(File) into --build-arg(-file) params", func(t *testing.T) {
 		buildahCli, executor := setupBuildahCli()
 		var capturedArgs []string
-		executor.executeWithOutput = func(command string, args ...string) (string, string, int, error) {
-			g.Expect(command).To(Equal("buildah"))
-			capturedArgs = args
+		executor.executeFunc = func(cmd cliwrappers.Cmd) (string, string, int, error) {
+			g.Expect(cmd.Name).To(Equal("buildah"))
+			capturedArgs = cmd.Args
 			return "", "", 0, nil
 		}
 
@@ -194,9 +194,9 @@ func TestBuildahCli_Build(t *testing.T) {
 	t.Run("should turn Envs into --env params", func(t *testing.T) {
 		buildahCli, executor := setupBuildahCli()
 		var capturedArgs []string
-		executor.executeWithOutput = func(command string, args ...string) (string, string, int, error) {
-			g.Expect(command).To(Equal("buildah"))
-			capturedArgs = args
+		executor.executeFunc = func(cmd cliwrappers.Cmd) (string, string, int, error) {
+			g.Expect(cmd.Name).To(Equal("buildah"))
+			capturedArgs = cmd.Args
 			return "", "", 0, nil
 		}
 
@@ -217,9 +217,9 @@ func TestBuildahCli_Build(t *testing.T) {
 	t.Run("should append extra args before context directory", func(t *testing.T) {
 		buildahCli, executor := setupBuildahCli()
 		var capturedArgs []string
-		executor.executeWithOutput = func(command string, args ...string) (string, string, int, error) {
-			g.Expect(command).To(Equal("buildah"))
-			capturedArgs = args
+		executor.executeFunc = func(cmd cliwrappers.Cmd) (string, string, int, error) {
+			g.Expect(cmd.Name).To(Equal("buildah"))
+			capturedArgs = cmd.Args
 			return "", "", 0, nil
 		}
 
@@ -263,12 +263,12 @@ func TestBuildahCli_Push(t *testing.T) {
 
 	ensureRetryerDisabled(t)
 
-	mockSuccessfulPush := func(captureArgs *[]string) func(command string, args ...string) (string, string, int, error) {
-		return func(command string, args ...string) (string, string, int, error) {
-			g.Expect(command).To(Equal("buildah"))
-			*captureArgs = args
+	mockSuccessfulPush := func(captureArgs *[]string) func(cmd cliwrappers.Cmd) (string, string, int, error) {
+		return func(cmd cliwrappers.Cmd) (string, string, int, error) {
+			g.Expect(cmd.Name).To(Equal("buildah"))
+			*captureArgs = cmd.Args
 
-			digestFile := findDigestFile(args)
+			digestFile := findDigestFile(cmd.Args)
 			g.Expect(digestFile).ToNot(BeEmpty())
 
 			os.WriteFile(digestFile, []byte(digest), 0644)
@@ -280,7 +280,7 @@ func TestBuildahCli_Push(t *testing.T) {
 	t.Run("should push image", func(t *testing.T) {
 		buildahCli, executor := setupBuildahCli()
 		var capturedArgs []string
-		executor.executeWithOutput = mockSuccessfulPush(&capturedArgs)
+		executor.executeFunc = mockSuccessfulPush(&capturedArgs)
 
 		pushArgs := &cliwrappers.BuildahPushArgs{
 			Image: image,
@@ -297,7 +297,7 @@ func TestBuildahCli_Push(t *testing.T) {
 
 	t.Run("should error if buildah execution fails", func(t *testing.T) {
 		buildahCli, executor := setupBuildahCli()
-		executor.executeWithOutput = func(command string, args ...string) (string, string, int, error) {
+		executor.executeFunc = func(cmd cliwrappers.Cmd) (string, string, int, error) {
 			return "", "", 1, errors.New("failed to execute buildah push")
 		}
 
@@ -324,7 +324,7 @@ func TestBuildahCli_Push(t *testing.T) {
 	t.Run("should clean up digest file after push", func(t *testing.T) {
 		buildahCli, executor := setupBuildahCli()
 		var capturedArgs []string
-		executor.executeWithOutput = mockSuccessfulPush(&capturedArgs)
+		executor.executeFunc = mockSuccessfulPush(&capturedArgs)
 
 		pushArgs := &cliwrappers.BuildahPushArgs{
 			Image: image,
@@ -345,8 +345,8 @@ func TestBuildahCli_Push(t *testing.T) {
 	t.Run("should handle digest with whitespace", func(t *testing.T) {
 		buildahCli, executor := setupBuildahCli()
 		digestWithWhitespace := "\n  " + digest + "  \n"
-		executor.executeWithOutput = func(command string, args ...string) (string, string, int, error) {
-			digestFile := findDigestFile(args)
+		executor.executeFunc = func(cmd cliwrappers.Cmd) (string, string, int, error) {
+			digestFile := findDigestFile(cmd.Args)
 			os.WriteFile(digestFile, []byte(digestWithWhitespace), 0644)
 			return "", "", 0, nil
 		}
@@ -365,7 +365,7 @@ func TestBuildahCli_Push(t *testing.T) {
 		buildahCli, executor := setupBuildahCli()
 		const destination = "docker://quay.io/other-org/other-image:tag"
 		var capturedArgs []string
-		executor.executeWithOutput = mockSuccessfulPush(&capturedArgs)
+		executor.executeFunc = mockSuccessfulPush(&capturedArgs)
 
 		pushArgs := &cliwrappers.BuildahPushArgs{
 			Image:       image,
@@ -391,9 +391,9 @@ func TestBuildahCli_Pull(t *testing.T) {
 	t.Run("should pull image", func(t *testing.T) {
 		buildahCli, executor := setupBuildahCli()
 		var capturedArgs []string
-		executor.executeWithOutput = func(command string, args ...string) (string, string, int, error) {
-			g.Expect(command).To(Equal("buildah"))
-			capturedArgs = args
+		executor.executeFunc = func(cmd cliwrappers.Cmd) (string, string, int, error) {
+			g.Expect(cmd.Name).To(Equal("buildah"))
+			capturedArgs = cmd.Args
 			return "", "", 0, nil
 		}
 
@@ -410,7 +410,7 @@ func TestBuildahCli_Pull(t *testing.T) {
 
 	t.Run("should error if buildah execution fails", func(t *testing.T) {
 		buildahCli, executor := setupBuildahCli()
-		executor.executeWithOutput = func(command string, args ...string) (string, string, int, error) {
+		executor.executeFunc = func(cmd cliwrappers.Cmd) (string, string, int, error) {
 			return "", "", 1, errors.New("failed to execute buildah pull")
 		}
 
@@ -443,9 +443,9 @@ func TestBuildahCli_Inspect(t *testing.T) {
 	t.Run("should execute buildah inspect correctly", func(t *testing.T) {
 		buildahCli, executor := setupBuildahCli()
 		var capturedArgs []string
-		executor.executeFunc = func(command string, args ...string) (string, string, int, error) {
-			g.Expect(command).To(Equal("buildah"))
-			capturedArgs = args
+		executor.executeFunc = func(cmd cliwrappers.Cmd) (string, string, int, error) {
+			g.Expect(cmd.Name).To(Equal("buildah"))
+			capturedArgs = cmd.Args
 			return `{"OCIv1": {}}`, "", 0, nil
 		}
 
@@ -466,7 +466,7 @@ func TestBuildahCli_Inspect(t *testing.T) {
 	t.Run("should error when name is empty", func(t *testing.T) {
 		buildahCli, executor := setupBuildahCli()
 		executorCalled := false
-		executor.executeFunc = func(command string, args ...string) (string, string, int, error) {
+		executor.executeFunc = func(cmd cliwrappers.Cmd) (string, string, int, error) {
 			executorCalled = true
 			return "", "", 0, nil
 		}
@@ -486,7 +486,7 @@ func TestBuildahCli_Inspect(t *testing.T) {
 	t.Run("should error when type is empty", func(t *testing.T) {
 		buildahCli, executor := setupBuildahCli()
 		executorCalled := false
-		executor.executeFunc = func(command string, args ...string) (string, string, int, error) {
+		executor.executeFunc = func(cmd cliwrappers.Cmd) (string, string, int, error) {
 			executorCalled = true
 			return "", "", 0, nil
 		}
@@ -505,7 +505,7 @@ func TestBuildahCli_Inspect(t *testing.T) {
 
 	t.Run("should error when buildah execution fails", func(t *testing.T) {
 		buildahCli, executor := setupBuildahCli()
-		executor.executeFunc = func(command string, args ...string) (string, string, int, error) {
+		executor.executeFunc = func(cmd cliwrappers.Cmd) (string, string, int, error) {
 			return "", "", 1, errors.New("buildah inspect failed")
 		}
 
@@ -539,7 +539,7 @@ func TestBuildahCli_InspectImage(t *testing.T) {
 			}
 		}`
 
-		executor.executeFunc = func(command string, args ...string) (string, string, int, error) {
+		executor.executeFunc = func(cmd cliwrappers.Cmd) (string, string, int, error) {
 			return sampleJSON, "", 0, nil
 		}
 
@@ -555,7 +555,7 @@ func TestBuildahCli_InspectImage(t *testing.T) {
 	t.Run("should error when Inspect fails", func(t *testing.T) {
 		buildahCli, executor := setupBuildahCli()
 
-		executor.executeFunc = func(command string, args ...string) (string, string, int, error) {
+		executor.executeFunc = func(cmd cliwrappers.Cmd) (string, string, int, error) {
 			return "", "", 1, errors.New("buildah inspect failed")
 		}
 
@@ -568,7 +568,7 @@ func TestBuildahCli_InspectImage(t *testing.T) {
 	t.Run("should error when JSON parsing fails", func(t *testing.T) {
 		buildahCli, executor := setupBuildahCli()
 
-		executor.executeFunc = func(command string, args ...string) (string, string, int, error) {
+		executor.executeFunc = func(cmd cliwrappers.Cmd) (string, string, int, error) {
 			return `{invalid json}`, "", 0, nil
 		}
 
@@ -585,9 +585,9 @@ func TestBuildahCli_Version(t *testing.T) {
 	t.Run("should execute buildah version correctly", func(t *testing.T) {
 		buildahCli, executor := setupBuildahCli()
 		var capturedArgs []string
-		executor.executeFunc = func(command string, args ...string) (string, string, int, error) {
-			g.Expect(command).To(Equal("buildah"))
-			capturedArgs = args
+		executor.executeFunc = func(cmd cliwrappers.Cmd) (string, string, int, error) {
+			g.Expect(cmd.Name).To(Equal("buildah"))
+			capturedArgs = cmd.Args
 			jsonOutput := `{
     "version": "1.42.2",
     "goVersion": "go1.24.10",

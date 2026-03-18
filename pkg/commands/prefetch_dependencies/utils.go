@@ -217,7 +217,7 @@ func registerSubscriptionManager(rhsmOrgPath string, rhsmActivationKeyPath strin
 
 	executor := cliwrappers.NewCliExecutor()
 	command := func() (stdout string, stderr string, errCode int, err error) {
-		return executor.Execute("subscription-manager", args...)
+		return executor.Execute(cliwrappers.Command("subscription-manager", args...))
 	}
 
 	retryer := cliwrappers.NewRetryer(command).StopIfOutputContains("unauthorized")
@@ -232,7 +232,7 @@ func registerSubscriptionManager(rhsmOrgPath string, rhsmActivationKeyPath strin
 // Wrapper around the subscription-manager unregister command.
 func unregisterSubscriptionManager() {
 	executor := cliwrappers.NewCliExecutor()
-	_, _, _, err := executor.Execute("subscription-manager", "unregister")
+	_, _, _, err := executor.Execute(cliwrappers.Command("subscription-manager", "unregister"))
 	// Ignore errors as unregister is a best-effort operation.
 	if err != nil {
 		log.Debug("subscription-manager unregister command failed")
@@ -320,7 +320,7 @@ func setupGitBasicAuth(authDir, sourceDir string) error {
 // Parse the hostname from the git remote origin URL.
 func getHostnameFromRemoteOriginURL(sourceDir string) (string, error) {
 	executor := cliwrappers.NewCliExecutor()
-	stdout, _, _, err := executor.ExecuteInDir(sourceDir, "git", "remote", "get-url", "origin")
+	stdout, _, _, err := executor.Execute(cliwrappers.Cmd{Name: "git", Args: []string{"remote", "get-url", "origin"}, Dir: sourceDir})
 	if err != nil {
 		return "", err
 	}
