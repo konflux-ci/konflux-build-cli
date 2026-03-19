@@ -2,6 +2,7 @@ package cliwrappers_test
 
 import (
 	"bytes"
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -328,6 +329,39 @@ func TestCliExecutor_ExecuteWithLogOutput(t *testing.T) {
 		g.Expect(exitCode).To(Equal(-1))
 		g.Expect(stdout).To(BeEmpty())
 		g.Expect(stderr).To(BeEmpty())
+	})
+
+	t.Run("should capture full output even when a line exceeds the scanner buffer size", func(t *testing.T) {
+		g := NewWithT(t)
+
+		longLineFile := filepath.Join(t.TempDir(), "long_line.txt")
+		// bufio.Scanner's default max token size is 64KB
+		longLine := strings.Repeat("x", 128*1024)
+		fileContent := fmt.Sprintf("before\n%s\nafter\n", longLine)
+
+		err := os.WriteFile(longLineFile, []byte(fileContent), 0644)
+		g.Expect(err).ToNot(HaveOccurred())
+
+		executor := cliwrappers.NewCliExecutor()
+
+		var stdout, stderr string
+		var exitCode int
+		logOutput := captureLogOutput(func() {
+			cmd := cliwrappers.Command("cat", longLineFile)
+			cmd.LogOutput = true
+			stdout, stderr, exitCode, err = executor.Execute(cmd)
+		})
+
+		g.Expect(err).ToNot(HaveOccurred())
+		g.Expect(exitCode).To(Equal(0))
+		g.Expect(stderr).To(BeEmpty())
+		g.Expect(stdout).To(ContainSubstring("before"))
+		g.Expect(stdout).To(ContainSubstring("\n" + longLine + "\n"))
+		g.Expect(stdout).To(ContainSubstring("after"))
+
+		g.Expect(logOutput).To(ContainSubstring("before"))
+		g.Expect(logOutput).To(ContainSubstring("stopped logging output: bufio.Scanner: token too long"))
+		g.Expect(logOutput).ToNot(ContainSubstring(longLine))
 	})
 }
 

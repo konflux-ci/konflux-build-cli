@@ -70,13 +70,30 @@ func (e *CliExecutor) Execute(c Cmd) (string, string, int, error) {
 
 	var stdoutBuf, stderrBuf bytes.Buffer
 
-	readStream := func(linePrefix string, r io.Reader, buf *bytes.Buffer) {
-		scanner := bufio.NewScanner(r)
+	readStream := func(linePrefix string, r io.Reader, buf *bytes.Buffer) error {
+		tee := io.TeeReader(r, buf)
+		scanner := bufio.NewScanner(tee)
 		for scanner.Scan() {
-			line := scanner.Text()
-			executorLog.Info(linePrefix + line)
-			buf.WriteString(line + "\n")
+			executorLog.Info(linePrefix + scanner.Text())
 		}
+		if scanner.Err() != nil {
+			executorLog.Warnf("%sstopped logging output: %s", linePrefix, scanner.Err())
+			// Read the rest of the pipe directly into buf.
+			//
+			// At this point, buf contains everything that was read from r via the scanner
+			// (by property of TeeReader - "the write must complete before the read completes").
+			// A second property of TeeReader that could break this:
+			// "Any error encountered while writing is reported as a read error".
+			// Not a problem here - [bytes.Buffer.Write] never errors, only panics.
+			//
+			// Naturally, buf also doesn't contain anything that *wasn't* read via the scanner,
+			// because the tee being read by the scanner is the only thing doing the writing.
+			// So this Copy() picks up exactly where the scanner left off.
+			if _, err := io.Copy(buf, r); err != nil {
+				return fmt.Errorf("failed to read remaining output: %w", err)
+			}
+		}
+		return nil
 	}
 
 	nameInLogs := c.NameInLogs
@@ -84,20 +101,19 @@ func (e *CliExecutor) Execute(c Cmd) (string, string, int, error) {
 		nameInLogs = c.Name
 	}
 
-	done := make(chan struct{}, 2)
+	done := make(chan error, 2)
 	go func() {
-		readStream(nameInLogs+" [stdout] ", stdoutPipe, &stdoutBuf)
-		done <- struct{}{}
+		done <- readStream(nameInLogs+" [stdout] ", stdoutPipe, &stdoutBuf)
 	}()
 	go func() {
-		readStream(nameInLogs+" [stderr] ", stderrPipe, &stderrBuf)
-		done <- struct{}{}
+		done <- readStream(nameInLogs+" [stderr] ", stderrPipe, &stderrBuf)
 	}()
 
-	err = cmd.Wait()
-	// Wait for both output streams to finish
-	<-done
-	<-done
+	// Wait for both output streams to finish before calling cmd.Wait().
+	// Per [exec.Cmd.StdoutPipe] docs, Wait closes the pipes, so all reads must complete first.
+	readErr := errors.Join(<-done, <-done)
+	cmdErr := cmd.Wait()
+	err = errors.Join(readErr, cmdErr)
 
 	return stdoutBuf.String(), stderrBuf.String(), getExitCodeFromError(err), err
 }
