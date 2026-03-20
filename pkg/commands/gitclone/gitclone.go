@@ -82,6 +82,12 @@ func (c *GitClone) Run() error {
 		return err
 	}
 
+	if c.Params.MergeTargetBranch {
+		if err := c.mergeTargetBranch(); err != nil {
+			return err
+		}
+	}
+
 	if err := c.gatherCommitInfo(); err != nil {
 		return err
 	}
