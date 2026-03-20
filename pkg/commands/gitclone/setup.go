@@ -47,3 +47,16 @@ func (c *GitClone) cleanCheckoutDir() error {
 
 	return nil
 }
+
+// setupGitConfig configures git settings for SSL verification.
+// Uses environment variables instead of git config to avoid modifying global git state.
+func (c *GitClone) setupGitConfig() error {
+	if !c.Params.SSLVerify {
+		l.Logger.Debug("Disabling SSL verification (GIT_SSL_NO_VERIFY=true)")
+		if err := os.Setenv("GIT_SSL_NO_VERIFY", "true"); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
