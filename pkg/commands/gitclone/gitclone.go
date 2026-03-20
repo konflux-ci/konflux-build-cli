@@ -24,6 +24,7 @@ type GitClone struct {
 	CliWrappers   CliWrappers
 	Results       Results
 	ResultsWriter common.ResultsWriterInterface
+	internalDir   string
 }
 
 func New(cmd *cobra.Command) (*GitClone, error) {
@@ -63,6 +64,23 @@ func (c *GitClone) Run() error {
 		if err := c.initCliWrappers(); err != nil {
 			return err
 		}
+	}
+
+	internalDir, err := os.MkdirTemp("", "git-clone-internal-*")
+	if err != nil {
+		return fmt.Errorf("failed to create internal directory: %w", err)
+	}
+	c.internalDir = internalDir
+
+	// Save and restore all environment variables that may be modified during Run().
+	restoreEnv := saveAndRestoreEnv("GIT_CONFIG_GLOBAL", "GIT_SSH_COMMAND", "GIT_SSL_NO_VERIFY")
+	defer func() {
+		_ = os.RemoveAll(c.internalDir)
+		restoreEnv()
+	}()
+
+	if err := c.setupGitConfig(); err != nil {
+		return err
 	}
 
 	// Verify the checkout directory path doesn't escape OutputDir via symlinks
@@ -368,4 +386,31 @@ func parseCSV(input string) ([]string, error) {
 	reader := csv.NewReader(strings.NewReader(input))
 	reader.TrimLeadingSpace = true
 	return reader.Read()
+}
+
+// saveAndRestoreEnv saves the current values of the given environment variables
+// and returns a function that restores them to their original state.
+func saveAndRestoreEnv(keys ...string) func() {
+	type envEntry struct {
+		val     string
+		existed bool
+	}
+	saved := make(map[string]envEntry, len(keys))
+	for _, key := range keys {
+		val, existed := os.LookupEnv(key)
+		saved[key] = envEntry{val, existed}
+	}
+	return func() {
+		for key, e := range saved {
+			if e.existed {
+				if err := os.Setenv(key, e.val); err != nil {
+					l.Logger.Debugf("failed to restore env var %s: %v", key, err)
+				}
+			} else {
+				if err := os.Unsetenv(key); err != nil {
+					l.Logger.Debugf("failed to unset env var %s: %v", key, err)
+				}
+			}
+		}
+	}
 }
