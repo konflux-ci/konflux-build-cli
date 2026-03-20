@@ -21,6 +21,10 @@ type BuildahCliInterface interface {
 	Inspect(args *BuildahInspectArgs) (string, error)
 	InspectImage(name string) (BuildahImageInfo, error)
 	Version() (BuildahVersionInfo, error)
+	ManifestCreate(args *BuildahManifestCreateArgs) error
+	ManifestAdd(args *BuildahManifestAddArgs) error
+	ManifestInspect(args *BuildahManifestInspectArgs) (string, error)
+	ManifestPush(args *BuildahManifestPushArgs) (string, error)
 }
 
 var _ BuildahCliInterface = &BuildahCli{}
@@ -417,4 +421,151 @@ func (b *BuildahCli) Version() (BuildahVersionInfo, error) {
 	}
 
 	return versionInfo, nil
+}
+
+type BuildahManifestCreateArgs struct {
+	ManifestName string
+}
+
+// ManifestCreate creates a new manifest list
+func (b *BuildahCli) ManifestCreate(args *BuildahManifestCreateArgs) error {
+	if args.ManifestName == "" {
+		return errors.New("manifest name is empty")
+	}
+
+	buildahArgs := []string{"manifest", "create", args.ManifestName}
+
+	buildahLog.Debugf("Running command:\nbuildah %s", strings.Join(buildahArgs, " "))
+
+	_, _, _, err := b.Executor.Execute(Cmd{Name: "buildah", Args: buildahArgs, LogOutput: true})
+	if err != nil {
+		buildahLog.Errorf("buildah manifest create failed: %s", err.Error())
+		return err
+	}
+
+	buildahLog.Debug("Manifest create completed successfully")
+
+	return nil
+}
+
+type BuildahManifestAddArgs struct {
+	ManifestName string
+	ImageRef     string
+	All          bool
+}
+
+// ManifestAdd adds an image to a manifest list
+func (b *BuildahCli) ManifestAdd(args *BuildahManifestAddArgs) error {
+	if args.ManifestName == "" {
+		return errors.New("manifest name is empty")
+	}
+	if args.ImageRef == "" {
+		return errors.New("image reference is empty")
+	}
+
+	buildahArgs := []string{"manifest", "add", args.ManifestName, args.ImageRef}
+
+	if args.All {
+		buildahArgs = append(buildahArgs, "--all")
+	}
+
+	buildahLog.Debugf("Running command:\nbuildah %s", strings.Join(buildahArgs, " "))
+
+	_, _, _, err := b.Executor.Execute(Cmd{Name: "buildah", Args: buildahArgs, LogOutput: true})
+	if err != nil {
+		buildahLog.Errorf("buildah manifest add failed: %s", err.Error())
+		return err
+	}
+
+	buildahLog.Debug("Manifest add completed successfully")
+
+	return nil
+}
+
+type BuildahManifestInspectArgs struct {
+	ManifestName string
+}
+
+// ManifestInspect inspects a manifest list and returns the JSON output
+func (b *BuildahCli) ManifestInspect(args *BuildahManifestInspectArgs) (string, error) {
+	if args.ManifestName == "" {
+		return "", errors.New("manifest name is empty")
+	}
+
+	buildahArgs := []string{"manifest", "inspect", args.ManifestName}
+
+	buildahLog.Debugf("Running command:\nbuildah %s", strings.Join(buildahArgs, " "))
+
+	stdout, _, _, err := b.Executor.Execute(Command("buildah", buildahArgs...))
+	if err != nil {
+		buildahLog.Errorf("buildah manifest inspect failed: %s", err.Error())
+		return "", err
+	}
+
+	buildahLog.Debug("Manifest inspect completed successfully")
+
+	return stdout, nil
+}
+
+type BuildahManifestPushArgs struct {
+	ManifestName string
+	Destination  string
+	Format       string
+	TLSVerify    bool
+}
+
+// ManifestPush pushes a manifest list to a registry and returns the digest
+func (b *BuildahCli) ManifestPush(args *BuildahManifestPushArgs) (string, error) {
+	if args.ManifestName == "" {
+		return "", errors.New("manifest name is empty")
+	}
+	if args.Destination == "" {
+		return "", errors.New("destination is empty")
+	}
+
+	tmpFile, err := os.CreateTemp("", "buildah-manifest-digest-")
+	if err != nil {
+		return "", err
+	}
+	digestFile := tmpFile.Name()
+	tmpFile.Close()
+	defer os.Remove(digestFile)
+
+	buildahArgs := []string{"manifest", "push", "--digestfile", digestFile}
+
+	if args.Format != "" {
+		buildahArgs = append(buildahArgs, "--format", args.Format)
+	}
+
+	if args.TLSVerify {
+		buildahArgs = append(buildahArgs, "--tls-verify=true")
+	} else {
+		buildahArgs = append(buildahArgs, "--tls-verify=false")
+	}
+
+	buildahArgs = append(buildahArgs, args.ManifestName, args.Destination)
+
+	buildahLog.Debugf("Running command:\nbuildah %s", strings.Join(buildahArgs, " "))
+
+	retryer := NewRetryer(func() (string, string, int, error) {
+		return b.Executor.Execute(Cmd{Name: "buildah", Args: buildahArgs, LogOutput: true})
+	}).WithImageRegistryPreset().
+		StopIfOutputContains("unauthorized").
+		StopIfOutputContains("authentication required")
+
+	_, _, _, err = retryer.Run()
+	if err != nil {
+		buildahLog.Errorf("buildah manifest push failed: %s", err.Error())
+		return "", err
+	}
+
+	buildahLog.Debug("Manifest push completed successfully")
+
+	content, err := os.ReadFile(digestFile)
+	if err != nil {
+		return "", err
+	}
+
+	digest := strings.TrimSpace(string(content))
+	return digest, nil
 }

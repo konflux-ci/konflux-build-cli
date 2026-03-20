@@ -806,3 +806,338 @@ func TestBuildahBuildArgs_Validate(t *testing.T) {
 		g.Expect(err.Error()).To(Equal("':' in volume mount target path: other:dir"))
 	})
 }
+
+func TestBuildahCli_ManifestCreate(t *testing.T) {
+	g := NewWithT(t)
+
+	const manifestName = "quay.io/org/myapp:latest"
+
+	t.Run("should create manifest", func(t *testing.T) {
+		buildahCli, executor := setupBuildahCli()
+		var capturedArgs []string
+		executor.executeFunc = func(cmd cliwrappers.Cmd) (string, string, int, error) {
+			g.Expect(cmd.Name).To(Equal("buildah"))
+			g.Expect(cmd.LogOutput).To(BeTrue())
+			capturedArgs = cmd.Args
+			return "", "", 0, nil
+		}
+
+		args := &cliwrappers.BuildahManifestCreateArgs{
+			ManifestName: manifestName,
+		}
+
+		err := buildahCli.ManifestCreate(args)
+
+		g.Expect(err).ToNot(HaveOccurred())
+		g.Expect(capturedArgs).To(Equal([]string{"manifest", "create", manifestName}))
+	})
+
+	t.Run("should error if manifest name is empty", func(t *testing.T) {
+		buildahCli, _ := setupBuildahCli()
+		args := &cliwrappers.BuildahManifestCreateArgs{
+			ManifestName: "",
+		}
+
+		err := buildahCli.ManifestCreate(args)
+
+		g.Expect(err).To(HaveOccurred())
+		g.Expect(err.Error()).To(ContainSubstring("manifest name is empty"))
+	})
+
+	t.Run("should error if buildah execution fails", func(t *testing.T) {
+		buildahCli, executor := setupBuildahCli()
+		executor.executeFunc = func(cmd cliwrappers.Cmd) (string, string, int, error) {
+			return "", "", 1, errors.New("failed to create manifest")
+		}
+
+		args := &cliwrappers.BuildahManifestCreateArgs{
+			ManifestName: manifestName,
+		}
+
+		err := buildahCli.ManifestCreate(args)
+
+		g.Expect(err).To(HaveOccurred())
+		g.Expect(err.Error()).To(Equal("failed to create manifest"))
+	})
+}
+
+func TestBuildahCli_ManifestAdd(t *testing.T) {
+	g := NewWithT(t)
+
+	const manifestName = "quay.io/org/myapp:latest"
+	const imageRef = "docker://quay.io/org/myapp@sha256:abc123"
+
+	t.Run("should add image to manifest", func(t *testing.T) {
+		buildahCli, executor := setupBuildahCli()
+		var capturedArgs []string
+		executor.executeFunc = func(cmd cliwrappers.Cmd) (string, string, int, error) {
+			g.Expect(cmd.Name).To(Equal("buildah"))
+			g.Expect(cmd.LogOutput).To(BeTrue())
+			capturedArgs = cmd.Args
+			return "", "", 0, nil
+		}
+
+		args := &cliwrappers.BuildahManifestAddArgs{
+			ManifestName: manifestName,
+			ImageRef:     imageRef,
+			All:          true,
+		}
+
+		err := buildahCli.ManifestAdd(args)
+
+		g.Expect(err).ToNot(HaveOccurred())
+		g.Expect(capturedArgs).To(Equal([]string{"manifest", "add", manifestName, imageRef, "--all"}))
+	})
+
+	t.Run("should add image without --all flag", func(t *testing.T) {
+		buildahCli, executor := setupBuildahCli()
+		var capturedArgs []string
+		executor.executeFunc = func(cmd cliwrappers.Cmd) (string, string, int, error) {
+			g.Expect(cmd.Name).To(Equal("buildah"))
+			g.Expect(cmd.LogOutput).To(BeTrue())
+			capturedArgs = cmd.Args
+			return "", "", 0, nil
+		}
+
+		args := &cliwrappers.BuildahManifestAddArgs{
+			ManifestName: manifestName,
+			ImageRef:     imageRef,
+			All:          false,
+		}
+
+		err := buildahCli.ManifestAdd(args)
+
+		g.Expect(err).ToNot(HaveOccurred())
+		g.Expect(capturedArgs).To(Equal([]string{"manifest", "add", manifestName, imageRef}))
+	})
+
+	t.Run("should error if manifest name is empty", func(t *testing.T) {
+		buildahCli, _ := setupBuildahCli()
+		args := &cliwrappers.BuildahManifestAddArgs{
+			ManifestName: "",
+			ImageRef:     imageRef,
+		}
+
+		err := buildahCli.ManifestAdd(args)
+
+		g.Expect(err).To(HaveOccurred())
+		g.Expect(err.Error()).To(ContainSubstring("manifest name is empty"))
+	})
+
+	t.Run("should error if image reference is empty", func(t *testing.T) {
+		buildahCli, _ := setupBuildahCli()
+		args := &cliwrappers.BuildahManifestAddArgs{
+			ManifestName: manifestName,
+			ImageRef:     "",
+		}
+
+		err := buildahCli.ManifestAdd(args)
+
+		g.Expect(err).To(HaveOccurred())
+		g.Expect(err.Error()).To(ContainSubstring("image reference is empty"))
+	})
+
+	t.Run("should error if buildah execution fails", func(t *testing.T) {
+		buildahCli, executor := setupBuildahCli()
+		executor.executeFunc = func(cmd cliwrappers.Cmd) (string, string, int, error) {
+			return "", "", 1, errors.New("failed to add image")
+		}
+
+		args := &cliwrappers.BuildahManifestAddArgs{
+			ManifestName: manifestName,
+			ImageRef:     imageRef,
+			All:          true,
+		}
+
+		err := buildahCli.ManifestAdd(args)
+
+		g.Expect(err).To(HaveOccurred())
+		g.Expect(err.Error()).To(Equal("failed to add image"))
+	})
+}
+
+func TestBuildahCli_ManifestInspect(t *testing.T) {
+	g := NewWithT(t)
+
+	const manifestName = "quay.io/org/myapp:latest"
+	const manifestJSON = `{"schemaVersion":2,"mediaType":"application/vnd.oci.image.index.v1+json"}`
+
+	t.Run("should inspect manifest and return JSON", func(t *testing.T) {
+		buildahCli, executor := setupBuildahCli()
+		var capturedArgs []string
+		executor.executeFunc = func(cmd cliwrappers.Cmd) (string, string, int, error) {
+			g.Expect(cmd.Name).To(Equal("buildah"))
+			capturedArgs = cmd.Args
+			return manifestJSON, "", 0, nil
+		}
+
+		args := &cliwrappers.BuildahManifestInspectArgs{
+			ManifestName: manifestName,
+		}
+
+		result, err := buildahCli.ManifestInspect(args)
+
+		g.Expect(err).ToNot(HaveOccurred())
+		g.Expect(capturedArgs).To(Equal([]string{"manifest", "inspect", manifestName}))
+		g.Expect(result).To(Equal(manifestJSON))
+	})
+
+	t.Run("should error if manifest name is empty", func(t *testing.T) {
+		buildahCli, _ := setupBuildahCli()
+		args := &cliwrappers.BuildahManifestInspectArgs{
+			ManifestName: "",
+		}
+
+		_, err := buildahCli.ManifestInspect(args)
+
+		g.Expect(err).To(HaveOccurred())
+		g.Expect(err.Error()).To(ContainSubstring("manifest name is empty"))
+	})
+
+	t.Run("should error if buildah execution fails", func(t *testing.T) {
+		buildahCli, executor := setupBuildahCli()
+		executor.executeFunc = func(cmd cliwrappers.Cmd) (string, string, int, error) {
+			return "", "", 1, errors.New("failed to inspect manifest")
+		}
+
+		args := &cliwrappers.BuildahManifestInspectArgs{
+			ManifestName: manifestName,
+		}
+
+		_, err := buildahCli.ManifestInspect(args)
+
+		g.Expect(err).To(HaveOccurred())
+		g.Expect(err.Error()).To(Equal("failed to inspect manifest"))
+	})
+}
+
+func TestBuildahCli_ManifestPush(t *testing.T) {
+	g := NewWithT(t)
+
+	const manifestName = "quay.io/org/myapp:latest"
+	const destination = "docker://quay.io/org/myapp:latest"
+	const digest = "sha256:1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
+
+	ensureRetryerDisabled(t)
+
+	mockSuccessfulManifestPush := func(captureArgs *[]string) func(cmd cliwrappers.Cmd) (string, string, int, error) {
+		return func(cmd cliwrappers.Cmd) (string, string, int, error) {
+			g.Expect(cmd.Name).To(Equal("buildah"))
+			g.Expect(cmd.LogOutput).To(BeTrue())
+			*captureArgs = cmd.Args
+
+			digestFile := findDigestFile(cmd.Args)
+			g.Expect(digestFile).ToNot(BeEmpty())
+
+			os.WriteFile(digestFile, []byte(digest), 0644)
+
+			return "", "", 0, nil
+		}
+	}
+
+	t.Run("should push manifest with default options", func(t *testing.T) {
+		buildahCli, executor := setupBuildahCli()
+		var capturedArgs []string
+		executor.executeFunc = mockSuccessfulManifestPush(&capturedArgs)
+
+		args := &cliwrappers.BuildahManifestPushArgs{
+			ManifestName: manifestName,
+			Destination:  destination,
+			TLSVerify:    true,
+		}
+
+		returnedDigest, err := buildahCli.ManifestPush(args)
+
+		g.Expect(err).ToNot(HaveOccurred())
+		g.Expect(capturedArgs[0]).To(Equal("manifest"))
+		g.Expect(capturedArgs[1]).To(Equal("push"))
+		expectArgAndValue(g, capturedArgs, "--digestfile", findDigestFile(capturedArgs))
+		g.Expect(capturedArgs).To(ContainElement("--tls-verify=true"))
+		g.Expect(capturedArgs[len(capturedArgs)-2]).To(Equal(manifestName))
+		g.Expect(capturedArgs[len(capturedArgs)-1]).To(Equal(destination))
+		g.Expect(returnedDigest).To(Equal(digest))
+	})
+
+	t.Run("should push manifest with format and retry", func(t *testing.T) {
+		buildahCli, executor := setupBuildahCli()
+		var capturedArgs []string
+		executor.executeFunc = mockSuccessfulManifestPush(&capturedArgs)
+
+		args := &cliwrappers.BuildahManifestPushArgs{
+			ManifestName: manifestName,
+			Destination:  destination,
+			Format:       "oci",
+			TLSVerify:    false,
+		}
+
+		_, err := buildahCli.ManifestPush(args)
+
+		g.Expect(err).ToNot(HaveOccurred())
+		expectArgAndValue(g, capturedArgs, "--format", "oci")
+		g.Expect(capturedArgs).To(ContainElement("--tls-verify=false"))
+	})
+
+	t.Run("should error if manifest name is empty", func(t *testing.T) {
+		buildahCli, _ := setupBuildahCli()
+		args := &cliwrappers.BuildahManifestPushArgs{
+			ManifestName: "",
+			Destination:  destination,
+		}
+
+		_, err := buildahCli.ManifestPush(args)
+
+		g.Expect(err).To(HaveOccurred())
+		g.Expect(err.Error()).To(ContainSubstring("manifest name is empty"))
+	})
+
+	t.Run("should error if destination is empty", func(t *testing.T) {
+		buildahCli, _ := setupBuildahCli()
+		args := &cliwrappers.BuildahManifestPushArgs{
+			ManifestName: manifestName,
+			Destination:  "",
+		}
+
+		_, err := buildahCli.ManifestPush(args)
+
+		g.Expect(err).To(HaveOccurred())
+		g.Expect(err.Error()).To(ContainSubstring("destination is empty"))
+	})
+
+	t.Run("should error if buildah execution fails", func(t *testing.T) {
+		buildahCli, executor := setupBuildahCli()
+		executor.executeFunc = func(cmd cliwrappers.Cmd) (string, string, int, error) {
+			return "", "", 1, errors.New("failed to push manifest")
+		}
+
+		args := &cliwrappers.BuildahManifestPushArgs{
+			ManifestName: manifestName,
+			Destination:  destination,
+		}
+
+		_, err := buildahCli.ManifestPush(args)
+
+		g.Expect(err).To(HaveOccurred())
+		g.Expect(err.Error()).To(Equal("failed to push manifest"))
+	})
+
+	t.Run("should clean up digest file after push", func(t *testing.T) {
+		buildahCli, executor := setupBuildahCli()
+		var capturedArgs []string
+		executor.executeFunc = mockSuccessfulManifestPush(&capturedArgs)
+
+		args := &cliwrappers.BuildahManifestPushArgs{
+			ManifestName: manifestName,
+			Destination:  destination,
+		}
+
+		_, err := buildahCli.ManifestPush(args)
+
+		g.Expect(err).ToNot(HaveOccurred())
+
+		digestFile := findDigestFile(capturedArgs)
+		g.Expect(digestFile).ToNot(BeEmpty())
+
+		_, statErr := os.Stat(digestFile)
+		g.Expect(os.IsNotExist(statErr)).To(BeTrue(), "digest file should be cleaned up")
+	})
+}
