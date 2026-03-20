@@ -25,9 +25,9 @@ func TestOrasCli_Push(t *testing.T) {
 	t.Run("successful push with minimum arguments", func(t *testing.T) {
 		orasCli, executor := setupOrasCli()
 
-		executor.executeWithOutput = func(command string, args ...string) (string, string, int, error) {
-			g.Expect(command).Should(Equal("oras"))
-			g.Expect(args).Should(Equal([]string{"push", artifactImage, fileName}))
+		executor.executeFunc = func(cmd cliwrappers.Cmd) (string, string, int, error) {
+			g.Expect(cmd.Name).Should(Equal("oras"))
+			g.Expect(cmd.Args).Should(Equal([]string{"push", artifactImage, fileName}))
 
 			stdout := "Digest: " + imageDigest
 			return stdout, "push progress", 0, nil
@@ -48,10 +48,10 @@ func TestOrasCli_Push(t *testing.T) {
 	t.Run("push with authentication", func(t *testing.T) {
 		orasCli, executor := setupOrasCli()
 
-		executor.executeWithOutput = func(command string, args ...string) (string, string, int, error) {
-			g.Expect(command).Should(Equal("oras"))
+		executor.executeFunc = func(cmd cliwrappers.Cmd) (string, string, int, error) {
+			g.Expect(cmd.Name).Should(Equal("oras"))
 			expectedArgs := []string{"push", "--registry-config", "/path/to/registry-config", artifactImage, fileName}
-			g.Expect(args).Should(Equal(expectedArgs))
+			g.Expect(cmd.Args).Should(Equal(expectedArgs))
 
 			stdout := "Digest: " + imageDigest
 			return stdout, "push progress", 0, nil
@@ -73,10 +73,10 @@ func TestOrasCli_Push(t *testing.T) {
 	t.Run("push with specific artifact type", func(t *testing.T) {
 		orasCli, executor := setupOrasCli()
 
-		executor.executeWithOutput = func(command string, args ...string) (string, string, int, error) {
-			g.Expect(command).Should(Equal("oras"))
+		executor.executeFunc = func(cmd cliwrappers.Cmd) (string, string, int, error) {
+			g.Expect(cmd.Name).Should(Equal("oras"))
 			expectedArgs := []string{"push", "--artifact-type", "application/vnd.custom.artifact", artifactImage, fileName}
-			g.Expect(args).Should(Equal(expectedArgs))
+			g.Expect(cmd.Args).Should(Equal(expectedArgs))
 
 			stdout := "Digest: " + imageDigest
 			return stdout, "push progress", 0, nil
@@ -98,10 +98,10 @@ func TestOrasCli_Push(t *testing.T) {
 	t.Run("push and output artifact info by go-template", func(t *testing.T) {
 		orasCli, executor := setupOrasCli()
 
-		executor.executeWithOutput = func(command string, args ...string) (string, string, int, error) {
-			g.Expect(command).Should(Equal("oras"))
+		executor.executeFunc = func(cmd cliwrappers.Cmd) (string, string, int, error) {
+			g.Expect(cmd.Name).Should(Equal("oras"))
 			expectedArgs := []string{"push", "--format", "go-template", "--template", "{{.reference}}", artifactImage, fileName}
-			g.Expect(args).Should(Equal(expectedArgs))
+			g.Expect(cmd.Args).Should(Equal(expectedArgs))
 			return imageDigest, "push progress", 0, nil
 		}
 

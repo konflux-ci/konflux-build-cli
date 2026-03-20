@@ -83,7 +83,7 @@ func (s *SkopeoCli) Copy(args *SkopeoCopyArgs) error {
 	skopeoLog.Debugf("Running command:\nskopeo %s", strings.Join(scopeoArgs, " "))
 
 	retryer := NewRetryer(func() (string, string, int, error) {
-		return s.Executor.Execute("skopeo", scopeoArgs...)
+		return s.Executor.Execute(Command("skopeo", scopeoArgs...))
 	}).WithImageRegistryPreset().StopIfOutputContains("unauthorized")
 
 	stdout, stderr, _, err := retryer.Run()
@@ -139,7 +139,7 @@ func (s *SkopeoCli) Inspect(args *SkopeoInspectArgs) (string, error) {
 	skopeoLog.Debugf("Running command:\nskopeo %s", strings.Join(scopeoArgs, " "))
 
 	retryer := NewRetryer(func() (string, string, int, error) {
-		return s.Executor.Execute("skopeo", scopeoArgs...)
+		return s.Executor.Execute(Command("skopeo", scopeoArgs...))
 	}).WithImageRegistryPreset().
 		StopIfOutputContains("unauthorized").
 		// Stop on unsupported config media type

@@ -68,7 +68,7 @@ func (b *OrasCli) Push(args *OrasPushArgs) (string, string, error) {
 
 	orasLog.Debugf("Running command:\noras %s", strings.Join(orasArgs, " "))
 
-	stdout, stderr, _, err := b.Executor.ExecuteWithOutput("oras", orasArgs...)
+	stdout, stderr, _, err := b.Executor.Execute(Cmd{Name: "oras", Args: orasArgs, LogOutput: true})
 
 	if err != nil {
 		orasLog.Errorf("oras push failed: %s", err.Error())

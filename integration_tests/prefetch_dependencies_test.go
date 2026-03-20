@@ -24,7 +24,7 @@ type prefetchDependenciesTestParams struct {
 
 func cloneGitRepo(url, branch, output string) error {
 	executor := cliwrappers.NewCliExecutor()
-	_, _, _, err := executor.Execute("git", "clone", url, output, "--depth=1", "--branch", branch)
+	_, _, _, err := executor.Execute(cliwrappers.Command("git", "clone", url, output, "--depth=1", "--branch", branch))
 	return err
 }
 

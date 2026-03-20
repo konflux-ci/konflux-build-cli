@@ -14,11 +14,21 @@ import (
 
 var executorLog = l.Logger.WithField("logger", "CliExecutor")
 
+type Cmd struct {
+	Name       string   // the name passed to [exec.Command]
+	Args       []string // the args passed to [exec.Command]
+	Dir        string   // same as [exec.Cmd.Dir]
+	LogOutput  bool     // log stdout/stderr lines in real time
+	NameInLogs string   // when logging stdout/stderr, prefix lines with this name (defaults to Name)
+}
+
+// Command creates a Cmd. Mirrors exec.Command().
+func Command(name string, args ...string) Cmd {
+	return Cmd{Name: name, Args: args}
+}
+
 type CliExecutorInterface interface {
-	Execute(command string, args ...string) (stdout, stderr string, exitCode int, err error)
-	ExecuteInDir(workdir, command string, args ...string) (stdout, stderr string, exitCode int, err error)
-	ExecuteWithOutput(command string, args ...string) (stdout, stderr string, exitCode int, err error)
-	ExecuteInDirWithOutput(workdir, command string, args ...string) (stdout, stderr string, exitCode int, err error)
+	Execute(cmd Cmd) (stdout, stderr string, exitCode int, err error)
 }
 
 var _ CliExecutorInterface = &CliExecutor{}
@@ -31,39 +41,18 @@ func NewCliExecutor() *CliExecutor {
 
 // Execute runs specified command with given arguments.
 // Returns stdout, stderr, exit code, error
-func (e *CliExecutor) Execute(command string, args ...string) (string, string, int, error) {
-	return e.ExecuteInDir("", command, args...)
-}
+func (e *CliExecutor) Execute(c Cmd) (string, string, int, error) {
+	cmd := exec.Command(c.Name, c.Args...)
+	cmd.Dir = c.Dir
 
-// ExecuteInDir runs specified command in the given directory.
-// Returns stdout, stderr, exit code, error
-func (e *CliExecutor) ExecuteInDir(workdir, command string, args ...string) (string, string, int, error) {
-	cmd := exec.Command(command, args...)
-	if workdir != "" {
-		cmd.Dir = workdir
-	}
+	if !c.LogOutput {
+		var stdoutBuf, stderrBuf bytes.Buffer
+		cmd.Stdout = &stdoutBuf
+		cmd.Stderr = &stderrBuf
 
-	var stdoutBuf, stderrBuf bytes.Buffer
-	cmd.Stdout = &stdoutBuf
-	cmd.Stderr = &stderrBuf
+		err := cmd.Run()
 
-	err := cmd.Run()
-
-	return stdoutBuf.String(), stderrBuf.String(), getExitCodeFromError(err), err
-}
-
-// ExecuteWithOutput runs specified command with args while printing stdout and stderr in real time.
-// Returns stdout, stderr, exit code, error
-func (e *CliExecutor) ExecuteWithOutput(command string, args ...string) (string, string, int, error) {
-	return e.ExecuteInDirWithOutput("", command, args...)
-}
-
-// ExecuteInDirWithOutput runs specified command with args in given directory while printing stdout and stderr in real time.
-// Returns stdout, stderr, exit code, error
-func (e *CliExecutor) ExecuteInDirWithOutput(workdir, command string, args ...string) (stdout, stderr string, exitCode int, err error) {
-	cmd := exec.Command(command, args...)
-	if workdir != "" {
-		cmd.Dir = workdir
+		return stdoutBuf.String(), stderrBuf.String(), getExitCodeFromError(err), err
 	}
 
 	stdoutPipe, err := cmd.StdoutPipe()
@@ -81,29 +70,50 @@ func (e *CliExecutor) ExecuteInDirWithOutput(workdir, command string, args ...st
 
 	var stdoutBuf, stderrBuf bytes.Buffer
 
-	readStream := func(linePrefix string, r io.Reader, buf *bytes.Buffer) {
-		scanner := bufio.NewScanner(r)
+	readStream := func(linePrefix string, r io.Reader, buf *bytes.Buffer) error {
+		tee := io.TeeReader(r, buf)
+		scanner := bufio.NewScanner(tee)
 		for scanner.Scan() {
-			line := scanner.Text()
-			executorLog.Info(linePrefix + line)
-			buf.WriteString(line + "\n")
+			executorLog.Info(linePrefix + scanner.Text())
 		}
+		if scanner.Err() != nil {
+			executorLog.Warnf("%sstopped logging output: %s", linePrefix, scanner.Err())
+			// Read the rest of the pipe directly into buf.
+			//
+			// At this point, buf contains everything that was read from r via the scanner
+			// (by property of TeeReader - "the write must complete before the read completes").
+			// A second property of TeeReader that could break this:
+			// "Any error encountered while writing is reported as a read error".
+			// Not a problem here - [bytes.Buffer.Write] never errors, only panics.
+			//
+			// Naturally, buf also doesn't contain anything that *wasn't* read via the scanner,
+			// because the tee being read by the scanner is the only thing doing the writing.
+			// So this Copy() picks up exactly where the scanner left off.
+			if _, err := io.Copy(buf, r); err != nil {
+				return fmt.Errorf("failed to read remaining output: %w", err)
+			}
+		}
+		return nil
 	}
 
-	done := make(chan struct{}, 2)
+	nameInLogs := c.NameInLogs
+	if nameInLogs == "" {
+		nameInLogs = c.Name
+	}
+
+	done := make(chan error, 2)
 	go func() {
-		readStream(command+" [stdout] ", stdoutPipe, &stdoutBuf)
-		done <- struct{}{}
+		done <- readStream(nameInLogs+" [stdout] ", stdoutPipe, &stdoutBuf)
 	}()
 	go func() {
-		readStream(command+" [stderr] ", stderrPipe, &stderrBuf)
-		done <- struct{}{}
+		done <- readStream(nameInLogs+" [stderr] ", stderrPipe, &stderrBuf)
 	}()
 
-	err = cmd.Wait()
-	// Wait for both output streams to finish
-	<-done
-	<-done
+	// Wait for both output streams to finish before calling cmd.Wait().
+	// Per [exec.Cmd.StdoutPipe] docs, Wait closes the pipes, so all reads must complete first.
+	readErr := errors.Join(<-done, <-done)
+	cmdErr := cmd.Wait()
+	err = errors.Join(readErr, cmdErr)
 
 	return stdoutBuf.String(), stderrBuf.String(), getExitCodeFromError(err), err
 }
