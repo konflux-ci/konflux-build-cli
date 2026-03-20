@@ -83,6 +83,15 @@ func (c *GitClone) Run() error {
 		return err
 	}
 
+	// Setup authentication
+	if err := c.setupBasicAuth(); err != nil {
+		return err
+	}
+
+	if err := c.setupSSH(); err != nil {
+		return err
+	}
+
 	// Verify the checkout directory path doesn't escape OutputDir via symlinks
 	// before any destructive operations (clean/clone).
 	if err := c.verifyCheckoutDirContainment(); err != nil {
