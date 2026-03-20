@@ -2,6 +2,7 @@ package cliwrappers_test
 
 import (
 	"errors"
+	"os"
 	"strings"
 	"testing"
 
@@ -671,5 +672,48 @@ func Test_SubmoduleUpdate(t *testing.T) {
 
 		g.Expect(err).To(HaveOccurred())
 		g.Expect(err.Error()).To(ContainSubstring("git submodule failed"))
+	})
+}
+
+func Test_SetEnv(t *testing.T) {
+	g := NewWithT(t)
+
+	t.Run("should pass extra env vars to commands via Cmd.Env", func(t *testing.T) {
+		var capturedEnv []string
+		cli := &cliwrappers.GitCli{
+			Executor: &mockExecutor{executeFunc: func(cmd cliwrappers.Cmd) (string, string, int, error) {
+				capturedEnv = cmd.Env
+				return "", "", 0, nil
+			}},
+			Workdir: "/test/workdir",
+		}
+
+		cli.SetEnv("GIT_SSL_NO_VERIFY", "true")
+		cli.SetEnv("GIT_CONFIG_GLOBAL", "/tmp/.gitconfig")
+
+		_ = cli.Init()
+
+		g.Expect(capturedEnv).ToNot(BeNil())
+		g.Expect(capturedEnv).To(ContainElement("GIT_SSL_NO_VERIFY=true"))
+		g.Expect(capturedEnv).To(ContainElement("GIT_CONFIG_GLOBAL=/tmp/.gitconfig"))
+		g.Expect(len(capturedEnv)).To(BeNumerically(">=", len(os.Environ())))
+	})
+
+	t.Run("should leave Cmd.Env nil when no extra env is set", func(t *testing.T) {
+		var capturedEnv []string
+		envWasCaptured := false
+		cli := &cliwrappers.GitCli{
+			Executor: &mockExecutor{executeFunc: func(cmd cliwrappers.Cmd) (string, string, int, error) {
+				capturedEnv = cmd.Env
+				envWasCaptured = true
+				return "", "", 0, nil
+			}},
+			Workdir: "/test/workdir",
+		}
+
+		_ = cli.Init()
+
+		g.Expect(envWasCaptured).To(BeTrue())
+		g.Expect(capturedEnv).To(BeNil())
 	})
 }
