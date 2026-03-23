@@ -727,13 +727,13 @@ LABEL test.label="secret-dirs-test"
 			t, buildParams, nil, WithVolumeWithOptions(secretsBaseDir, "/secrets", "z"),
 		)
 
-		stdout, _, err := runBuildWithOutput(container, buildParams)
+		_, stderr, err := runBuildWithOutput(container, buildParams)
 		Expect(err).ToNot(HaveOccurred())
 
-		// Verify that the secret values appear in the build output
-		Expect(stdout).To(ContainSubstring("token=secret-token-value"))
-		Expect(stdout).To(ContainSubstring("api-key=secret-api-key-value"))
-		Expect(stdout).To(ContainSubstring("password=secret-password-value"))
+		// Verify that the secret values appear in the build output (stderr contains build logs)
+		Expect(stderr).To(ContainSubstring("token=secret-token-value"))
+		Expect(stderr).To(ContainSubstring("api-key=secret-api-key-value"))
+		Expect(stderr).To(ContainSubstring("password=secret-password-value"))
 
 		// Verify the image exists in buildah's local storage
 		err = container.ExecuteCommand("buildah", "images", outputRef)
@@ -2129,11 +2129,11 @@ FROM image.does.not/exist:1 AS stage-after-target
 
 		container := setupBuildContainerWithCleanup(t, buildParams, nil)
 
-		stdout, _, err := runBuildWithOutput(container, buildParams)
+		_, stderr, err := runBuildWithOutput(container, buildParams)
 		Expect(err).ToNot(HaveOccurred())
 
 		// Stage 0 should be built despite not being needed
-		Expect(stdout).To(ContainSubstring("stage 0 was built"))
+		Expect(stderr).To(ContainSubstring("stage 0 was built"))
 
 		// But the target stage should still be "target"
 		imageMeta := getImageMeta(container, outputRef)
@@ -2176,12 +2176,11 @@ ADD https://1.1.1.1 /cloudflare-1111.html
 
 				container := setupBuildContainerWithCleanup(t, buildParams, nil, opts...)
 
-				stdout, _, err := runBuildWithOutput(container, buildParams)
+				_, stderr, err := runBuildWithOutput(container, buildParams)
 				Expect(err).To(HaveOccurred())
 
-				// kbc prints the error to stderr, but we run it via 'podman exec -t',
-				// which prints everything to stdout
-				Expect(stdout).To(ContainSubstring("dial tcp 1.1.1.1:443: connect: network is unreachable"))
+				// kbc prints the error to stderr
+				Expect(stderr).To(ContainSubstring("dial tcp 1.1.1.1:443: connect: network is unreachable"))
 			}
 
 			t.Run("AsNonRoot", func(t *testing.T) {
@@ -2225,12 +2224,11 @@ RUN if echo > /dev/tcp/8.8.8.8/53; then echo "Has network access!"; exit 1; fi
 
 				container := setupBuildContainerWithCleanup(t, buildParams, nil, opts...)
 
-				stdout, _, err := runBuildWithOutput(container, buildParams)
+				_, stderr, err := runBuildWithOutput(container, buildParams)
 				Expect(err).ToNot(HaveOccurred())
 
-				// kbc prints the build logs to stderr, but we run it via 'podman exec -t',
-				// which prints everything to stdout
-				Expect(stdout).To(ContainSubstring("/dev/tcp/8.8.8.8/53: Network is unreachable"))
+				// kbc prints the build logs to stderr
+				Expect(stderr).To(ContainSubstring("/dev/tcp/8.8.8.8/53: Network is unreachable"))
 			}
 
 			t.Run("AsNonRoot", func(t *testing.T) {
@@ -2368,12 +2366,12 @@ RUN cp /random-data.bin /data/realBaseImage.bin
 
 			container := setupBuildContainerWithCleanup(t, buildParams, imageRegistry)
 
-			stdout, _, err := runBuildWithOutput(container, buildParams)
+			_, stderr, err := runBuildWithOutput(container, buildParams)
 			// Main check: no error (would fail without pre-pulling)
 			Expect(err).ToNot(HaveOccurred())
 
 			// Verify that buildah really did build the unused stage (otherwise we wasted a pull)
-			Expect(stdout).To(ContainSubstring("the unused stage WAS built"))
+			Expect(stderr).To(ContainSubstring("the unused stage WAS built"))
 
 			// Verify that the correct base was pulled for each FROM/from
 			// by checking the sizes of the random-data files

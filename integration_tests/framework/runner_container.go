@@ -333,7 +333,7 @@ func (c *TestRunnerContainer) ExecuteBuildCli(args ...string) error {
 // stdout, stderr, and error.
 func (c *TestRunnerContainer) ExecuteCommandWithOutput(command string, args ...string) (string, string, error) {
 	c.ensureContainerRunning()
-	execArgs := []string{"exec", "-t", c.name}
+	execArgs := []string{"exec", c.name}
 	execArgs = append(execArgs, command)
 	execArgs = append(execArgs, args...)
 
@@ -362,7 +362,7 @@ func (c *TestRunnerContainer) debugBuildCli(cliArgs ...string) error {
 		return err
 	}
 
-	execArgs := []string{"exec", "-t", c.name}
+	execArgs := []string{"exec", c.name}
 	execArgs = append(execArgs, "dlv", "--listen=0.0.0.0:2345", "--headless=true", "--log=true", "--api-version=2", "exec", "/usr/bin/"+KonfluxBuildCli)
 	if len(cliArgs) > 0 {
 		execArgs = append(execArgs, "--")
@@ -406,7 +406,7 @@ func (c *TestRunnerContainer) GetTaskResultValue(resultFilePath string) (string,
 }
 
 func (c *TestRunnerContainer) GetHomeDir() (string, error) {
-	execCmd := []string{"exec", "-t", c.name, "bash", "-c", "echo -n $HOME"}
+	execCmd := []string{"exec", c.name, "bash", "-c", "echo -n $HOME"}
 	homeDir, _, _, err := c.executor.Execute(cliWrappers.Command(containerTool, execCmd...))
 	if err != nil {
 		return "", err

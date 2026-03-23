@@ -295,6 +295,7 @@ func (z *ZotRegistry) GetImageIndexInfo(imageName, tag string) (*ImageIndexManif
 	if err := json.Unmarshal(body, imageIndexInfo); err != nil {
 		return nil, fmt.Errorf("error unmarshaling response JSON: %v", err)
 	}
+	imageIndexInfo.RawManifest = body
 
 	return imageIndexInfo, nil
 }
