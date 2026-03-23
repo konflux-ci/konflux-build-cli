@@ -229,6 +229,7 @@ func (z *QuayRegistry) GetImageIndexInfo(repo, tag string) (*ImageIndexManifest,
 	if err := json.Unmarshal(body, imageIndexInfo); err != nil {
 		return nil, fmt.Errorf("error unmarshaling response JSON: %v", err)
 	}
+	imageIndexInfo.RawManifest = body
 
 	return imageIndexInfo, nil
 }

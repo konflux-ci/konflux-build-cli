@@ -33,8 +33,9 @@ type ImageRegistry interface {
 }
 
 type ImageIndexManifest struct {
-	MediaType string          `json:"mediaType,omitempty"`
-	Manifests []ImageManifest `json:"manifests,omitempty"`
+	MediaType   string          `json:"mediaType,omitempty"`
+	Manifests   []ImageManifest `json:"manifests,omitempty"`
+	RawManifest []byte          `json:"-"`
 }
 type ImageManifest struct {
 	MediaType string `json:"mediaType,omitempty"`
