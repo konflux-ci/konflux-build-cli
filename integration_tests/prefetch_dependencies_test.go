@@ -74,7 +74,7 @@ func runPrefetchDependencies(params prefetchDependenciesTestParams) error {
 		args = append(args, "--output-dir-mount-point", params.OutputDirMountPoint)
 	}
 	if len(params.EnvFiles) > 0 {
-		args = append(args, "--env-file")
+		args = append(args, "--env-files")
 		args = append(args, params.EnvFiles...)
 	}
 	return container.ExecuteBuildCli(args...)

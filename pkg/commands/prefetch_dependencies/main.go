@@ -84,7 +84,7 @@ func (pd *PrefetchDependencies) Run() error {
 		return fmt.Errorf("hermeto fetch-deps command failed: %w", err)
 	}
 
-	for _, envFile := range pd.Config.EnvFile {
+	for _, envFile := range pd.Config.EnvFiles {
 		generateEnvParams := cliwrappers.HermetoGenerateEnvParams{
 			OutputDir:    pd.Config.OutputDir,
 			ForOutputDir: pd.Config.OutputDirMountPoint,
