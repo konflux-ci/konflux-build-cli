@@ -7,6 +7,8 @@ import (
 	"github.com/konflux-ci/konflux-build-cli/pkg/cliwrappers"
 	"github.com/konflux-ci/konflux-build-cli/pkg/common"
 	"github.com/konflux-ci/konflux-build-cli/pkg/logger"
+	c "github.com/konflux-ci/konflux-build-cli/pkg/common"
+	cfg "github.com/konflux-ci/konflux-build-cli/pkg/config"
 
 	"github.com/spf13/cobra"
 )
@@ -17,20 +19,53 @@ type PrefetchDependencies struct {
 	Config     *Params
 	HermetoCli cliwrappers.HermetoCliInterface
 }
+type ConfigReaderFactory = func() (cfg.ConfigReader, error)
+
+func getHermetoEnvFromConfigMap(configReaderFactory ConfigReaderFactory) (c.ProcEnvironment, error) {
+	hermetoEnv := c.ProcEnvironment{}
+	configMapReader, err := configReaderFactory()
+	if err != nil { return hermetoEnv, err }
+	configMap, err := configMapReader.ReadConfigData()
+	// Empty strings must be dropped right here, otherwise they will confuse Hermeto.
+	// It apears that the least repetitive way of conversion between configMap fields
+	// and variables is an explicit mapping:
+	if configMap != nil {
+		if configMap.HermetoNpmProxy != "" {
+			hermetoEnv["HERMETO_NPM__PROXY_URL"] = configMap.HermetoNpmProxy
+		}
+	}
+	return hermetoEnv, err
+}
+
+// Constructs an execution environment accepted by exec.Cmd.Env
+func constructHermetoEnv (env c.ProcEnvironment) []string {
+	processedEnv := []string{}
+	for varName, varValue := range env {
+		envEntry := fmt.Sprintf("%s=%s", varName, varValue)
+		processedEnv = append(processedEnv, envEntry)
+	}
+	return processedEnv
+}
 
 func New(cmd *cobra.Command) (*PrefetchDependencies, error) {
-	config := Params{}
-	if err := common.ParseParameters(cmd, ParamsConfig, &config); err != nil {
+	local_config := Params{}
+	if err := common.ParseParameters(cmd, ParamsConfig, &local_config); err != nil {
 		return nil, err
 	}
 
+	hermetoEnv, err := getHermetoEnvFromConfigMap(cfg.NewConfigReader)
+	if err != nil {
+		log.Warnf("Failed to extract Hermeto environment settings from ConfigMap: %+v", err)
+	}
+	processedEnv := constructHermetoEnv(hermetoEnv)
+
 	executor := cliwrappers.NewCliExecutor()
-	hermetoCli, err := cliwrappers.NewHermetoCli(executor)
+	hermetoCli, err := cliwrappers.NewHermetoCli(executor, processedEnv)
 	if err != nil {
 		return nil, err
 	}
 
-	prefetchDependencies := PrefetchDependencies{Config: &config, HermetoCli: hermetoCli}
+	prefetchDependencies := PrefetchDependencies{Config: &local_config, HermetoCli: hermetoCli}
 	return &prefetchDependencies, nil
 }
 
