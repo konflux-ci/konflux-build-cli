@@ -12,9 +12,15 @@ import (
 )
 
 type KonfluxInfo struct {
-	AllowCacheProxy string
-	HttpProxy       string
-	NoProxy         string
+	AllowCacheProxy 			string
+	HttpProxy       			string
+	NoProxy         			string
+
+	// Address of a package registry proxy serving npm packages
+	HermetoNpmProxy 			string
+	// Global setting allowing of forbidding usage of package registry rpoxies
+	// on the cluster level.
+	HermetoPackageRegistryProxyAllowed	string
 }
 
 // ConfigReader defines the interface for reading config data.
@@ -58,6 +64,8 @@ func (y *IniFileReader) ReadConfigData() (*KonfluxInfo, error) {
 		AllowCacheProxy: cfg.Section("cache-proxy").Key("allow-cache-proxy").String(),
 		HttpProxy:       cfg.Section("cache-proxy").Key("http-proxy").String(),
 		NoProxy:         cfg.Section("cache-proxy").Key("no-proxy").String(),
+		HermetoNpmProxy: cfg.Section("artifact-registry").Key("package-registry-proxy-npm").String(),
+		HermetoPackageRegistryProxyAllowed: cfg.Section("artifact-registry").Key("allow-package-registry-proxy").String(),
 	}
 
 	return newCacheProxy, nil
@@ -71,9 +79,11 @@ func (k *K8sConfigMapReader) ReadConfigData() (*KonfluxInfo, error) {
 		return nil, fmt.Errorf("failed to get configmap %s/%s: %w", k.Namespace, k.Name, err)
 	}
 	newCacheProxy := &KonfluxInfo{
-		AllowCacheProxy: configMap.Data["allow-cache-proxy"],
-		HttpProxy:       configMap.Data["http-proxy"],
-		NoProxy:         configMap.Data["no-proxy"],
+		AllowCacheProxy: 			configMap.Data["allow-cache-proxy"],
+		HttpProxy:       			configMap.Data["http-proxy"],
+		NoProxy:         			configMap.Data["no-proxy"],
+		HermetoNpmProxy: 			configMap.Data["hermeto-npm-proxy"],
+		HermetoPackageRegistryProxyAllowed: 	configMap.Data["allow-package-registry-proxy"],
 	}
 	return newCacheProxy, nil
 }
