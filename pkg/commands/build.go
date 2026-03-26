@@ -2,6 +2,7 @@ package commands
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"io/fs"
@@ -18,6 +19,7 @@ import (
 	"github.com/containers/image/v5/docker/reference"
 	cliWrappers "github.com/konflux-ci/konflux-build-cli/pkg/cliwrappers"
 	"github.com/konflux-ci/konflux-build-cli/pkg/common"
+	dfeditor "github.com/konflux-ci/konflux-build-cli/pkg/common/containerfile_editor"
 	"github.com/opencontainers/go-digest"
 	"github.com/spf13/cobra"
 
@@ -26,6 +28,11 @@ import (
 	"github.com/keilerkonzept/dockerfile-json/pkg/dockerfile"
 	l "github.com/konflux-ci/konflux-build-cli/pkg/logger"
 	"github.com/moby/buildkit/frontend/dockerfile/instructions"
+)
+
+const (
+	defaultPrefetchOutputMount = "/tmp/.prefetch-output"
+	defaultPrefetchEnvMount    = "/tmp/.prefetch.env"
 )
 
 var BuildParamsConfig = map[string]common.Parameter{
@@ -252,6 +259,34 @@ var BuildParamsConfig = map[string]common.Parameter{
 		DefaultValue: "",
 		Usage:        "Set an alternative mount destination for the merged yum-repos-d-sources dir (default is /etc/yum.repos.d).",
 	},
+	"prefetch-dir": {
+		Name:       "prefetch-dir",
+		ShortName:  "",
+		EnvVarName: "KBC_BUILD_PREFETCH_DIR",
+		TypeKind:   reflect.String,
+		Usage:      "Directory containing the outputs of the prefetch-dependencies subcommand.\nShould have a prefetch.env file in the root and an output/ subdirectory.",
+	},
+	"prefetch-dir-copy": {
+		Name:       "prefetch-dir-copy",
+		ShortName:  "",
+		EnvVarName: "KBC_BUILD_PREFETCH_DIR_COPY",
+		TypeKind:   reflect.String,
+		Usage:      "Set an alternative path where to copy the prefetch directory.\nDefaults to a randomly named directory alongside prefetch-dir. Must not already exist. Removed on exit.",
+	},
+	"prefetch-output-mount": {
+		Name:       "prefetch-output-mount",
+		ShortName:  "",
+		EnvVarName: "KBC_BUILD_PREFETCH_OUTPUT_MOUNT",
+		TypeKind:   reflect.String,
+		Usage:      "Set an alternative mount destination for the prefetch output (default is " + defaultPrefetchOutputMount + ").",
+	},
+	"prefetch-env-mount": {
+		Name:       "prefetch-env-mount",
+		ShortName:  "",
+		EnvVarName: "KBC_BUILD_PREFETCH_ENV_MOUNT",
+		TypeKind:   reflect.String,
+		Usage:      "Set an alternative mount destination for the prefetch env file (default is " + defaultPrefetchEnvMount + ")\nThis path usually doesn't matter, containerfiles never need to access it explicitly.",
+	},
 	"resolved-base-images-output": {
 		Name:       "resolved-base-images-output",
 		ShortName:  "",
@@ -292,6 +327,10 @@ type BuildParams struct {
 	ImagePullNoProxy           string   `paramName:"image-pull-noproxy"`
 	YumReposDSources           []string `paramName:"yum-repos-d-sources"`
 	YumReposDTarget            string   `paramName:"yum-repos-d-target"`
+	PrefetchDir                string   `paramName:"prefetch-dir"`
+	PrefetchDirCopy            string   `paramName:"prefetch-dir-copy"`
+	PrefetchOutputMount        string   `paramName:"prefetch-output-mount"`
+	PrefetchEnvMount           string   `paramName:"prefetch-env-mount"`
 	ResolvedBaseImagesOutput   string   `paramName:"resolved-base-images-output"`
 	ExtraArgs                  []string // Additional arguments to pass to buildah build
 }
@@ -326,6 +365,9 @@ type Build struct {
 	// temporary workdir and related paths
 	tempWorkdir           string
 	containerfileCopyPath string
+
+	// temporary files/directories that could not be placed inside the tempWorkdir
+	tempFilesOutsideWorkdir []string
 }
 
 func NewBuild(cmd *cobra.Command, extraArgs []string) (*Build, error) {
@@ -352,6 +394,11 @@ func (c *Build) cleanup() {
 	if c.tempWorkdir != "" {
 		if err := os.RemoveAll(c.tempWorkdir); err != nil {
 			l.Logger.Warnf("Failed to clean up temporary workdir %s: %s", c.tempWorkdir, err)
+		}
+	}
+	for _, p := range c.tempFilesOutsideWorkdir {
+		if err := os.RemoveAll(p); err != nil {
+			l.Logger.Warnf("Failed to clean up temporary path %s: %s", p, err)
 		}
 	}
 }
@@ -387,6 +434,19 @@ func (c *Build) ensureTempWorkdirExists() error {
 		c.tempWorkdir = tempWorkdir
 	}
 
+	return nil
+}
+
+func (c *Build) ensureContainerfileCopied() error {
+	if c.containerfileCopyPath != "" {
+		return nil
+	}
+	containerfileCopy, err := c.copyToTempWorkdir(c.containerfilePath)
+	if err != nil {
+		return fmt.Errorf("creating containerfile copy: %w", err)
+	}
+	l.Logger.Debugf("Copied containerfile to %s", containerfileCopy)
+	c.containerfileCopyPath = containerfileCopy
 	return nil
 }
 
@@ -449,7 +509,12 @@ func (c *Build) Run() error {
 		return err
 	}
 
-	if err := c.prepareYumReposMount(); err != nil {
+	prefetchResources, err := c.integrateWithPrefetch()
+	if err != nil {
+		return fmt.Errorf("setting up prefetch integration: %w", err)
+	}
+
+	if err := c.prepareYumReposMount(prefetchResources); err != nil {
 		return fmt.Errorf("preparing yum.repos.d mount: %w", err)
 	}
 
@@ -521,6 +586,12 @@ func (c *Build) validateParams() error {
 
 	if c.Params.YumReposDTarget != "" && !filepath.IsAbs(c.Params.YumReposDTarget) {
 		return fmt.Errorf("yum-repos-d-target must be an absolute path, got '%s'", c.Params.YumReposDTarget)
+	}
+
+	if c.Params.PrefetchDirCopy != "" {
+		if _, err := os.Lstat(c.Params.PrefetchDirCopy); !os.IsNotExist(err) {
+			return fmt.Errorf("prefetch-dir-copy must not be an existing path: %s", c.Params.PrefetchDirCopy)
+		}
 	}
 
 	if c.Params.RewriteTimestamp && c.Params.SourceDateEpoch == "" {
@@ -692,12 +763,282 @@ func isRegular(entry os.DirEntry, dir string) (bool, error) {
 	return false, nil
 }
 
+type prefetchResources struct {
+	outputDir string
+	envFile   string
+	yumReposD string
+}
+
+func findPrefetchResources(prefetchDir string) (*prefetchResources, error) {
+	var resources prefetchResources
+
+	outputDir := filepath.Join(prefetchDir, "output")
+	if _, err := os.Lstat(outputDir); err == nil {
+		l.Logger.Debugf("Found prefetched dependencies: %s", outputDir)
+		resources.outputDir = outputDir
+	} else if !os.IsNotExist(err) {
+		return nil, err
+	}
+
+	// For backwards compatibility, also look for cachi2.env (but prefetch.env is preferred)
+	for _, envfile := range []string{"prefetch.env", "cachi2.env"} {
+		envfilePath := filepath.Join(prefetchDir, envfile)
+		if _, err := os.Lstat(envfilePath); err == nil {
+			l.Logger.Debugf("Found prefetch env file: %s", envfilePath)
+			resources.envFile = envfilePath
+			break
+		} else if !os.IsNotExist(err) {
+			return nil, err
+		}
+	}
+
+	currentArch := goArchToArchitectureLabel(runtime.GOARCH)
+
+	reposD := filepath.Join(prefetchDir, "output", "deps", "rpm", currentArch, "repos.d")
+	if _, err := os.Lstat(reposD); err == nil {
+		l.Logger.Debugf("Found prefetch yum repos for current architecture: %s", reposD)
+		resources.yumReposD = reposD
+	} else if !os.IsNotExist(err) {
+		return nil, err
+	}
+
+	return &resources, nil
+}
+
+func (c *Build) integrateWithPrefetch() (*prefetchResources, error) {
+	if c.Params.PrefetchDir == "" {
+		return nil, nil
+	}
+
+	l.Logger.Info("Setting up prefetch integration...")
+
+	prefetchDirCopy, err := c.copyPrefetchDir()
+	if err != nil {
+		return nil, fmt.Errorf("copying prefetch resources: %w", err)
+	}
+
+	resources, err := findPrefetchResources(prefetchDirCopy)
+	if err != nil {
+		return nil, fmt.Errorf("looking for prefetch resources in %s: %w", prefetchDirCopy, err)
+	}
+
+	if resources.outputDir != "" {
+		outputMountPath := c.Params.PrefetchOutputMount
+		if outputMountPath == "" {
+			outputMountPath = defaultPrefetchOutputMount
+		}
+
+		c.buildahVolumes = append(c.buildahVolumes, cliWrappers.BuildahVolume{
+			HostDir:      resources.outputDir,
+			ContainerDir: outputMountPath,
+			Options:      "z",
+		})
+	}
+
+	if resources.envFile != "" {
+		envMountPath := c.Params.PrefetchEnvMount
+		if envMountPath == "" {
+			envMountPath = defaultPrefetchEnvMount
+		}
+
+		c.buildahVolumes = append(c.buildahVolumes, cliWrappers.BuildahVolume{
+			HostDir:      resources.envFile,
+			ContainerDir: envMountPath,
+			Options:      "z",
+		})
+
+		l.Logger.Debug("Modifying containerfile to apply prefetch env")
+		if err := c.injectPrefetchEnvToContainerfile(envMountPath); err != nil {
+			return nil, fmt.Errorf("modifying containerfile to apply prefetch env: %w", err)
+		}
+	}
+
+	return resources, nil
+}
+
+// Copy the relevant resources from the prefetch dir to a temporary directory.
+// Note that this temporary directory can't go to /tmp (and by extension, can't go tempWorkdir)
+// because the size of the prefetched dependencies is often too large for a tmpfs.
+//
+// Reasons why we need to copy:
+//   - All the prefetch resources need to be rw to everyone. Any user in the containerfile
+//     may need to write to GOCACHE, for example. We can't expect to always have ownership of
+//     the prefetch dir, so we can't chmod it directly. But we can chmod a copy.
+//   - If the RUN instructions in the containerfile modify the content of the prefetch dir,
+//     this should not affect the original host directory. Mounting with the O option (overlay)
+//     could solve this, but doesn't seem to work for rootless buildah.
+//   - The build shouldn't mount the entire prefetch tree, because it may contain RPMs for arches
+//     other than the current arch, and we don't want to make unnecessary content available to
+//     the build (this content may be unaccounted for in the SBOM). This function only copies
+//     the relevant deps directories.
+//
+// Ideally, the temporary directory should be on the same filesystem as the original prefetch dir,
+// which allows io.Copy to use CoW copies on some filesystems like btrfs or xfs. When successful,
+// this avoids duplicating the potentially massive amount of underlying data.
+// This function tries to achieve that by copying to a subdirectory of the original prefetch-dir,
+// but the user can override this with --prefetch-dir-copy in case the prefetch dir is not writable.
+func (c *Build) copyPrefetchDir() (string, error) {
+	prefetchDir := c.Params.PrefetchDir
+	prefetchDirCopy := c.Params.PrefetchDirCopy
+
+	if prefetchDirCopy != "" {
+		err := os.Mkdir(prefetchDirCopy, 0755)
+		if err != nil {
+			return "", err
+		}
+	} else {
+		// Default to a subdirectory of the original prefetch dir to guarantee same filesystem
+		pdcopy, err := os.MkdirTemp(prefetchDir, "copy-*")
+		if err != nil {
+			return "", err
+		}
+		prefetchDirCopy = pdcopy
+	}
+	c.tempFilesOutsideWorkdir = append(c.tempFilesOutsideWorkdir, prefetchDirCopy)
+
+	l.Logger.Debugf("Copying prefetch resources to %s", prefetchDirCopy)
+
+	currentArch := goArchToArchitectureLabel(runtime.GOARCH)
+	// Clean the filepaths, we do string comparisons below
+	prefetchDir = filepath.Clean(prefetchDir)
+	prefetchDirCopy = filepath.Clean(prefetchDirCopy)
+
+	err := filepath.WalkDir(prefetchDir, func(srcPath string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+
+		// Skip the root, we've already created the destination directory
+		if srcPath == prefetchDir {
+			return nil
+		}
+		// If we find the target dir while walking the source dir, don't recurse into it
+		if srcPath == prefetchDirCopy {
+			l.Logger.Debugf("Skipping %s, it's the target dir", srcPath)
+			return filepath.SkipDir
+		}
+
+		relPath, err := filepath.Rel(prefetchDir, srcPath)
+		if err != nil {
+			// probably impossible
+			return fmt.Errorf("failed to make prefetchDir subpath relative to prefetchDir: %w", err)
+		}
+
+		// Don't recurse into output/deps/rpm/${arch} directories unless the arch matches ours
+		isRPM := filepath.Dir(relPath) == filepath.Join("output", "deps", "rpm")
+		if isRPM && filepath.Base(srcPath) != currentArch {
+			l.Logger.Debugf("Skipping %s, does not match the current architecture (%s)", srcPath, currentArch)
+			return filepath.SkipDir
+		}
+
+		dstPath := filepath.Join(prefetchDirCopy, relPath)
+
+		switch d.Type() {
+		case os.ModeDir:
+			return os.Mkdir(dstPath, 0755)
+		case os.ModeSymlink:
+			target, err := os.Readlink(srcPath)
+			if err != nil {
+				return err
+			}
+			return os.Symlink(target, dstPath)
+		case 0: // regular
+			return copyFile(srcPath, dstPath)
+		default:
+			return fmt.Errorf("unsupported file %s, type bits: %#o", srcPath, d.Type())
+		}
+	})
+	if err != nil {
+		return "", err
+	}
+
+	// All containerfile users need write permissions
+	if err := chmodAddRWX(prefetchDirCopy); err != nil {
+		return "", fmt.Errorf("adding +rwX: %w", err)
+	}
+
+	return prefetchDirCopy, nil
+}
+
+// Copy srcPath to dstPath, preserving permissions.
+func copyFile(srcPath, dstPath string) error {
+	info, err := os.Stat(srcPath)
+	if err != nil {
+		return err
+	}
+
+	src, err := os.Open(srcPath)
+	if err != nil {
+		return err
+	}
+	defer src.Close()
+
+	dst, err := os.OpenFile(dstPath, os.O_CREATE|os.O_WRONLY|os.O_EXCL, info.Mode().Perm())
+	if err != nil {
+		return err
+	}
+
+	_, err = io.Copy(dst, src)
+	if err != nil {
+		// we already have an error and want to return that one
+		_ = dst.Close()
+		return fmt.Errorf("copy %s to %s: %w", srcPath, dstPath, err)
+	}
+
+	return dst.Close()
+}
+
+// Modifies RUN instructions in the Containerfile to source the env file at the beginning,
+// after any options like --mount. Skips exec-form RUN instructions and bare heredocs
+// ('RUN sh <<EOF' is supported, 'RUN <<EOF' isn't).
+func (c *Build) injectPrefetchEnvToContainerfile(envMountPath string) error {
+	if err := c.ensureContainerfileCopied(); err != nil {
+		return err
+	}
+
+	content, err := os.ReadFile(c.containerfileCopyPath)
+	if err != nil {
+		return fmt.Errorf("reading containerfile copy: %w", err)
+	}
+
+	injector := dfeditor.RunInjector{OnUnsupported: func(lineno int, err error) {
+		switch {
+		case errors.Is(err, dfeditor.ErrRunNoOp):
+			l.Logger.Warnf("Applying prefetch env: skipping RUN instruction on line %d, appears effectively empty", lineno)
+		case errors.Is(err, dfeditor.ErrRunHeredoc):
+			l.Logger.Warnf("Applying prefetch env: skipping unsupported RUN instruction on line %d (heredoc). "+
+				"Please specify the interpreter explicitly (e.g. '/bin/sh <<EOF' instead of just '<<EOF').", lineno)
+		case errors.Is(err, dfeditor.ErrRunExec):
+			l.Logger.Warnf("Applying prefetch env: skipping unsupported RUN instruction on line %d (exec form). "+
+				"Please use the shell form instead if possible (not a JSON array).", lineno)
+		default:
+			l.Logger.Warnf("Applying prefetch.env: skipping RUN instruction on line %d due to unexpected error: %s", lineno, err)
+		}
+	}}
+
+	injection := fmt.Sprintf(". %s && \\\n    ", cliWrappers.ShellQuote(envMountPath))
+
+	result, err := injector.Inject(string(content), injection)
+	if err != nil {
+		return fmt.Errorf("modifying containerfile to apply prefetch env: %w", err)
+	}
+
+	if err := os.WriteFile(c.containerfileCopyPath, []byte(result), 0644); err != nil {
+		return fmt.Errorf("writing modified containerfile: %w", err)
+	}
+	return nil
+}
+
 // Copies regular files from all yum-repos-d-sources to a subdirectory in the tempWorkdir.
 // On filename conflict, the file found later replaces the one found earlier.
 //
 // Adds a buildahVolumes mount that mounts the subdirectory at yum-repos-d-target.
-func (c *Build) prepareYumReposMount() error {
-	if len(c.Params.YumReposDSources) == 0 {
+func (c *Build) prepareYumReposMount(prefetchResources *prefetchResources) error {
+	reposDSources := c.Params.YumReposDSources
+	if prefetchResources != nil && prefetchResources.yumReposD != "" {
+		reposDSources = append(reposDSources, prefetchResources.yumReposD)
+	}
+	if len(reposDSources) == 0 {
 		return nil
 	}
 
@@ -714,7 +1055,7 @@ func (c *Build) prepareYumReposMount() error {
 
 	seen := make(map[string]string) // filename -> source directory that provided it
 
-	for _, srcDir := range c.Params.YumReposDSources {
+	for _, srcDir := range reposDSources {
 		entries, err := os.ReadDir(srcDir)
 		if err != nil {
 			return fmt.Errorf("reading yum.repos.d source %s: %w", srcDir, err)
@@ -1019,13 +1360,9 @@ func (c *Build) injectBuildinfo(df *dockerfile.Dockerfile, userLabels []string) 
 		return fmt.Errorf("writing labels.json to buildinfo dir: %w", err)
 	}
 
-	// Copy containerfile and modify the copy
-	containerfileCopy, err := c.copyToTempWorkdir(c.containerfilePath)
-	if err != nil {
-		return fmt.Errorf("creating containerfile copy: %w", err)
+	if err := c.ensureContainerfileCopied(); err != nil {
+		return err
 	}
-	l.Logger.Debugf("Copied containerfile to %s", containerfileCopy)
-	c.containerfileCopyPath = containerfileCopy
 
 	appendLines := []string{"COPY --from=.konflux-buildinfo . /usr/share/buildinfo/"}
 	if c.Params.IncludeLegacyBuildinfoPath {
@@ -1037,7 +1374,7 @@ func (c *Build) injectBuildinfo(df *dockerfile.Dockerfile, userLabels []string) 
 	// prepend a newline in case the input containerfile doesn't end with one
 	appendContent := "\n" + strings.Join(appendLines, "\n") + "\n"
 
-	if err := appendToFile(containerfileCopy, appendContent); err != nil {
+	if err := appendToFile(c.containerfileCopyPath, appendContent); err != nil {
 		return fmt.Errorf("writing to containerfile copy: %w", err)
 	}
 
