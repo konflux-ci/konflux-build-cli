@@ -95,6 +95,13 @@ var ParamsConfig = map[string]common.Parameter{
 		Usage:        "directory with git auth credentials (.git-credentials, .gitconfig or username/password)",
 		Required:     false,
 	},
+	"use-package-registry-proxy": {
+		Name:       "use-package-registry-proxy",
+		EnvVarName: "USE_PACKAGE_REGISTRY_PROXY",
+		TypeKind:   reflect.String,
+		Usage:      "Whether to use package registry proxy proxy or not. Defaults to true.",
+		DefaultValue: "true",
+	},
 }
 
 type Params struct {
@@ -109,4 +116,5 @@ type Params struct {
 	RHSMOrg             string   `paramName:"rhsm-org"`
 	RHSMActivationKey   string   `paramName:"rhsm-activation-key"`
 	GitAuthDirectory    string   `paramName:"git-auth-directory"`
+	UsePackageRegistryProxy string   `paramName:"use-package-registry-proxy"`
 }
