@@ -21,7 +21,7 @@ type PrefetchDependencies struct {
 }
 type ConfigReaderFactory = func() (cfg.ConfigReader, error)
 
-func getHermetoEnvFromConfigMap(configReaderFactory ConfigReaderFactory) (c.ProcEnvironment, error) {
+func getPackageProxyConfiguration(configReaderFactory ConfigReaderFactory) (c.ProcEnvironment, error) {
 	hermetoEnv := c.ProcEnvironment{}
 	configMapReader, err := configReaderFactory()
 	if err != nil { return hermetoEnv, err }
@@ -47,17 +47,24 @@ func constructHermetoEnv (env c.ProcEnvironment) []string {
 	return processedEnv
 }
 
+func packageRegistryProxyEnabledInTaskDefinition() bool {
+	return true
+}
+
 func New(cmd *cobra.Command) (*PrefetchDependencies, error) {
 	local_config := Params{}
 	if err := common.ParseParameters(cmd, ParamsConfig, &local_config); err != nil {
 		return nil, err
 	}
 
-	hermetoEnv, err := getHermetoEnvFromConfigMap(cfg.NewConfigReader)
+	hermetoEnv, err := getPackageProxyConfiguration(cfg.NewConfigReader)
 	if err != nil {
 		log.Warnf("Failed to extract Hermeto environment settings from ConfigMap: %+v", err)
 	}
-	processedEnv := constructHermetoEnv(hermetoEnv)
+	processedEnv := []string{}
+	if local_config.UsePackageRegistryProxy == "true" {
+		processedEnv = constructHermetoEnv(hermetoEnv)
+	}
 
 	executor := cliwrappers.NewCliExecutor()
 	hermetoCli, err := cliwrappers.NewHermetoCli(executor, processedEnv)

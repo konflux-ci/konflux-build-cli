@@ -34,6 +34,7 @@ func Test_getHermetoEnvFromConfigMap(t *testing.T) {
 				"http-proxy":        testHttpProxy,
 				"no-proxy":          "",
 				"hermeto-npm-proxy": fake_proxy_url,
+				"allow-package-registry-proxy": "true",
 			},
 		}
 		ctx := context.Background()
@@ -42,18 +43,19 @@ func Test_getHermetoEnvFromConfigMap(t *testing.T) {
 			return fakeK8sConfigMapReader, nil
 		}
 
-		parsed_config_map, err := getHermetoEnvFromConfigMap(fakeConfigReaderFactory)
+		parsed_config_map, err := getPackageProxyConfiguration(fakeConfigReaderFactory)
 
 		g.Expect(err).ToNot(HaveOccurred())
 		g.Expect(parsed_config_map).ToNot(BeNil())
 		g.Expect(parsed_config_map["HERMETO_NPM__PROXY_URL"]).To(Equal(fake_proxy_url))
+	})
 
 	t.Run("returns empty env when there is an error creating config map reader", func(t *testing.T) {
 		fakeConfigReaderFactory := func() (config.ConfigReader, error) {
 			return nil, fmt.Errorf("Fake error")
 		}
 
-		parsed_config_map, err := getHermetoEnvFromConfigMap(fakeConfigReaderFactory)
+		parsed_config_map, err := getPackageProxyConfiguration(fakeConfigReaderFactory)
 
 		g.Expect(err).To(HaveOccurred())
 		g.Expect(parsed_config_map).To(BeEmpty())
@@ -75,7 +77,7 @@ func Test_getHermetoEnvFromConfigMap(t *testing.T) {
 			return fakeK8sConfigMapReader, nil
 		}
 
-		parsed_config_map, err := getHermetoEnvFromConfigMap(fakeConfigReaderFactory)
+		parsed_config_map, err := getPackageProxyConfiguration(fakeConfigReaderFactory)
 
 		g.Expect(err).ToNot(HaveOccurred())
 		g.Expect(parsed_config_map).To(BeEmpty())
@@ -103,11 +105,10 @@ func Test_getHermetoEnvFromConfigMap(t *testing.T) {
 			return fakeK8sConfigMapReader, nil
 		}
 
-		parsed_config_map, err := getHermetoEnvFromConfigMap(fakeConfigReaderFactory)
+		parsed_config_map, err := getPackageProxyConfiguration(fakeConfigReaderFactory)
 
 		g.Expect(err).ToNot(HaveOccurred())
 		g.Expect(parsed_config_map).ToNot(BeNil())
 		g.Expect(parsed_config_map).To(BeEmpty())
-	})
 	})
 }
