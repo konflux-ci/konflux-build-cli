@@ -792,7 +792,7 @@ func findPrefetchResources(prefetchDir string) (*prefetchResources, error) {
 		}
 	}
 
-	currentArch := goArchToArchitectureLabel(runtime.GOARCH)
+	currentArch := goArchToRpmArch(runtime.GOARCH)
 
 	reposD := filepath.Join(prefetchDir, "output", "deps", "rpm", currentArch, "repos.d")
 	if _, err := os.Lstat(reposD); err == nil {
@@ -898,7 +898,7 @@ func (c *Build) copyPrefetchDir() (string, error) {
 
 	l.Logger.Debugf("Copying prefetch resources to %s", prefetchDirCopy)
 
-	currentArch := goArchToArchitectureLabel(runtime.GOARCH)
+	currentArch := goArchToRpmArch(runtime.GOARCH)
 	// Clean the filepaths, we do string comparisons below
 	prefetchDir = filepath.Clean(prefetchDir)
 	prefetchDirCopy = filepath.Clean(prefetchDirCopy)
@@ -1253,7 +1253,7 @@ func (c *Build) processLabelsAndAnnotations() error {
 	if c.Params.AddLegacyLabels {
 		defaultLabels = append(defaultLabels, "build-date="+buildTimeStr)
 
-		arch := goArchToArchitectureLabel(runtime.GOARCH)
+		arch := goArchToRpmArch(runtime.GOARCH)
 		defaultLabels = append(defaultLabels, "architecture="+arch)
 
 		if c.Params.ImageSource != "" {
@@ -1324,11 +1324,8 @@ func parseAnnotationsFile(filePath string) ([]string, error) {
 	return annotationStrings, nil
 }
 
-// Convert Go's GOARCH value to the value used for the 'architecture' label.
-//
-// Historically, the 'architecture' label used the RPM architecture names rather
-// than the GOARCH names. Keep that the same.
-func goArchToArchitectureLabel(goarch string) string {
+// Convert a supported GOARCH value to the corresponding RPM architecture name.
+func goArchToRpmArch(goarch string) string {
 	switch goarch {
 	case "amd64":
 		return "x86_64"

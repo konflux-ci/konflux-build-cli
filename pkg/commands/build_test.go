@@ -1145,7 +1145,7 @@ func Test_goArchToArchitectureLabel(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-		result := goArchToArchitectureLabel(tc.goarch)
+		result := goArchToRpmArch(tc.goarch)
 		g.Expect(result).To(Equal(tc.expected), "goArchToUname(%s) should return %s", tc.goarch, tc.expected)
 	}
 }
@@ -1249,7 +1249,7 @@ func Test_Build_processLabelsAndAnnotations(t *testing.T) {
 		err := c.processLabelsAndAnnotations()
 		g.Expect(err).ToNot(HaveOccurred())
 
-		arch := goArchToArchitectureLabel(runtime.GOARCH)
+		arch := goArchToRpmArch(runtime.GOARCH)
 		g.Expect(c.mergedLabels).To(Equal([]string{
 			"org.opencontainers.image.created=2026-01-01T00:00:00Z",
 			"org.opencontainers.image.source=https://github.com/org/repo",
@@ -2255,7 +2255,7 @@ func Test_Build_copyPrefetchDir(t *testing.T) {
 	t.Run("filters RPM dirs by architecture", func(t *testing.T) {
 		g := NewWithT(t)
 
-		currentArch := goArchToArchitectureLabel(runtime.GOARCH)
+		currentArch := goArchToRpmArch(runtime.GOARCH)
 		otherArch := "s390x"
 
 		srcDir := t.TempDir()
