@@ -1114,10 +1114,14 @@ func (c *Build) prepareYumReposMount(prefetchResources *prefetchResources) error
 
 // Recursively adds read-write permissions, execute permission as well if the file
 // is a directory or has at least one execute bit already set (equivalent to 'chmod -R +rwX').
+// Skips symlinks.
 func chmodAddRWX(rootDir string) error {
 	return filepath.WalkDir(rootDir, func(path string, entry fs.DirEntry, err error) error {
 		if err != nil {
 			return err
+		}
+		if entry.Type()&os.ModeSymlink != 0 {
+			return nil
 		}
 		info, err := entry.Info()
 		if err != nil {

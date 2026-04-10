@@ -2175,6 +2175,13 @@ func Test_chmodAddRWX(t *testing.T) {
 	execFile := filepath.Join(nested, "run.sh")
 	g.Expect(os.WriteFile(execFile, []byte("#!/bin/sh"), 0700)).To(Succeed())
 
+	// Symlink pointing outside the tree - should be skipped without affecting the target,
+	// shouldn't prevent the walk from proceeding
+	symlinkTarget := filepath.Join(dir, "outside-root")
+	g.Expect(os.WriteFile(symlinkTarget, []byte("data"), 0400)).To(Succeed())
+	symlink := filepath.Join(root, "link")
+	g.Expect(os.Symlink(symlinkTarget, symlink)).To(Succeed())
+
 	// Restrict root to 0600 (not traversable) after creating children
 	g.Expect(os.Chmod(root, 0600)).To(Succeed())
 
@@ -2184,6 +2191,7 @@ func Test_chmodAddRWX(t *testing.T) {
 	g.Expect(getPerm(nested)).To(Equal(os.FileMode(0777)))
 	g.Expect(getPerm(regularFile)).To(Equal(os.FileMode(0666)))
 	g.Expect(getPerm(execFile)).To(Equal(os.FileMode(0777)))
+	g.Expect(getPerm(symlinkTarget)).To(Equal(os.FileMode(0400)))
 }
 
 func Test_Build_copyPrefetchDir(t *testing.T) {
