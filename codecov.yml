@@ -1,0 +1,26 @@
+codecov:
+  require_ci_to_pass: true
+
+coverage:
+  precision: 2
+  round: down
+  range: "50...100"
+
+  status:
+    project:
+      default:
+        partials_as_hits: true
+    patch:
+      default:
+        partials_as_hits: true
+
+ignore:
+  - "integration_tests/**"
+
+flags:
+  unit-tests:
+    carryforward: true
+
+comment:
+  layout: "reach,diff,flags,files"
+  behavior: default

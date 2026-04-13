@@ -32,6 +32,11 @@ spec:
 
               cd /source
               git checkout "$git_revision"
+
+              # Extract metadata for downstream steps because checkout leaves detached HEAD
+              branch=$(git branch -r --points-at HEAD | head -1 | sed 's|.*origin/||; s|^[[:space:]]*||')
+              slug=$(echo "$git_url" | sed -E 's|.*github\.com[:/]||; s|\.git$||')
+              printf '%s\n%s\n%s\n' "$git_revision" "${branch:-main}" "$slug" > /source/.git-metadata
             volumeMounts:
             - name: source
               mountPath: /source
@@ -49,7 +54,40 @@ spec:
               set -ex
               microdnf install -y go
               cd /source
-              go test ./pkg/...
+              go test -coverprofile=coverage.out -covermode=atomic ./pkg/...
+            volumeMounts:
+            - name: source
+              mountPath: /source
+          - name: upload-coverage
+            image: quay.io/konflux-ci/task-runner:1.4.1@sha256:d9feec6f2ce9b10cfb76b45ea14f83b5ed9f231de7d6083291550aebe8eb09ea
+            onError: continue
+            env:
+              - name: CODECOV_TOKEN
+                valueFrom:
+                  secretKeyRef:
+                    name: codecov-token
+                    key: CODECOV_TOKEN
+            script: |
+              #!/bin/bash
+              cd /source
+
+              curl -Os https://cli.codecov.io/v11.2.8/linux/codecov
+              if ! echo "8930c4bb30254a42f3d8c340706b1be340885e20c0df5160a24efa2e030e662b  codecov" | sha256sum -c -; then
+                echo "WARNING: Codecov CLI checksum verification failed, skipping upload"
+                exit 1
+              fi
+              chmod +x codecov
+              COMMIT_SHA=$(sed -n '1p' /source/.git-metadata)
+              BRANCH=$(sed -n '2p' /source/.git-metadata)
+              SLUG=$(sed -n '3p' /source/.git-metadata)
+              ./codecov upload-process \
+                --token "${CODECOV_TOKEN}" \
+                --flag unit-tests \
+                --file coverage.out \
+                --commit-sha "${COMMIT_SHA}" \
+                --branch "${BRANCH}" \
+                --slug "${SLUG}" \
+                --git-service github || echo "WARNING: Coverage upload failed"
             volumeMounts:
             - name: source
               mountPath: /source
