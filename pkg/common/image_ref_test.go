@@ -465,16 +465,20 @@ func TestAreImagesEquivalent(t *testing.T) {
 		want bool
 	}{
 		{"ubuntu", "ubuntu:latest", true},
+		{"ubuntu:latest", "docker.io/library/ubuntu:latest", true},
+		{"nginx:latest", "nginx@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", false},
 		{"nginx", "docker.io/library/nginx:latest", true},
 		{"nginx:1.2", "nginx:latest", false},
-		{"redis@sha256:",
+		{"redis@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
 			"redis@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
 			true},
 	}
 
 	for _, tt := range tests {
+	t.Run(tt.a+"_"+tt.b, func(t *testing.T) {
 		if common.AreImagesEquivalent(tt.a, tt.b) != tt.want {
 			t.Errorf("expected %v for %s vs %s", tt.want, tt.a, tt.b)
 		}
-	}
+	})
+} 
 }
