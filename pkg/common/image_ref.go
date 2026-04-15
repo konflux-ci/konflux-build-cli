@@ -107,3 +107,34 @@ func ValidateImageHasTagOrDigest(imageRef string) error {
 
 	return fmt.Errorf("image '%s' must have a tag or digest", imageRef)
 }
+
+func AreImagesEquivalent(img1, img2 string) bool {
+	ref1, err1 := reference.Parse(img1)
+	ref2, err2 := reference.Parse(img2)
+
+	if err1 != nil || err2 != nil {
+		return false
+	}
+
+	//  If both have digest → compare digest
+	c1, ok1 := ref1.(reference.Canonical)
+	c2, ok2 := ref2.(reference.Canonical)
+
+	if ok1 && ok2 {
+		return c1.Digest() == c2.Digest()
+	}
+
+	// Convert to named for tag comparison
+	n1, ok1 := ref1.(reference.Named)
+	n2, ok2 := ref2.(reference.Named)
+
+	if !ok1 || !ok2 {
+		return false
+	}
+
+	// normalize implicit :latest
+	n1 = reference.TagNameOnly(n1)
+	n2 = reference.TagNameOnly(n2)
+
+	return reference.FamiliarString(n1) == reference.FamiliarString(n2)
+}

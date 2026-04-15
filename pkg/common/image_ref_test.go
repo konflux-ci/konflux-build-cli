@@ -458,3 +458,23 @@ func Test_ValidateImageHasTagOrDigest(t *testing.T) {
 		})
 	}
 }
+
+func TestAreImagesEquivalent(t *testing.T) {
+	tests := []struct {
+		a, b string
+		want bool
+	}{
+		{"ubuntu", "ubuntu:latest", true},
+		{"nginx", "docker.io/library/nginx:latest", true},
+		{"nginx:1.2", "nginx:latest", false},
+		{"redis@sha256:",
+			"redis@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+			true},
+	}
+
+	for _, tt := range tests {
+		if common.AreImagesEquivalent(tt.a, tt.b) != tt.want {
+			t.Errorf("expected %v for %s vs %s", tt.want, tt.a, tt.b)
+		}
+	}
+}
