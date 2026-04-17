@@ -61,6 +61,10 @@ type BuildParams struct {
 	ImagePullNoProxy           string
 	YumReposDSources           []string
 	YumReposDTarget            string
+	PrefetchDir                string
+	PrefetchDirCopy            string
+	PrefetchOutputMount        string
+	PrefetchEnvMount           string
 	ResolvedBaseImagesOutput   string
 	ExtraArgs                  []string
 }
@@ -314,6 +318,18 @@ func runBuildWithOutput(container *TestRunnerContainer, buildParams BuildParams)
 	}
 	if buildParams.YumReposDTarget != "" {
 		args = append(args, "--yum-repos-d-target", buildParams.YumReposDTarget)
+	}
+	if buildParams.PrefetchDir != "" {
+		args = append(args, "--prefetch-dir", buildParams.PrefetchDir)
+	}
+	if buildParams.PrefetchDirCopy != "" {
+		args = append(args, "--prefetch-dir-copy", buildParams.PrefetchDirCopy)
+	}
+	if buildParams.PrefetchOutputMount != "" {
+		args = append(args, "--prefetch-output-mount", buildParams.PrefetchOutputMount)
+	}
+	if buildParams.PrefetchEnvMount != "" {
+		args = append(args, "--prefetch-env-mount", buildParams.PrefetchEnvMount)
 	}
 	if buildParams.ResolvedBaseImagesOutput != "" {
 		args = append(args, "--resolved-base-images-output", buildParams.ResolvedBaseImagesOutput)
@@ -2656,6 +2672,404 @@ RUN cd /etc/yum.repos.d && du -b * > /tmp/repos-during-build.txt
 			Expect(reposDuringBuild).To(ContainSubstring("ubi.repo"))
 			Expect(reposDuringBuild).To(Equal(reposInBuiltImage))
 		})
+	})
+
+	t.Run("PrefetchIntegration", func(t *testing.T) {
+		SetupGomega(t)
+
+		t.Run("InjectEnv", func(t *testing.T) {
+			SetupGomega(t)
+
+			prefetchDir := t.TempDir()
+			// Needs group-write permissions so that taskuser can write to it
+			Expect(os.Chmod(prefetchDir, 0775)).To(Succeed())
+
+			testutil.WriteFileTree(t, prefetchDir, map[string]string{
+				"prefetch.env": "export PREFETCH_ENV_VAR=foo",
+			})
+
+			contextDir := setupTestContext(t)
+			writeContainerfile(contextDir, fmt.Sprintf(`
+FROM %s AS base
+
+RUN echo "base: PREFETCH_ENV_VAR=$PREFETCH_ENV_VAR"
+
+# Test that injection works with a heredoc that explicitly includes the interpreter
+RUN bash <<EOF
+echo "heredoc: PREFETCH_ENV_VAR=$PREFETCH_ENV_VAR"
+EOF
+
+FROM base
+
+LABEL testlabel=prefetch-integration
+
+# Test that injection doesn't break --mount flags
+RUN --mount=from=base,src=/etc/os-release,dst=/tmp/os-release \
+    if [ -e /tmp/os-release ]; then echo "mount worked"; fi && \
+    echo "final stage: PREFETCH_ENV_VAR=$PREFETCH_ENV_VAR"
+`, baseImage))
+
+			outputRef := "localhost/test-prefetch:" + GenerateUniqueTag(t)
+
+			buildParams := BuildParams{
+				Context:     contextDir,
+				OutputRef:   outputRef,
+				Push:        false,
+				PrefetchDir: "/prefetch",
+			}
+
+			container := setupBuildContainerWithCleanup(t, buildParams, nil,
+				WithVolumeWithOptions(prefetchDir, "/prefetch", "z"))
+
+			_, stderr, err := runBuildWithOutput(container, buildParams)
+			Expect(err).ToNot(HaveOccurred())
+
+			Expect(stderr).To(ContainSubstring("mount worked"))
+			Expect(stderr).To(ContainSubstring("base: PREFETCH_ENV_VAR=foo"))
+			Expect(stderr).To(ContainSubstring("heredoc: PREFETCH_ENV_VAR=foo"))
+			Expect(stderr).To(ContainSubstring("final stage: PREFETCH_ENV_VAR=foo"))
+
+			// Test that labels.json injection works when prefetch is enabled
+			// (both code paths modify the Containerfile)
+			injectedLabels := getLabelsFromLabelsJson(container, outputRef)
+			Expect(injectedLabels).To(HaveKeyWithValue("testlabel", "prefetch-integration"))
+		})
+
+		t.Run("InjectWithTrickyComments", func(t *testing.T) {
+			SetupGomega(t)
+
+			contextDir := setupTestContext(t)
+			writeContainerfile(contextDir, fmt.Sprintf(`
+FROM %s AS base
+
+RUN echo && \
+    # Did you know you can just put a comment in the middle of a RUN instruction?
+    echo "RUN 1: PREFETCH_ENV_VAR=${PREFETCH_ENV_VAR-unset}"
+
+RUN --mount=from=%s,src=/etc/os-release,dst=/tmp/os-release \
+    # Also between flags, of course.
+    --network=host \
+    echo "RUN 2: PREFETCH_ENV_VAR=${PREFETCH_ENV_VAR-unset}"
+
+RUN \
+    # And the comment can end with a line continuation, which is ignored anyway \
+    echo "RUN 3: PREFETCH_ENV_VAR=${PREFETCH_ENV_VAR-unset}"
+
+RUN # But not if there's another token in front of the comment. \
+    In that case, the line continuation is honored and this whole \
+    RUN instruction is a comment (which is a no-op, not an error).
+
+RUN --network=host # This is also a no-op.
+
+RUN echo "RUN 6: PREFETCH_ENV_VAR=${PREFETCH_ENV_VAR-unset}" # And this works as expected.
+`, baseImage, baseImage))
+
+			outputRef := "localhost/test-prefetch:" + GenerateUniqueTag(t)
+
+			// Build without prefetch first to verify injection doesn't alter the expected behavior
+			buildParams := BuildParams{
+				Context:   contextDir,
+				OutputRef: outputRef,
+				Push:      false,
+			}
+			container := setupBuildContainerWithCleanup(t, buildParams, nil)
+			_, stderr, err := runBuildWithOutput(container, buildParams)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(stderr).To(ContainSubstring("RUN 1: PREFETCH_ENV_VAR=unset"))
+			Expect(stderr).To(ContainSubstring("RUN 2: PREFETCH_ENV_VAR=unset"))
+			Expect(stderr).To(ContainSubstring("RUN 3: PREFETCH_ENV_VAR=unset"))
+			Expect(stderr).To(ContainSubstring("RUN 6: PREFETCH_ENV_VAR=unset"))
+
+			// Then build with prefetch, verify it still works and the var is set as expected
+			prefetchDir := t.TempDir()
+			Expect(os.Chmod(prefetchDir, 0775)).To(Succeed())
+			testutil.WriteFileTree(t, prefetchDir, map[string]string{
+				"prefetch.env": "export PREFETCH_ENV_VAR=foo",
+			})
+			buildParams.PrefetchDir = "/prefetch"
+			container = setupBuildContainerWithCleanup(t, buildParams, nil,
+				WithVolumeWithOptions(prefetchDir, "/prefetch", "z"))
+			_, stderr, err = runBuildWithOutput(container, buildParams)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(stderr).To(ContainSubstring("RUN 1: PREFETCH_ENV_VAR=foo"))
+			Expect(stderr).To(ContainSubstring("RUN 2: PREFETCH_ENV_VAR=foo"))
+			Expect(stderr).To(ContainSubstring("RUN 3: PREFETCH_ENV_VAR=foo"))
+			Expect(stderr).To(ContainSubstring("RUN 6: PREFETCH_ENV_VAR=foo"))
+		})
+
+		t.Run("InjectSkipUnsupported", func(t *testing.T) {
+			SetupGomega(t)
+
+			prefetchDir := t.TempDir()
+			// Needs group-write permissions so that taskuser can write to it
+			Expect(os.Chmod(prefetchDir, 0775)).To(Succeed())
+
+			testutil.WriteFileTree(t, prefetchDir, map[string]string{
+				"prefetch.env": "export PREFETCH_ENV_VAR=foo",
+			})
+
+			contextDir := setupTestContext(t)
+			writeContainerfile(contextDir, fmt.Sprintf(`
+FROM %s
+
+# heredoc without interpreter
+RUN <<EOF
+echo "heredoc: PREFETCH_ENV_VAR=${PREFETCH_ENV_VAR-unset}"
+EOF
+
+# exec form
+RUN ["/bin/sh", "-c", "echo \"exec: PREFETCH_ENV_VAR=${PREFETCH_ENV_VAR-unset}\""]
+`, baseImage))
+
+			outputRef := "localhost/test-prefetch:" + GenerateUniqueTag(t)
+
+			buildParams := BuildParams{
+				Context:     contextDir,
+				OutputRef:   outputRef,
+				Push:        false,
+				PrefetchDir: "/prefetch",
+			}
+
+			container := setupBuildContainerWithCleanup(t, buildParams, nil,
+				WithVolumeWithOptions(prefetchDir, "/prefetch", "z"))
+
+			_, stderr, err := runBuildWithOutput(container, buildParams)
+			Expect(err).ToNot(HaveOccurred())
+
+			Expect(stderr).To(ContainSubstring("heredoc: PREFETCH_ENV_VAR=unset"))
+			Expect(stderr).To(ContainSubstring("exec: PREFETCH_ENV_VAR=unset"))
+
+			Expect(stderr).To(ContainSubstring("skipping unsupported RUN instruction on line 5 (heredoc)"))
+			Expect(stderr).To(ContainSubstring("skipping unsupported RUN instruction on line 10 (exec form)"))
+		})
+
+		t.Run("InjectDoesntMangleHeredocs", func(t *testing.T) {
+			SetupGomega(t)
+
+			prefetchDir := t.TempDir()
+			// Needs group-write permissions so that taskuser can write to it
+			Expect(os.Chmod(prefetchDir, 0775)).To(Succeed())
+
+			testutil.WriteFileTree(t, prefetchDir, map[string]string{
+				"prefetch.env": "export PREFETCH_ENV_VAR=foo",
+			})
+
+			contextDir := setupTestContext(t)
+			writeContainerfile(contextDir, fmt.Sprintf(`
+FROM %s
+
+COPY <<example.Containerfile \
+     <<"example2.Containerfile" /tmp
+# Lines that look like RUN inside a COPY heredoc should not be modified
+RUN echo hi
+example.Containerfile
+# Same goes for the second heredoc in the same instruction of course
+RUN echo $FOO
+example2.Containerfile
+
+# The actual RUN instruction *should* be modified to set the env var
+RUN sh <<'EOF'
+function RUN() {
+    echo "Run: $*"
+}
+# A line that looks like RUN inside a RUN heredoc should not be modified
+# => in the output, we should see "Run: echo PREFETCH_ENV_VAR=foo"
+#                             not "Run: . /tmp/prefetch.env"
+RUN echo "PREFETCH_ENV_VAR=${PREFETCH_ENV_VAR-unset}"
+EOF
+`, baseImage))
+
+			outputRef := "localhost/test-prefetch:" + GenerateUniqueTag(t)
+
+			buildParams := BuildParams{
+				Context:     contextDir,
+				OutputRef:   outputRef,
+				Push:        false,
+				PrefetchDir: "/prefetch",
+			}
+
+			container := setupBuildContainerWithCleanup(t, buildParams, nil,
+				WithVolumeWithOptions(prefetchDir, "/prefetch", "z"))
+
+			_, stderr, err := runBuildWithOutput(container, buildParams)
+			Expect(err).ToNot(HaveOccurred())
+
+			// RUN instruction was handled as expected
+			Expect(stderr).To(ContainSubstring("Run: echo PREFETCH_ENV_VAR=foo"))
+			Expect(stderr).ToNot(ContainSubstring("Run: . /tmp/prefetch.env"))
+
+			// COPY heredocs were left untouched as expected
+			file1 := getFileContentFromOutputImage(container, outputRef, "/tmp/example.Containerfile")
+			lines := slices.Collect(strings.Lines(file1))
+			Expect(lines).To(Equal([]string{
+				"# Lines that look like RUN inside a COPY heredoc should not be modified\n",
+				"RUN echo hi\n",
+			}))
+
+			file2 := getFileContentFromOutputImage(container, outputRef, "/tmp/example2.Containerfile")
+			lines2 := slices.Collect(strings.Lines(file2))
+			Expect(lines2).To(Equal([]string{
+				"# Same goes for the second heredoc in the same instruction of course\n",
+				"RUN echo $FOO\n",
+			}))
+		})
+
+		t.Run("MountDeps", func(t *testing.T) {
+			SetupGomega(t)
+
+			prefetchDir := t.TempDir()
+			// Needs group-write permissions so that taskuser can write to it
+			Expect(os.Chmod(prefetchDir, 0775)).To(Succeed())
+
+			testutil.WriteFileTree(t, prefetchDir, map[string]string{
+				"output/deps/gomod/foo.txt":                    "",
+				"output/deps/pip/bar.txt":                      "",
+				"output/deps/rpm/x86_64/repos.d/hermeto.repo":  "",
+				"output/deps/rpm/aarch64/repos.d/hermeto.repo": "",
+				"output/deps/rpm/s390x/repos.d/hermeto.repo":   "",
+				"output/deps/rpm/ppc64le/repos.d/hermeto.repo": "",
+			})
+
+			contextDir := setupTestContext(t)
+			writeContainerfile(contextDir, fmt.Sprintf(`
+FROM %s
+
+RUN cd /tmp/.prefetch-output/deps      && echo * > /tmp/deps-dirs.txt
+RUN cd /tmp/.prefetch-output/deps/rpm/ && echo * > /tmp/rpm-dirs.txt
+RUN cd /etc/yum.repos.d         && echo * > /tmp/yum-repos.txt
+
+USER 2000
+# Any user should be able to modify prefetch resources during the build
+RUN echo foo > /tmp/.prefetch-output/deps/gomod/user-created.txt
+`, baseImage))
+
+			outputRef := "localhost/test-prefetch:" + GenerateUniqueTag(t)
+
+			buildParams := BuildParams{
+				Context:     contextDir,
+				OutputRef:   outputRef,
+				Push:        false,
+				PrefetchDir: "/prefetch",
+			}
+
+			container := setupBuildContainerWithCleanup(t, buildParams, nil,
+				WithVolumeWithOptions(prefetchDir, "/prefetch", "z"))
+
+			err := runBuild(container, buildParams)
+			Expect(err).ToNot(HaveOccurred())
+
+			depsDirs := getFileContentFromOutputImage(container, outputRef, "/tmp/deps-dirs.txt")
+			rpmDirs := getFileContentFromOutputImage(container, outputRef, "/tmp/rpm-dirs.txt")
+			yumRepos := getFileContentFromOutputImage(container, outputRef, "/tmp/yum-repos.txt")
+
+			Expect(strings.TrimSpace(depsDirs)).To(Equal("gomod pip rpm"))
+			// should mount only the matching RPM arch depending on developer's machine
+			Expect(strings.TrimSpace(rpmDirs)).To(Or(Equal("x86_64"), Equal("aarch64")))
+			Expect(strings.TrimSpace(yumRepos)).To(Equal("hermeto.repo"))
+
+			userCreatedFile := filepath.Join(prefetchDir, "output/deps/gomod/user-created.txt")
+			Expect(userCreatedFile).To(Not(BeAnExistingFile()),
+				"Modifications during build should not modify original prefetch dir")
+
+			Expect(fileExistsInOutputImage(container, outputRef, "/tmp/.prefetch-output")).To(BeFalse(),
+				"Mount point should not persist in built image even if written to")
+
+			// By default, prefetch resources are copied to prefetchDir/copy-*
+			entries, err := os.ReadDir(prefetchDir)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(entries).To(HaveLen(1),
+				"Copy directory created during build should not persist after build")
+		})
+
+		t.Run("CompatPaths", func(t *testing.T) {
+			SetupGomega(t)
+
+			// Does not need group-write permissions here, we copy to a different location
+			prefetchDir := t.TempDir()
+			testutil.WriteFileTree(t, prefetchDir, map[string]string{
+				// Test that cachi2.env works as well
+				"cachi2.env":                  "export PREFETCH_ENV_VAR=foo\n",
+				"output/deps/generic/foo.txt": "",
+			})
+
+			contextDir := setupTestContext(t)
+			writeContainerfile(contextDir, fmt.Sprintf(`
+FROM %s
+
+RUN echo "PREFETCH_ENV_VAR=$PREFETCH_ENV_VAR"
+# Test that we're able to recreate the same structure used current in Konflux
+RUN cat /cachi2/cachi2.env
+RUN ls /cachi2/output/deps/generic
+`, baseImage))
+
+			outputRef := "localhost/test-prefetch:" + GenerateUniqueTag(t)
+
+			buildParams := BuildParams{
+				Context:             contextDir,
+				OutputRef:           outputRef,
+				Push:                false,
+				PrefetchDir:         "/prefetch",
+				PrefetchDirCopy:     "/workspace/prefetch-copy",
+				PrefetchEnvMount:    "/cachi2/cachi2.env",
+				PrefetchOutputMount: "/cachi2/output",
+			}
+
+			container := setupBuildContainerWithCleanup(t, buildParams, nil,
+				WithVolumeWithOptions(prefetchDir, "/prefetch", "z"))
+
+			err := runBuild(container, buildParams)
+			Expect(err).ToNot(HaveOccurred())
+
+			Expect(filepath.Join(contextDir, "prefetch-copy")).ToNot(BeAnExistingFile(),
+				"Copy directory created during build should not persist after build")
+		})
+	})
+
+	t.Run("YumReposAndPrefetchRepo", func(t *testing.T) {
+		SetupGomega(t)
+
+		reposDir := t.TempDir()
+		testutil.WriteFileTree(t, reposDir, map[string]string{
+			"my.repo": "[my-repo]",
+			// prefetch repos take priority, this gets overwritten
+			"hermeto.repo": "[not-real-hermeto-repo]",
+		})
+
+		prefetchDir := t.TempDir()
+		// Needs group-write permissions so that taskuser can write to it
+		Expect(os.Chmod(prefetchDir, 0775)).To(Succeed())
+		testutil.WriteFileTree(t, prefetchDir, map[string]string{
+			"output/deps/rpm/x86_64/repos.d/hermeto.repo":  "[hermeto-repo]",
+			"output/deps/rpm/aarch64/repos.d/hermeto.repo": "[hermeto-repo]",
+		})
+
+		contextDir := setupTestContext(t)
+		writeContainerfile(contextDir, fmt.Sprintf(`
+FROM %s
+
+RUN echo "my.repo=$(cat /etc/yum.repos.d/my.repo)"
+RUN echo "hermeto.repo=$(cat /etc/yum.repos.d/hermeto.repo)"
+`, baseImage))
+
+		outputRef := "localhost/test-prefetch:" + GenerateUniqueTag(t)
+
+		buildParams := BuildParams{
+			Context:          contextDir,
+			OutputRef:        outputRef,
+			Push:             false,
+			PrefetchDir:      "/prefetch",
+			YumReposDSources: []string{"/repos"},
+		}
+
+		container := setupBuildContainerWithCleanup(t, buildParams, nil,
+			WithVolumeWithOptions(prefetchDir, "/prefetch", "z"),
+			WithVolumeWithOptions(reposDir, "/repos", "z"))
+
+		_, stderr, err := runBuildWithOutput(container, buildParams)
+		Expect(err).ToNot(HaveOccurred())
+
+		Expect(stderr).To(ContainSubstring("my.repo=[my-repo]"))
+		Expect(stderr).To(ContainSubstring("hermeto.repo=[hermeto-repo]"))
 	})
 
 	t.Run("ResolvedBaseImages", func(t *testing.T) {

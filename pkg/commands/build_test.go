@@ -106,6 +106,25 @@ func Test_Build_validateParams(t *testing.T) {
 			errExpected:  true,
 			errSubstring: "yum-repos-d-target must be an absolute path",
 		},
+		{
+			name: "should fail when prefetch-dir-copy already exists",
+			params: BuildParams{
+				OutputRef:       "quay.io/org/image:tag",
+				Context:         tempDir,
+				PrefetchDirCopy: tempDir,
+			},
+			errExpected:  true,
+			errSubstring: "prefetch-dir-copy must not be an existing path",
+		},
+		{
+			name: "should allow prefetch-dir-copy that does not exist",
+			params: BuildParams{
+				OutputRef:       "quay.io/org/image:tag",
+				Context:         tempDir,
+				PrefetchDirCopy: filepath.Join(tempDir, "nonexistent-copy-dir"),
+			},
+			errExpected: false,
+		},
 	}
 
 	for _, tc := range tests {
@@ -1126,7 +1145,7 @@ func Test_goArchToArchitectureLabel(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-		result := goArchToArchitectureLabel(tc.goarch)
+		result := goArchToRpmArch(tc.goarch)
 		g.Expect(result).To(Equal(tc.expected), "goArchToUname(%s) should return %s", tc.goarch, tc.expected)
 	}
 }
@@ -1230,7 +1249,7 @@ func Test_Build_processLabelsAndAnnotations(t *testing.T) {
 		err := c.processLabelsAndAnnotations()
 		g.Expect(err).ToNot(HaveOccurred())
 
-		arch := goArchToArchitectureLabel(runtime.GOARCH)
+		arch := goArchToRpmArch(runtime.GOARCH)
 		g.Expect(c.mergedLabels).To(Equal([]string{
 			"org.opencontainers.image.created=2026-01-01T00:00:00Z",
 			"org.opencontainers.image.source=https://github.com/org/repo",
@@ -2156,6 +2175,13 @@ func Test_chmodAddRWX(t *testing.T) {
 	execFile := filepath.Join(nested, "run.sh")
 	g.Expect(os.WriteFile(execFile, []byte("#!/bin/sh"), 0700)).To(Succeed())
 
+	// Symlink pointing outside the tree - should be skipped without affecting the target,
+	// shouldn't prevent the walk from proceeding
+	symlinkTarget := filepath.Join(dir, "outside-root")
+	g.Expect(os.WriteFile(symlinkTarget, []byte("data"), 0400)).To(Succeed())
+	symlink := filepath.Join(root, "link")
+	g.Expect(os.Symlink(symlinkTarget, symlink)).To(Succeed())
+
 	// Restrict root to 0600 (not traversable) after creating children
 	g.Expect(os.Chmod(root, 0600)).To(Succeed())
 
@@ -2165,4 +2191,235 @@ func Test_chmodAddRWX(t *testing.T) {
 	g.Expect(getPerm(nested)).To(Equal(os.FileMode(0777)))
 	g.Expect(getPerm(regularFile)).To(Equal(os.FileMode(0666)))
 	g.Expect(getPerm(execFile)).To(Equal(os.FileMode(0777)))
+	g.Expect(getPerm(symlinkTarget)).To(Equal(os.FileMode(0400)))
+}
+
+func Test_Build_copyPrefetchDir(t *testing.T) {
+	readFile := func(g Gomega, path string) string {
+		t.Helper()
+		data, err := os.ReadFile(path)
+		g.Expect(err).ToNot(HaveOccurred())
+		return string(data)
+	}
+	getPerm := func(g Gomega, path string) os.FileMode {
+		t.Helper()
+		info, err := os.Stat(path)
+		g.Expect(err).ToNot(HaveOccurred())
+		return info.Mode().Perm()
+	}
+
+	t.Run("basic copy with custom destination", func(t *testing.T) {
+		g := NewWithT(t)
+
+		srcDir := t.TempDir()
+		testutil.WriteFileTree(t, srcDir, map[string]string{
+			"file1.txt":        "hello",
+			"subdir/file2.txt": "world",
+		})
+
+		dstDir := filepath.Join(t.TempDir(), "dest")
+		c := &Build{Params: &BuildParams{PrefetchDir: srcDir, PrefetchDirCopy: dstDir}}
+
+		result, err := c.copyPrefetchDir()
+		g.Expect(err).ToNot(HaveOccurred())
+		g.Expect(result).To(Equal(dstDir))
+
+		g.Expect(readFile(g, filepath.Join(dstDir, "file1.txt"))).To(Equal("hello"))
+		g.Expect(readFile(g, filepath.Join(dstDir, "subdir", "file2.txt"))).To(Equal("world"))
+		g.Expect(c.tempFilesOutsideWorkdir).To(ContainElement(dstDir))
+	})
+
+	t.Run("default destination is subdirectory of source", func(t *testing.T) {
+		g := NewWithT(t)
+
+		srcDir := t.TempDir()
+		testutil.WriteFileTree(t, srcDir, map[string]string{
+			"file.txt": "content",
+		})
+
+		c := &Build{Params: &BuildParams{PrefetchDir: srcDir}}
+
+		result, err := c.copyPrefetchDir()
+		g.Expect(err).ToNot(HaveOccurred())
+
+		// The copy is a subdirectory of the source
+		g.Expect(result).To(HavePrefix(srcDir + string(os.PathSeparator)))
+		g.Expect(filepath.Base(result)).To(HavePrefix("copy-"))
+
+		// Source file is present in the copy
+		g.Expect(readFile(g, filepath.Join(result, "file.txt"))).To(Equal("content"))
+
+		// The copy does not contain a recursive copy of itself
+		entries, err := os.ReadDir(result)
+		g.Expect(err).ToNot(HaveOccurred())
+		for _, entry := range entries {
+			g.Expect(entry.Name()).ToNot(HavePrefix("copy-"),
+				"copy dir should not contain a nested copy")
+		}
+
+		g.Expect(c.tempFilesOutsideWorkdir).To(ContainElement(result))
+	})
+
+	t.Run("filters RPM dirs by architecture", func(t *testing.T) {
+		g := NewWithT(t)
+
+		currentArch := goArchToRpmArch(runtime.GOARCH)
+		otherArch := "s390x"
+
+		srcDir := t.TempDir()
+		testutil.WriteFileTree(t, srcDir, map[string]string{
+			filepath.Join("output", "deps", "rpm", currentArch, "packages", "foo.rpm"): "matching",
+			filepath.Join("output", "deps", "rpm", otherArch, "packages", "bar.rpm"):   "non-matching",
+			"other/file.txt": "kept",
+		})
+
+		dstDir := filepath.Join(t.TempDir(), "dest")
+		c := &Build{Params: &BuildParams{PrefetchDir: srcDir, PrefetchDirCopy: dstDir}}
+
+		result, err := c.copyPrefetchDir()
+		g.Expect(err).ToNot(HaveOccurred())
+		g.Expect(result).To(Equal(dstDir))
+
+		// Matching arch is copied
+		g.Expect(readFile(g, filepath.Join(dstDir, "output", "deps", "rpm", currentArch, "packages", "foo.rpm"))).
+			To(Equal("matching"))
+		// Non-matching arch is skipped
+		g.Expect(filepath.Join(dstDir, "output", "deps", "rpm", otherArch)).ToNot(BeAnExistingFile())
+		// Other files are copied
+		g.Expect(readFile(g, filepath.Join(dstDir, "other", "file.txt"))).To(Equal("kept"))
+	})
+
+	t.Run("preserves symlinks", func(t *testing.T) {
+		g := NewWithT(t)
+
+		srcDir := t.TempDir()
+		testutil.WriteFileTree(t, srcDir, map[string]string{
+			"target.txt": "target content",
+		})
+		g.Expect(os.Symlink("target.txt", filepath.Join(srcDir, "link.txt"))).To(Succeed())
+
+		dstDir := filepath.Join(t.TempDir(), "dest")
+		c := &Build{Params: &BuildParams{PrefetchDir: srcDir, PrefetchDirCopy: dstDir}}
+
+		_, err := c.copyPrefetchDir()
+		g.Expect(err).ToNot(HaveOccurred())
+
+		// The copy contains the regular file
+		g.Expect(readFile(g, filepath.Join(dstDir, "target.txt"))).To(Equal("target content"))
+
+		// The copy contains a symlink with the same target
+		linkTarget, err := os.Readlink(filepath.Join(dstDir, "link.txt"))
+		g.Expect(err).ToNot(HaveOccurred())
+		g.Expect(linkTarget).To(Equal("target.txt"))
+	})
+
+	t.Run("sets permissions", func(t *testing.T) {
+		g := NewWithT(t)
+
+		srcDir := t.TempDir()
+		testutil.WriteFileTree(t, srcDir, map[string]string{
+			"restricted/data.txt": "data",
+			"restricted/run.sh":   "#!/bin/sh",
+		})
+		g.Expect(os.Chmod(filepath.Join(srcDir, "restricted", "data.txt"), 0400)).To(Succeed())
+		g.Expect(os.Chmod(filepath.Join(srcDir, "restricted", "run.sh"), 0500)).To(Succeed())
+		g.Expect(os.Chmod(filepath.Join(srcDir, "restricted"), 0700)).To(Succeed())
+
+		dstDir := filepath.Join(t.TempDir(), "dest")
+		c := &Build{Params: &BuildParams{PrefetchDir: srcDir, PrefetchDirCopy: dstDir}}
+
+		_, err := c.copyPrefetchDir()
+		g.Expect(err).ToNot(HaveOccurred())
+
+		g.Expect(getPerm(g, filepath.Join(dstDir, "restricted"))).To(Equal(os.FileMode(0777)))
+		g.Expect(getPerm(g, filepath.Join(dstDir, "restricted", "data.txt"))).To(Equal(os.FileMode(0666)))
+		g.Expect(getPerm(g, filepath.Join(dstDir, "restricted", "run.sh"))).To(Equal(os.FileMode(0777)))
+	})
+
+	t.Run("error when destination already exists", func(t *testing.T) {
+		g := NewWithT(t)
+
+		srcDir := t.TempDir()
+		testutil.WriteFileTree(t, srcDir, map[string]string{
+			"file.txt": "content",
+		})
+
+		dstDir := filepath.Join(t.TempDir(), "dest")
+		g.Expect(os.Mkdir(dstDir, 0755)).To(Succeed())
+
+		c := &Build{Params: &BuildParams{PrefetchDir: srcDir, PrefetchDirCopy: dstDir}}
+
+		_, err := c.copyPrefetchDir()
+		g.Expect(err).To(MatchError(ContainSubstring("file exists")))
+	})
+}
+
+func Test_Build_injectPrefetchEnvToContainerfile(t *testing.T) {
+	// Injection is thoroughly tested in RunInjector tests, test only the interesting cases here.
+	tests := []struct {
+		name     string
+		envMount string
+		input    string
+		expected string
+	}{
+		{
+			name:     "env mount path is shell-quoted",
+			envMount: "/path/with spaces/prefetch.env",
+			input: strings.Join([]string{
+				`FROM scratch`,
+				`RUN dnf install -y pkg`,
+				``,
+			}, "\n"),
+			expected: strings.Join([]string{
+				`FROM scratch`,
+				`RUN . '/path/with spaces/prefetch.env' && \`,
+				`    dnf install -y pkg`,
+				``,
+			}, "\n"),
+		},
+		{
+			name:     "injects correctly into backtick-escaped containerfile",
+			envMount: "/tmp/.prefetch.env",
+			input: strings.Join([]string{
+				"# escape=`",
+				"FROM scratch",
+				"RUN dnf install -y pkg",
+				``,
+			}, "\n"),
+			expected: strings.Join([]string{
+				"# escape=`",
+				"FROM scratch",
+				"RUN . /tmp/.prefetch.env && `",
+				"    dnf install -y pkg",
+				``,
+			}, "\n"),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			g := NewWithT(t)
+
+			tempDir := t.TempDir()
+			containerfile := filepath.Join(tempDir, "Containerfile")
+			g.Expect(os.WriteFile(containerfile, []byte(tt.input), 0644)).To(Succeed())
+
+			c := &Build{
+				Params:            &BuildParams{},
+				containerfilePath: containerfile,
+			}
+
+			g.Expect(c.injectPrefetchEnvToContainerfile(tt.envMount)).To(Succeed())
+
+			// Original is unchanged
+			originalContent, err := os.ReadFile(containerfile)
+			g.Expect(err).NotTo(HaveOccurred())
+			g.Expect(string(originalContent)).To(Equal(tt.input))
+
+			// Modified copy has injection
+			copyContent, err := os.ReadFile(c.containerfileCopyPath)
+			g.Expect(err).NotTo(HaveOccurred())
+			g.Expect(string(copyContent)).To(Equal(tt.expected))
+		})
+	}
 }
