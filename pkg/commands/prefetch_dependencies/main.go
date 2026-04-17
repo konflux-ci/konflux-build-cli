@@ -18,33 +18,31 @@ type PrefetchDependencies struct {
 	Config     *Params
 	HermetoCli cliwrappers.HermetoCliInterface
 }
-type ConfigReaderFactory = func() (cfg.ConfigReader, error)
 
-func getPackageProxyConfiguration(configReaderFactory ConfigReaderFactory) ([]string, error) {
+func getPackageProxyConfiguration() ([]string, error) {
 	hermetoEnv := []string{}
-	configMapReader, err := configReaderFactory()
+	konfluxConfig, err := cfg.GetKonfluxConfig()
 	if err != nil {
 		return hermetoEnv, err
 	}
-
-	configMap, err := configMapReader.ReadConfigData()
-	if err != nil {
-		return hermetoEnv, err
+	packageProxyConfig := konfluxConfig.HermetoProxy
+	if packageProxyConfig == nil {
+		return hermetoEnv, nil
 	}
 
-	if configMap.HermetoPackageRegistryProxyAllowed != "true" {
+	if !packageProxyConfig.PackageRegistryProxyAllowed {
 		log.Info("Not using package registry proxy because allow-package-registry-proxy " +
 			"is not set to `true` on the cluster level")
 		return hermetoEnv, err
 	}
 	// Note that empty URLs must be sanitized here, or it would result in validation
 	// error in Hermeto.
-	if configMap.HermetoNpmProxy != "" {
-		envEntry := fmt.Sprintf("HERMETO_NPM__PROXY_URL=%s", configMap.HermetoNpmProxy)
+	if packageProxyConfig.NpmProxy != "" {
+		envEntry := fmt.Sprintf("HERMETO_NPM__PROXY_URL=%s", packageProxyConfig.NpmProxy)
 		hermetoEnv = append(hermetoEnv, envEntry)
 	}
-	if configMap.HermetoYarnProxy != "" {
-		envEntry := fmt.Sprintf("HERMETO_YARN__PROXY_URL=%s", configMap.HermetoYarnProxy)
+	if packageProxyConfig.YarnProxy != "" {
+		envEntry := fmt.Sprintf("HERMETO_YARN__PROXY_URL=%s", packageProxyConfig.YarnProxy)
 		hermetoEnv = append(hermetoEnv, envEntry)
 	}
 
@@ -60,7 +58,7 @@ func New(cmd *cobra.Command) (*PrefetchDependencies, error) {
 
 	hermetoEnv := []string{}
 	if local_config.EnablePackageRegistryProxy {
-		hermetoEnv, err = getPackageProxyConfiguration(cfg.NewConfigReader)
+		hermetoEnv, err = getPackageProxyConfiguration()
 		if err != nil {
 			log.Warnf("Failed to extract Hermeto environment settings from ConfigMap: %+v", err)
 		}
