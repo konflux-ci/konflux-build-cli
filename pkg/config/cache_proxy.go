@@ -20,7 +20,8 @@ func NewCacheProxyConfig(rawConfig KonfluxRawConfig) (*CacheProxyConfig, error) 
 	}
 
 	if rawConfig.AllowCacheProxy == "" {
-		cacheProxyConfig.Allowed = cacheProxyConfig.HttpProxy != ""
+		// If unset, allow using the proxy.
+		cacheProxyConfig.Allowed = true
 		return cacheProxyConfig, nil
 	}
 
