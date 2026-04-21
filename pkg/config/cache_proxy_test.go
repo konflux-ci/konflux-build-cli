@@ -47,7 +47,7 @@ func Test_NewCacheProxyConfig(t *testing.T) {
 
 		cacheProxyConfig, err := config.NewCacheProxyConfig(rawConfig)
 		g.Expect(err).ToNot(HaveOccurred())
-		g.Expect(cacheProxyConfig.Allowed).To(BeFalse())
+		g.Expect(cacheProxyConfig.Allowed).To(BeTrue())
 		g.Expect(cacheProxyConfig.HttpProxy).To(BeEmpty())
 		g.Expect(cacheProxyConfig.NoProxy).To(BeEmpty())
 	})

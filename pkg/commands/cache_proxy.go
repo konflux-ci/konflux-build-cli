@@ -109,8 +109,20 @@ func (c *CacheProxy) Run() error {
 		}
 	} else {
 		cacheProxyConfig = konfluxConfig.CacheProxy
+		if cacheProxyConfig == nil {
+			cacheProxyConfig = &config.CacheProxyConfig{
+				Allowed: true, // If unset, allow using the proxy
+			}
+		}
+
+		if cacheProxyConfig.HttpProxy == "" && cacheProxyConfig.NoProxy == "" {
+			cacheProxyConfig.HttpProxy = c.Params.DefaultHttpProxy
+			cacheProxyConfig.NoProxy = c.Params.DefaultNoProxy
+
+			l.Logger.Debug("Falling back to default proxy config")
+		}
 	}
-	l.Logger.Debugf("cache proxy config: %s", cacheProxyConfig.ToString())
+	l.Logger.Debugf("Using cache proxy config: %s", cacheProxyConfig.ToString())
 
 	// Use proxy only if both backend and the parameter allow it
 	if cacheProxyConfig.Allowed && c.Params.Enable == "true" {

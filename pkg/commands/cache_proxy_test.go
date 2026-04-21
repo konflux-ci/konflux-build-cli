@@ -122,6 +122,31 @@ func Test_CacheProxy_Run(t *testing.T) {
 		g.Expect(isWriteResultsStringCalled).To(BeTrue())
 	})
 
+	t.Run("should enable cache-proxy with defaults when cache proxy config is not set", func(t *testing.T) {
+		config.GetKonfluxConfig = func() (*config.KonfluxConfig, error) {
+			return &config.KonfluxConfig{
+				CacheProxy: nil,
+			}, nil
+		}
+		c.Params = &CacheProxyParams{
+			Enable:           "true",
+			DefaultHttpProxy: defaultHttpProxy,
+			DefaultNoProxy:   defaultNoProxy,
+		}
+
+		isWriteResultsStringCalled := false
+		_mockResultsWriter.WriteResultStringFunc = func(result, path string) error {
+			isWriteResultsStringCalled = true
+			return nil
+		}
+
+		err := c.Run()
+		g.Expect(err).ToNot(HaveOccurred())
+		g.Expect(c.Results.HttpProxy).To(Equal(defaultHttpProxy))
+		g.Expect(c.Results.NoProxy).Should(Equal(defaultNoProxy))
+		g.Expect(isWriteResultsStringCalled).To(BeTrue())
+	})
+
 	t.Run("should disable cache-proxy when failed to read config and disallowed in parameter", func(t *testing.T) {
 		config.GetKonfluxConfig = func() (*config.KonfluxConfig, error) {
 			return nil, errors.New("failed to read config")
