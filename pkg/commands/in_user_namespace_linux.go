@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"syscall"
 
 	"github.com/vishvananda/netlink"
+	"golang.org/x/sys/unix"
 )
 
 // RunInUserNamespace executes a command within an externally created user
@@ -35,5 +35,5 @@ func RunInUserNamespace(loopbackUp bool, args []string) error {
 		return err
 	}
 
-	return syscall.Exec(binary, args, os.Environ())
+	return unix.Exec(binary, args, os.Environ())
 }
