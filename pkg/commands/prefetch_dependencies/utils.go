@@ -194,12 +194,12 @@ func registerSubscriptionManager(rhsmOrgPath string, rhsmActivationKeyPath strin
 
 	org, err := os.ReadFile(rhsmOrgPath)
 	if err != nil {
-		return fmt.Errorf("failed to read %s file", rhsmOrgPath)
+		return err
 	}
 
 	key, err := os.ReadFile(rhsmActivationKeyPath)
 	if err != nil {
-		return fmt.Errorf("failed to read %s file", rhsmActivationKeyPath)
+		return err
 	}
 
 	args := []string{
