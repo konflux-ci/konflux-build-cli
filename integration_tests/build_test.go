@@ -3209,11 +3209,8 @@ COPY --from={shortWithTag} /etc/os-release /tmp/os-release
 
 		// make it possible to test the canonicalization of image refs,
 		// e.g. if the containerfile has just "ubi10/ubi-micro" we want to make it fully qualified
-		registriesConfContent := `unqualified-search-registries = ["registry.access.redhat.com"]`
-		registriesConfPath := filepath.Join(contextDir, "registries.conf")
-		Expect(os.WriteFile(registriesConfPath, []byte(registriesConfContent), 0644)).To(Succeed())
-
-		container.CopyFileIntoContainer(registriesConfPath, "/tmp/registries.conf")
+		container.CreateFileInContainer(
+			"/tmp/registries.conf", `unqualified-search-registries = ["registry.access.redhat.com"]`)
 
 		err := runBuild(container, buildParams)
 		Expect(err).ToNot(HaveOccurred())
