@@ -295,6 +295,49 @@ var BuildParamsConfig = map[string]common.Parameter{
 		TypeKind:   reflect.String,
 		Usage:      "Take the set of images that the containerfile depends on and write them to the file at the specified path.\nEach line in the file is \"<ref-from-containerfile> <canonical-ref>\",\nwhere canonical-ref includes the fully qualified name, digest and optionaly tag (if ref-from-containerfile has a tag).",
 	},
+	"rhsm-entitlements": {
+		Name:       "rhsm-entitlements",
+		ShortName:  "",
+		EnvVarName: "KBC_BUILD_RHSM_ENTITLEMENTS",
+		TypeKind:   reflect.String,
+		Usage:      "Directory with RHSM entitlement certificates.\nSee 'Red Hat Subscription Management' in the help text for more details.",
+	},
+	"rhsm-activation-key": {
+		Name:       "rhsm-activation-key",
+		ShortName:  "",
+		EnvVarName: "KBC_BUILD_RHSM_ACTIVATION_KEY",
+		TypeKind:   reflect.String,
+		Usage:      "File containing an RHSM activation key.\nSee 'Red Hat Subscription Management' in the help text for more details.",
+	},
+	"rhsm-org": {
+		Name:       "rhsm-org",
+		ShortName:  "",
+		EnvVarName: "KBC_BUILD_RHSM_ORG",
+		TypeKind:   reflect.String,
+		Usage:      "File containing an RHSM organization ID.\nSee 'Red Hat Subscription Management' in the help text for more details.",
+	},
+	"rhsm-activation-mount": {
+		Name:       "rhsm-activation-mount",
+		ShortName:  "",
+		EnvVarName: "KBC_BUILD_RHSM_ACTIVATION_MOUNT",
+		TypeKind:   reflect.String,
+		Usage:      "Mount destination for the RHSM activation key and org files.\nSee 'Red Hat Subscription Management' in the help text for more details.",
+	},
+	"rhsm-activation-preregister": {
+		Name:       "rhsm-activation-preregister",
+		ShortName:  "",
+		EnvVarName: "KBC_BUILD_RHSM_ACTIVATION_PREREGISTER",
+		TypeKind:   reflect.Bool,
+		Usage:      "Pre-register with RHSM using the provided activation key and org ID.\nWARNING: unregisters your host system if already registered. Requires root permissions.\nSee 'Red Hat Subscription Management' in the help text for more details.",
+	},
+	"rhsm-mount-ca-certs": {
+		Name:         "rhsm-mount-ca-certs",
+		ShortName:    "",
+		EnvVarName:   "KBC_BUILD_RHSM_MOUNT_CA_CERTS",
+		DefaultValue: "auto",
+		TypeKind:     reflect.String,
+		Usage:        "Mount /etc/rhsm/ca from the host machine into the build. Valid values are 'always', 'auto', 'never'.\nSee 'Red Hat Subscription Management' in the help text for more details.",
+	},
 }
 
 type BuildParams struct {
@@ -333,6 +376,12 @@ type BuildParams struct {
 	PrefetchOutputMount        string   `paramName:"prefetch-output-mount"`
 	PrefetchEnvMount           string   `paramName:"prefetch-env-mount"`
 	ResolvedBaseImagesOutput   string   `paramName:"resolved-base-images-output"`
+	RHSMEntitlements           string   `paramName:"rhsm-entitlements"`
+	RHSMActivationKey          string   `paramName:"rhsm-activation-key"`
+	RHSMOrg                    string   `paramName:"rhsm-org"`
+	RHSMActivationMount        string   `paramName:"rhsm-activation-mount"`
+	RHSMActivationPreregister  bool     `paramName:"rhsm-activation-preregister"`
+	RHSMMountCACerts           string   `paramName:"rhsm-mount-ca-certs"`
 	ExtraArgs                  []string // Additional arguments to pass to buildah build
 }
 
@@ -341,6 +390,7 @@ type BuildCliWrappers struct {
 	BuildahUnshare      cliWrappers.WrapperCmd
 	Unshare             cliWrappers.WrapperCmd
 	SelfInUserNamespace cliWrappers.WrapperCmd
+	SubscriptionManager cliWrappers.SubscriptionManagerCliInterface
 }
 
 type BuildResults struct {
@@ -369,10 +419,20 @@ type Build struct {
 
 	// temporary files/directories that could not be placed inside the tempWorkdir
 	tempFilesOutsideWorkdir []string
+
+	registeredWithRHSM bool
+	// these are constants, but they need to be mockable for tests
+	hostEntitlements  string
+	hostConsumerCerts string
+	hostRHSMcaCerts   string
 }
 
 func NewBuild(cmd *cobra.Command, extraArgs []string) (*Build, error) {
-	build := &Build{}
+	build := &Build{
+		hostEntitlements:  "/etc/pki/entitlement",
+		hostConsumerCerts: "/etc/pki/consumer",
+		hostRHSMcaCerts:   "/etc/rhsm/ca",
+	}
 
 	params := &BuildParams{}
 	if err := common.ParseParameters(cmd, BuildParamsConfig, params); err != nil {
@@ -402,6 +462,9 @@ func (c *Build) cleanup() {
 			l.Logger.Warnf("Failed to clean up temporary path %s: %s", p, err)
 		}
 	}
+	if c.registeredWithRHSM {
+		c.CliWrappers.SubscriptionManager.Unregister()
+	}
 }
 
 func (c *Build) initCliWrappers() error {
@@ -422,6 +485,14 @@ func (c *Build) initCliWrappers() error {
 		return err
 	}
 	c.CliWrappers.SelfInUserNamespace = cliWrappers.NewWrapperCmd(selfPath, "internal", "in-user-namespace")
+
+	if c.Params.RHSMActivationPreregister {
+		subman, err := cliWrappers.NewSubscriptionManagerCli(executor)
+		if err != nil {
+			return fmt.Errorf("cannot pre-register with RHSM: %w", err)
+		}
+		c.CliWrappers.SubscriptionManager = subman
+	}
 
 	return nil
 }
@@ -519,6 +590,10 @@ func (c *Build) Run() error {
 		return fmt.Errorf("preparing yum.repos.d mount: %w", err)
 	}
 
+	if err := c.integrateWithRHSM(); err != nil {
+		return fmt.Errorf("setting up RHSM integration: %w", err)
+	}
+
 	if !c.Params.SkipInjections {
 		if c.Params.Target != "" {
 			l.Logger.Warnf("Injecting buildinfo is not supported with --target. Skipping.")
@@ -592,6 +667,37 @@ func (c *Build) validateParams() error {
 	if c.Params.PrefetchDirCopy != "" {
 		if _, err := os.Lstat(c.Params.PrefetchDirCopy); !os.IsNotExist(err) {
 			return fmt.Errorf("prefetch-dir-copy must not be an existing path: %s", c.Params.PrefetchDirCopy)
+		}
+	}
+
+	if c.Params.RHSMEntitlements != "" && c.Params.RHSMActivationKey != "" {
+		return fmt.Errorf("rhsm-entitlements and rhsm-activation-key are mutually exclusive")
+	}
+
+	if (c.Params.RHSMActivationKey != "") != (c.Params.RHSMOrg != "") {
+		return fmt.Errorf("rhsm-activation-key and rhsm-org must be used together")
+	}
+
+	if c.Params.RHSMActivationPreregister && c.Params.RHSMActivationKey == "" {
+		return fmt.Errorf("rhsm-activation-preregister requires rhsm-activation-key and rhsm-org")
+	}
+
+	if c.Params.RHSMActivationMount != "" && c.Params.RHSMActivationKey == "" {
+		return fmt.Errorf("rhsm-activation-mount requires rhsm-activation-key and rhsm-org")
+	}
+
+	if c.Params.RHSMActivationMount != "" && !filepath.IsAbs(c.Params.RHSMActivationMount) {
+		return fmt.Errorf("rhsm-activation-mount must be an absolute path, got '%s'", c.Params.RHSMActivationMount)
+	}
+
+	if c.Params.RHSMActivationKey != "" && c.Params.RHSMActivationMount == "" && !c.Params.RHSMActivationPreregister {
+		return fmt.Errorf("rhsm-activation-key requires rhsm-activation-mount or rhsm-activation-preregister")
+	}
+
+	if c.Params.RHSMMountCACerts != "" {
+		validMountCACerts := map[string]bool{"always": true, "auto": true, "never": true}
+		if !validMountCACerts[c.Params.RHSMMountCACerts] {
+			return fmt.Errorf("rhsm-mount-ca-certs must be one of 'always', 'auto', 'never', got '%s'", c.Params.RHSMMountCACerts)
 		}
 	}
 
@@ -1144,6 +1250,183 @@ func chmodAddRWX(rootDir string) error {
 		}
 		return os.Chmod(path, perm)
 	})
+}
+
+func (c *Build) integrateWithRHSM() error {
+	if c.Params.RHSMEntitlements == "" && c.Params.RHSMActivationKey == "" {
+		return nil
+	}
+
+	if c.Params.RHSMActivationPreregister {
+		if err := c.registerRHSM(); err != nil {
+			return fmt.Errorf("registering with subscription-manager: %w", err)
+		}
+		c.registeredWithRHSM = true
+	}
+
+	rhsm, err := c.gatherRHSMresources()
+	if err != nil {
+		return err
+	}
+
+	maybeMount := func(src string, dest string) {
+		if src != "" {
+			volume := cliWrappers.BuildahVolume{HostDir: src, ContainerDir: dest, Options: "z"}
+			c.buildahVolumes = append(c.buildahVolumes, volume)
+		}
+	}
+	maybeMount(rhsm.entitlementCerts, "/etc/pki/entitlement")
+	maybeMount(rhsm.consumerCerts, "/etc/pki/consumer")
+	maybeMount(rhsm.caCerts, "/etc/rhsm/ca")
+	maybeMount(rhsm.activationSecrets, c.Params.RHSMActivationMount)
+
+	return nil
+}
+
+func (c *Build) registerRHSM() error {
+	key, err := os.ReadFile(c.Params.RHSMActivationKey)
+	if err != nil {
+		return err
+	}
+	org, err := os.ReadFile(c.Params.RHSMOrg)
+	if err != nil {
+		return err
+	}
+
+	params := &cliWrappers.SubscriptionManagerRegisterParams{
+		Org:           strings.TrimSpace(string(org)),
+		ActivationKey: strings.TrimSpace(string(key)),
+		Force:         true,
+	}
+	return c.CliWrappers.SubscriptionManager.Register(params)
+}
+
+type rhsmResources struct {
+	entitlementCerts  string // directory with files from /etc/pki/entitlement
+	consumerCerts     string // directory with files from /etc/pki/consumer
+	caCerts           string // directory with files from /etc/rhsm/ca
+	activationSecrets string // directory with 'activationkey' and 'org' files
+}
+
+// Find the files relevant for RHSM integration and copy them to subdirectories of the tempWorkdir.
+// Copying is necessary so that, when we mount them into the build, the build doesn't have direct
+// access to modify the original host files.
+func (c *Build) gatherRHSMresources() (*rhsmResources, error) {
+	var rhsm rhsmResources
+
+	if err := c.ensureTempWorkdirExists(); err != nil {
+		return nil, err
+	}
+
+	mkWorkdir := func(dirname string, outPath *string) error {
+		path := filepath.Join(c.tempWorkdir, dirname)
+		if err := os.Mkdir(path, 0755); err != nil {
+			return fmt.Errorf("creating temporary directory for RHSM files: %w", err)
+		}
+		*outPath = path
+		return nil
+	}
+
+	if c.Params.RHSMEntitlements != "" {
+		if err := mkWorkdir("rhsm-entitlement", &rhsm.entitlementCerts); err != nil {
+			return nil, err
+		}
+		if err := copyRegularFiles(c.Params.RHSMEntitlements, rhsm.entitlementCerts); err != nil {
+			return nil, fmt.Errorf("copying entitlements: %w", err)
+		}
+	} else if c.Params.RHSMActivationKey != "" {
+		// Always create the entitlement and consumer dirs. Even if we didn't pre-pregister,
+		// we still want to mount empty dirs over /etc/pki/{entitlement,consumer} so that,
+		// if the build runs 'subscription-manager register', the outputs go to the volume mount
+		// instead of going to the container filesystem (the outputs are secrets).
+		if err := mkWorkdir("rhsm-entitlement", &rhsm.entitlementCerts); err != nil {
+			return nil, err
+		}
+		if err := mkWorkdir("rhsm-consumer", &rhsm.consumerCerts); err != nil {
+			return nil, err
+		}
+
+		if c.Params.RHSMActivationPreregister {
+			if err := copyRegularFiles(c.hostEntitlements, rhsm.entitlementCerts); err != nil {
+				return nil, fmt.Errorf("copying %s: %w", c.hostEntitlements, err)
+			}
+			if err := copyRegularFiles(c.hostConsumerCerts, rhsm.consumerCerts); err != nil {
+				return nil, fmt.Errorf("copying %s: %w", c.hostConsumerCerts, err)
+			}
+		}
+
+		if c.Params.RHSMActivationMount != "" {
+			if err := mkWorkdir("rhsm-activation", &rhsm.activationSecrets); err != nil {
+				return nil, err
+			}
+			activationkey := filepath.Join(rhsm.activationSecrets, "activationkey")
+			if err := copyFile(c.Params.RHSMActivationKey, activationkey); err != nil {
+				return nil, fmt.Errorf("copying activation key file: %w", err)
+			}
+			org := filepath.Join(rhsm.activationSecrets, "org")
+			if err := copyFile(c.Params.RHSMOrg, org); err != nil {
+				return nil, fmt.Errorf("copying org file: %w", err)
+			}
+		}
+	}
+
+	if c.shouldMountRHSMcaCerts() {
+		if _, err := os.Stat(c.hostRHSMcaCerts); err == nil {
+			if err := mkWorkdir("rhsm-ca-certs", &rhsm.caCerts); err != nil {
+				return nil, err
+			}
+			if err := copyRegularFiles(c.hostRHSMcaCerts, rhsm.caCerts); err != nil {
+				return nil, fmt.Errorf("copying RHSM CA certificates: %w", err)
+			}
+		} else if os.IsNotExist(err) {
+			if c.Params.RHSMMountCACerts == "always" {
+				return nil, fmt.Errorf("rhsm-mount-ca-certs=always, but %s doesn't exist", c.hostRHSMcaCerts)
+			} else {
+				l.Logger.Warnf("Couldn't mount RHSM CA certificates into the build, %s doesn't exist. "+
+					"This may not be a problem if the build already has the certificates installed, proceeding.",
+					c.hostRHSMcaCerts)
+			}
+		} else {
+			return nil, fmt.Errorf("checking %s existence: %w", c.hostRHSMcaCerts, err)
+		}
+	}
+
+	return &rhsm, nil
+}
+
+func (c *Build) shouldMountRHSMcaCerts() bool {
+	switch c.Params.RHSMMountCACerts {
+	case "always":
+		return true
+	case "never":
+		return false
+	default:
+		isSelfRegistration := c.Params.RHSMActivationKey != "" && !c.Params.RHSMActivationPreregister
+		return !isSelfRegistration
+	}
+}
+
+func copyRegularFiles(srcDir, dstDir string) error {
+	entries, err := os.ReadDir(srcDir)
+	if err != nil {
+		return err
+	}
+	for _, entry := range entries {
+		isFile, err := isRegular(entry, srcDir)
+		if err != nil {
+			return err
+		}
+		if !isFile {
+			continue
+		}
+
+		srcPath := filepath.Join(srcDir, entry.Name())
+		dstPath := filepath.Join(dstDir, entry.Name())
+		if err := copyFile(srcPath, dstPath); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (c *Build) parseContainerfile() (*dockerfile.Dockerfile, error) {
@@ -1940,15 +2223,20 @@ func (c *Build) chooseBuildahWrappers() *cliWrappers.WrapperCmd {
 		wrapper = c.CliWrappers.BuildahUnshare
 	}
 
+	inUserNamespaceArgs := []string{"--disable-rhsm-host-integration"}
+
 	if c.Params.Hermetic {
 		wrapper = cliWrappers.JoinWrappers(
 			wrapper,
 			// Create an isolated network namespace
-			c.CliWrappers.Unshare.WithArgs("--net"),
-			// But bring up the loopback interface inside this namespace.
-			// Mainly needed for Bazel builds, Bazel runs a server on localhost.
-			c.CliWrappers.SelfInUserNamespace.WithArgs("--loopback-up"))
+			c.CliWrappers.Unshare.WithArgs("--net"))
+		// But bring up the loopback interface inside this namespace.
+		// Mainly needed for Bazel builds, Bazel runs a server on localhost.
+		inUserNamespaceArgs = append(inUserNamespaceArgs, "--loopback-up")
 	}
+
+	wrapper = cliWrappers.JoinWrappers(
+		wrapper, c.CliWrappers.SelfInUserNamespace.WithArgs(inUserNamespaceArgs...))
 
 	return &wrapper
 }

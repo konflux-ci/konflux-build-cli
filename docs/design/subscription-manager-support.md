@@ -158,7 +158,7 @@ approach not viable.
 ### RHSM CA cert
 
 The buildah task's handling of the CA cert doesn't make a lot of sense. To improve coherence,
-the CLI will take `--rhsm-mount-ca-cert=always|auto|never`.
+the CLI will take `--rhsm-mount-ca-certs=always|auto|never`.
 
 * `always` always mounts the cert, fails if it doesn't exist on the host
 * `auto` mounts the cert for the activation key pre-registration path (like the current buildah task)

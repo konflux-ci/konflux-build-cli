@@ -26,6 +26,19 @@ func parseDockerfile(t *testing.T, g Gomega, content string) *dockerfile.Dockerf
 	return df
 }
 
+func listDir(path string) ([]string, error) {
+	entries, err := os.ReadDir(path)
+	if err != nil {
+		return nil, err
+	}
+
+	var filenames []string
+	for _, entry := range entries {
+		filenames = append(filenames, entry.Name())
+	}
+	return filenames, nil
+}
+
 func Test_Build_validateParams(t *testing.T) {
 	g := NewWithT(t)
 
@@ -124,6 +137,163 @@ func Test_Build_validateParams(t *testing.T) {
 				PrefetchDirCopy: filepath.Join(tempDir, "nonexistent-copy-dir"),
 			},
 			errExpected: false,
+		},
+		{
+			name: "should allow activation key with self-registration mount",
+			params: BuildParams{
+				OutputRef:           "quay.io/org/image:tag",
+				Context:             tempDir,
+				RHSMActivationKey:   "/path/to/key",
+				RHSMOrg:             "/path/to/org",
+				RHSMActivationMount: "/activation-key",
+			},
+			errExpected: false,
+		},
+		{
+			name: "should allow activation key with pre-registration",
+			params: BuildParams{
+				OutputRef:                 "quay.io/org/image:tag",
+				Context:                   tempDir,
+				RHSMActivationKey:         "/path/to/key",
+				RHSMOrg:                   "/path/to/org",
+				RHSMActivationPreregister: true,
+			},
+			errExpected: false,
+		},
+		{
+			name: "should allow activation key with both mount and pre-registration",
+			params: BuildParams{
+				OutputRef:                 "quay.io/org/image:tag",
+				Context:                   tempDir,
+				RHSMActivationKey:         "/path/to/key",
+				RHSMOrg:                   "/path/to/org",
+				RHSMActivationMount:       "/activation-key",
+				RHSMActivationPreregister: true,
+			},
+			errExpected: false,
+		},
+		{
+			name: "should allow rhsm-entitlements",
+			params: BuildParams{
+				OutputRef:        "quay.io/org/image:tag",
+				Context:          tempDir,
+				RHSMEntitlements: "/etc/pki/entitlement",
+			},
+			errExpected: false,
+		},
+		{
+			name: "should allow rhsm-mount-ca-certs=always",
+			params: BuildParams{
+				OutputRef:        "quay.io/org/image:tag",
+				Context:          tempDir,
+				RHSMMountCACerts: "always",
+			},
+			errExpected: false,
+		},
+		{
+			name: "should allow rhsm-mount-ca-certs=auto",
+			params: BuildParams{
+				OutputRef:        "quay.io/org/image:tag",
+				Context:          tempDir,
+				RHSMMountCACerts: "auto",
+			},
+			errExpected: false,
+		},
+		{
+			name: "should allow rhsm-mount-ca-certs=never",
+			params: BuildParams{
+				OutputRef:        "quay.io/org/image:tag",
+				Context:          tempDir,
+				RHSMMountCACerts: "never",
+			},
+			errExpected: false,
+		},
+		{
+			name: "should fail when rhsm-activation-key is provided without rhsm-org",
+			params: BuildParams{
+				OutputRef:           "quay.io/org/image:tag",
+				Context:             tempDir,
+				RHSMActivationKey:   "/path/to/key",
+				RHSMActivationMount: "/activation-key",
+			},
+			errExpected:  true,
+			errSubstring: "must be used together",
+		},
+		{
+			name: "should fail when rhsm-org is provided without rhsm-activation-key",
+			params: BuildParams{
+				OutputRef: "quay.io/org/image:tag",
+				Context:   tempDir,
+				RHSMOrg:   "/path/to/org",
+			},
+			errExpected:  true,
+			errSubstring: "must be used together",
+		},
+		{
+			name: "should fail when rhsm-entitlements and rhsm-activation-key are used together",
+			params: BuildParams{
+				OutputRef:           "quay.io/org/image:tag",
+				Context:             tempDir,
+				RHSMEntitlements:    "/etc/pki/entitlement",
+				RHSMActivationKey:   "/path/to/key",
+				RHSMOrg:             "/path/to/org",
+				RHSMActivationMount: "/activation-key",
+			},
+			errExpected:  true,
+			errSubstring: "are mutually exclusive",
+		},
+		{
+			name: "should fail when rhsm-activation-mount is used without rhsm-activation-key",
+			params: BuildParams{
+				OutputRef:           "quay.io/org/image:tag",
+				Context:             tempDir,
+				RHSMActivationMount: "/activation-key",
+			},
+			errExpected:  true,
+			errSubstring: "requires rhsm-activation-key",
+		},
+		{
+			name: "should fail when rhsm-activation-preregister is used without rhsm-activation-key",
+			params: BuildParams{
+				OutputRef:                 "quay.io/org/image:tag",
+				Context:                   tempDir,
+				RHSMActivationPreregister: true,
+			},
+			errExpected:  true,
+			errSubstring: "requires rhsm-activation-key",
+		},
+		{
+			name: "should fail when rhsm-activation-mount is a relative path",
+			params: BuildParams{
+				OutputRef:           "quay.io/org/image:tag",
+				Context:             tempDir,
+				RHSMActivationKey:   "/path/to/key",
+				RHSMOrg:             "/path/to/org",
+				RHSMActivationMount: "activation-key",
+			},
+			errExpected:  true,
+			errSubstring: "must be an absolute path",
+		},
+		{
+			name: "should fail when rhsm-mount-ca-certs has invalid value",
+			params: BuildParams{
+				OutputRef:        "quay.io/org/image:tag",
+				Context:          tempDir,
+				RHSMMountCACerts: "invalid",
+			},
+			errExpected:  true,
+			errSubstring: "must be one of",
+		},
+		{
+			name: "should fail when rhsm-activation-key is used without mount or preregister",
+			params: BuildParams{
+				OutputRef:         "quay.io/org/image:tag",
+				Context:           tempDir,
+				RHSMActivationKey: "/path/to/key",
+				RHSMOrg:           "/path/to/org",
+			},
+			errExpected:  true,
+			errSubstring: "requires rhsm-activation-mount or rhsm-activation-preregister",
 		},
 	}
 
@@ -1127,6 +1297,92 @@ func Test_Build_Run(t *testing.T) {
 		// Check that the Run() function restored the cwd on exit
 		restoredDir, _ := os.Getwd()
 		g.Expect(restoredDir).To(Equal(tempDir))
+	})
+
+	// Unit-test the full RHSM pre-registration flow. Ideally this would be a real integration test,
+	// but it's not practical to do RHSM registration in tests.
+	t.Run("should do RHSM pre-registration", func(t *testing.T) {
+		beforeEach()
+
+		c.hostEntitlements = t.TempDir()
+		c.hostConsumerCerts = t.TempDir()
+		c.hostRHSMcaCerts = t.TempDir()
+
+		caCertPath := filepath.Join(c.hostRHSMcaCerts, "redhat-uep.pem")
+		g.Expect(os.WriteFile(caCertPath, []byte("RHSM CA cert"), 0644)).To(Succeed())
+
+		activationDir := t.TempDir()
+		testutil.WriteFileTree(t, activationDir, map[string]string{
+			"key.txt": "my-activation-key\n",
+			"org.txt": "my-org\n",
+		})
+
+		c.Params.RHSMActivationKey = filepath.Join(activationDir, "key.txt")
+		c.Params.RHSMOrg = filepath.Join(activationDir, "org.txt")
+		c.Params.RHSMActivationPreregister = true
+		c.Params.RHSMActivationMount = "/activation-key"
+
+		var capturedRegisterParams *cliwrappers.SubscriptionManagerRegisterParams
+		unregisterCalled := false
+
+		c.CliWrappers.SubscriptionManager = &mockSubscriptionManagerCli{
+			RegisterFunc: func(params *cliwrappers.SubscriptionManagerRegisterParams) error {
+				capturedRegisterParams = params
+				// Simulate subscription-manager creating cert files on the host
+				testutil.WriteFileTree(t, c.hostEntitlements, map[string]string{
+					"12345.pem":     "entitlement-cert",
+					"12345-key.pem": "entitlement-key",
+				})
+				testutil.WriteFileTree(t, c.hostConsumerCerts, map[string]string{
+					"cert.pem": "consumer-cert",
+				})
+				return nil
+			},
+			UnregisterFunc: func() {
+				unregisterCalled = true
+			},
+		}
+
+		buildCalled := false
+
+		_mockBuildahCli.BuildFunc = func(args *cliwrappers.BuildahBuildArgs) error {
+			buildCalled = true
+
+			expectedMounts := map[string][]string{
+				// Should mount the entitlement and consumer certs created by subscription-manager
+				"/etc/pki/entitlement": {"12345.pem", "12345-key.pem"},
+				"/etc/pki/consumer":    {"cert.pem"},
+				// By default, should mount RHSM CA cert from host for when preregister=true
+				"/etc/rhsm/ca": {"redhat-uep.pem"},
+				// Should mount the activation key even when preregister=true, if requested
+				"/activation-key": {"activationkey", "org"},
+			}
+			for destDir, files := range expectedMounts {
+				found := false
+				for _, v := range args.Volumes {
+					if v.ContainerDir == destDir {
+						g.Expect(listDir(v.HostDir)).To(ConsistOf(files))
+						found = true
+						break
+					}
+				}
+				g.Expect(found).To(BeTrue(), "no volume with destination="+destDir+" found!")
+			}
+
+			return nil
+		}
+
+		err := c.Run()
+		g.Expect(err).ToNot(HaveOccurred())
+
+		g.Expect(buildCalled).To(BeTrue())
+
+		g.Expect(capturedRegisterParams).ToNot(BeNil())
+		g.Expect(capturedRegisterParams.ActivationKey).To(Equal("my-activation-key"))
+		g.Expect(capturedRegisterParams.Org).To(Equal("my-org"))
+		g.Expect(capturedRegisterParams.Force).To(BeTrue())
+
+		g.Expect(unregisterCalled).To(BeTrue())
 	})
 }
 
@@ -2540,6 +2796,178 @@ func Test_determineContentSets(t *testing.T) {
 		))
 		g.Expect(metadata["image_layer_index"]).To(Equal(0))
 		g.Expect(result["from_dnf_hint"]).To(BeTrue())
+	})
+}
+
+func Test_Build_shouldMountRHSMcaCerts(t *testing.T) {
+	g := NewWithT(t)
+
+	tests := []struct {
+		name                      string
+		rhsmMountCACerts          string
+		rhsmEntitlements          string
+		rhsmActivationKey         string
+		rhsmActivationPreregister bool
+		expected                  bool
+	}{
+		{
+			name:             "'always' returns true",
+			rhsmMountCACerts: "always",
+			expected:         true,
+		},
+		{
+			name:             "'never' returns false",
+			rhsmMountCACerts: "never",
+			expected:         false,
+		},
+		{
+			name:             "auto with entitlements returns true",
+			expected:         true,
+			rhsmEntitlements: "/path/to/entitlements",
+		},
+		{
+			name:                      "auto with activation key and preregister returns true",
+			rhsmActivationKey:         "/path/to/key",
+			rhsmActivationPreregister: true,
+			expected:                  true,
+		},
+		{
+			name:              "auto with activation key without preregister (self-registration) returns false",
+			rhsmActivationKey: "/path/to/key",
+			expected:          false,
+		},
+		{
+			name:              "explicit 'auto' behaves like default",
+			rhsmMountCACerts:  "auto",
+			rhsmActivationKey: "/path/to/key",
+			expected:          false,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			c := &Build{
+				Params: &BuildParams{
+					RHSMMountCACerts:          tc.rhsmMountCACerts,
+					RHSMEntitlements:          tc.rhsmEntitlements,
+					RHSMActivationKey:         tc.rhsmActivationKey,
+					RHSMActivationPreregister: tc.rhsmActivationPreregister,
+				},
+			}
+			g.Expect(c.shouldMountRHSMcaCerts()).To(Equal(tc.expected))
+		})
+	}
+}
+
+func Test_Build_integrateWithRHSM(t *testing.T) {
+	t.Run("should error when entitlements dir does not exist", func(t *testing.T) {
+		g := NewWithT(t)
+
+		c := &Build{
+			Params: &BuildParams{
+				RHSMEntitlements: "/nonexistent/entitlements",
+			},
+		}
+		defer c.cleanup()
+
+		err := c.integrateWithRHSM()
+		g.Expect(err).To(HaveOccurred())
+		g.Expect(err.Error()).To(ContainSubstring("copying entitlements"))
+	})
+
+	t.Run("should error when activation key file does not exist", func(t *testing.T) {
+		g := NewWithT(t)
+
+		tempDir := t.TempDir()
+		orgFile := filepath.Join(tempDir, "org.txt")
+		g.Expect(os.WriteFile(orgFile, []byte("my-org"), 0644)).To(Succeed())
+
+		c := &Build{
+			Params: &BuildParams{
+				RHSMActivationKey:   filepath.Join(tempDir, "nonexistent-key.txt"),
+				RHSMOrg:             orgFile,
+				RHSMActivationMount: "/activation-key",
+			},
+		}
+		defer c.cleanup()
+
+		err := c.integrateWithRHSM()
+		g.Expect(err).To(HaveOccurred())
+		g.Expect(err.Error()).To(ContainSubstring("copying activation key file"))
+	})
+
+	t.Run("should error on rhsm-mount-ca-certs=always when CA dir does not exist", func(t *testing.T) {
+		g := NewWithT(t)
+
+		c := &Build{
+			Params: &BuildParams{
+				RHSMEntitlements: t.TempDir(),
+				RHSMMountCACerts: "always",
+			},
+			hostRHSMcaCerts: "/nonexistent/rhsm/ca",
+		}
+		defer c.cleanup()
+
+		err := c.integrateWithRHSM()
+		g.Expect(err).To(HaveOccurred())
+		g.Expect(err.Error()).To(ContainSubstring("rhsm-mount-ca-certs=always, but /nonexistent/rhsm/ca doesn't exist"))
+	})
+
+	t.Run("should warn when CA dir does not exist in auto mode", func(t *testing.T) {
+		g := NewWithT(t)
+
+		c := &Build{
+			Params: &BuildParams{
+				RHSMEntitlements: t.TempDir(),
+			},
+			hostRHSMcaCerts: "/nonexistent/rhsm/ca",
+		}
+		defer c.cleanup()
+
+		logOutput := testutil.CaptureLogOutput(func() {
+			err := c.integrateWithRHSM()
+			g.Expect(err).ToNot(HaveOccurred())
+		})
+
+		g.Expect(logOutput).To(ContainSubstring("Couldn't mount RHSM CA certificates"))
+
+		for _, volume := range c.buildahVolumes {
+			g.Expect(volume.ContainerDir).To(Equal("/etc/pki/entitlement"),
+				"should mount only the /etc/pki/entitlement directory, nothing else")
+		}
+	})
+
+	t.Run("should error when subscription-manager registration fails", func(t *testing.T) {
+		g := NewWithT(t)
+
+		tempDir := t.TempDir()
+		testutil.WriteFileTree(t, tempDir, map[string]string{
+			"key.txt": "my-key",
+			"org.txt": "my-org",
+		})
+
+		mockSM := &mockSubscriptionManagerCli{
+			RegisterFunc: func(params *cliwrappers.SubscriptionManagerRegisterParams) error {
+				return errors.New("network timeout")
+			},
+		}
+
+		c := &Build{
+			Params: &BuildParams{
+				RHSMActivationKey:         filepath.Join(tempDir, "key.txt"),
+				RHSMOrg:                   filepath.Join(tempDir, "org.txt"),
+				RHSMActivationPreregister: true,
+				RHSMMountCACerts:          "never",
+			},
+			CliWrappers: BuildCliWrappers{SubscriptionManager: mockSM},
+		}
+		defer c.cleanup()
+
+		err := c.integrateWithRHSM()
+		g.Expect(err).To(HaveOccurred())
+		g.Expect(err.Error()).To(ContainSubstring("registering with subscription-manager: network timeout"))
+		g.Expect(c.registeredWithRHSM).To(BeFalse(),
+			"should not be marked as registered when registration fails")
 	})
 }
 
