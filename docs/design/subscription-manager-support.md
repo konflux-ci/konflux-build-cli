@@ -136,7 +136,7 @@ This solves both problems:
 
 Konflux-build-cli already wraps the `buildah build` call in multiple levels of wrappers,
 e.g. `buildah unshare -- konflux-build-cli internal in-user-namespace -- buildah build ...`.
-The `internal in-user-namespace` command will get a new `--rhsm-disable-host-integration` flag
+The `internal in-user-namespace` command will get a new `--disable-rhsm-host-integration` flag
 with the effect of mounting a tmpfs over the `/usr/share/rhel/secrets` directory if it exists.
 
 Same as the buildah task, the CLI will *always* disable host integration,
