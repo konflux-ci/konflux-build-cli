@@ -86,15 +86,11 @@ func containsRPM(input any) bool {
 }
 
 // Modify the user input for RPM packages.
-func injectRPMInput(input any, rhsmOrgPath string, rhsmActivationKeyPath string) (any, error) {
+func injectRPMInput(input any, registeredWithRHSM bool) (any, error) {
 	withSummary := injectSummaryInSBOMField(input)
 
-	if rhsmOrgPath == "" || rhsmActivationKeyPath == "" {
+	if !registeredWithRHSM {
 		return withSummary, nil
-	}
-
-	if err := registerSubscriptionManager(rhsmOrgPath, rhsmActivationKeyPath); err != nil {
-		return withSummary, fmt.Errorf("failed to register with subscription-manager: %w", err)
 	}
 
 	// Glob ignores file system errors such as I/O errors reading directories.
@@ -184,59 +180,6 @@ func injectSSLOptions(input any, ssl map[string]any) any {
 		}
 	}
 	return input
-}
-
-// Wrapper around the subscription-manager register command.
-func registerSubscriptionManager(rhsmOrgPath string, rhsmActivationKeyPath string) error {
-	available, err := cliwrappers.CheckCliToolAvailable("subscription-manager")
-	if err != nil {
-		return err
-	}
-	if !available {
-		return errors.New("subscription-manager CLI is not available")
-	}
-
-	org, err := os.ReadFile(rhsmOrgPath)
-	if err != nil {
-		return fmt.Errorf("failed to read %s file", rhsmOrgPath)
-	}
-
-	key, err := os.ReadFile(rhsmActivationKeyPath)
-	if err != nil {
-		return fmt.Errorf("failed to read %s file", rhsmActivationKeyPath)
-	}
-
-	args := []string{
-		"register",
-		"--force",
-		"--org",
-		strings.TrimSpace(string(org)),
-		"--activationkey",
-		strings.TrimSpace(string(key)),
-	}
-
-	executor := cliwrappers.NewCliExecutor()
-	command := func() (stdout string, stderr string, errCode int, err error) {
-		return executor.Execute(cliwrappers.Command("subscription-manager", args...))
-	}
-
-	retryer := cliwrappers.NewRetryer(command).StopIfOutputContains("unauthorized")
-	_, _, _, err = retryer.Run()
-	if err != nil {
-		return errors.New("subscription-manager register command failed")
-	}
-
-	return nil
-}
-
-// Wrapper around the subscription-manager unregister command.
-func unregisterSubscriptionManager() {
-	executor := cliwrappers.NewCliExecutor()
-	_, _, _, err := executor.Execute(cliwrappers.Command("subscription-manager", "unregister"))
-	// Ignore errors as unregister is a best-effort operation.
-	if err != nil {
-		log.Debug("subscription-manager unregister command failed")
-	}
 }
 
 func cpFile(sourcePath, destinationPath string) error {

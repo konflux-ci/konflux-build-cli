@@ -3,6 +3,8 @@ package prefetch_dependencies
 import (
 	"encoding/json"
 	"fmt"
+	"os"
+	"strings"
 
 	"github.com/konflux-ci/konflux-build-cli/pkg/cliwrappers"
 	"github.com/konflux-ci/konflux-build-cli/pkg/common"
@@ -15,8 +17,9 @@ import (
 var log = logger.Logger.WithField("logger", "PrefetchDependencies")
 
 type PrefetchDependencies struct {
-	Config     *Params
-	HermetoCli cliwrappers.HermetoCliInterface
+	Config                 *Params
+	HermetoCli             cliwrappers.HermetoCliInterface
+	SubscriptionManagerCli cliwrappers.SubscriptionManagerCliInterface
 }
 
 func getPackageProxyConfiguration() ([]string, error) {
@@ -99,9 +102,15 @@ func (pd *PrefetchDependencies) Run() error {
 
 	decodedJSONInput := parseInput(pd.Config.Input)
 	if containsRPM(decodedJSONInput) {
-		defer unregisterSubscriptionManager()
+		registerRHSM := pd.Config.RHSMOrg != "" && pd.Config.RHSMActivationKey != ""
+		if registerRHSM {
+			if err := pd.registerRHSM(); err != nil {
+				return fmt.Errorf("failed to register with subscription-manager: %w", err)
+			}
+			defer pd.unregisterRHSM()
+		}
 
-		modifiedInput, err := injectRPMInput(decodedJSONInput, pd.Config.RHSMOrg, pd.Config.RHSMActivationKey)
+		modifiedInput, err := injectRPMInput(decodedJSONInput, registerRHSM)
 		if err != nil {
 			return fmt.Errorf("failed to inject RPM input: %w", err)
 		}
@@ -150,5 +159,47 @@ func (pd *PrefetchDependencies) Run() error {
 		return fmt.Errorf("failed to rename hermeto.repo files: %w", err)
 	}
 
+	return nil
+}
+
+func (pd *PrefetchDependencies) registerRHSM() error {
+	if err := pd.initSubscriptionManager(); err != nil {
+		return err
+	}
+
+	org, err := os.ReadFile(pd.Config.RHSMOrg)
+	if err != nil {
+		return err
+	}
+	key, err := os.ReadFile(pd.Config.RHSMActivationKey)
+	if err != nil {
+		return err
+	}
+
+	params := &cliwrappers.SubscriptionManagerRegisterParams{
+		Org:           strings.TrimSpace(string(org)),
+		ActivationKey: strings.TrimSpace(string(key)),
+		Force:         true,
+	}
+	return pd.SubscriptionManagerCli.Register(params)
+}
+
+func (pd *PrefetchDependencies) unregisterRHSM() {
+	if err := pd.initSubscriptionManager(); err != nil {
+		log.Warnf("Couldn't unregister with subscription-manager: %s", err)
+		return
+	}
+	pd.SubscriptionManagerCli.Unregister()
+}
+
+func (pd *PrefetchDependencies) initSubscriptionManager() error {
+	if pd.SubscriptionManagerCli == nil {
+		executor := cliwrappers.NewCliExecutor()
+		smCli, err := cliwrappers.NewSubscriptionManagerCli(executor)
+		if err != nil {
+			return err
+		}
+		pd.SubscriptionManagerCli = smCli
+	}
 	return nil
 }
