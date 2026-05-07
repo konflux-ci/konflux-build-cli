@@ -66,6 +66,12 @@ type BuildParams struct {
 	PrefetchOutputMount        string
 	PrefetchEnvMount           string
 	ResolvedBaseImagesOutput   string
+	RHSMEntitlements           string
+	RHSMActivationKey          string
+	RHSMOrg                    string
+	RHSMActivationMount        string
+	RHSMActivationPreregister  bool
+	RHSMMountCACerts           string
 	ExtraArgs                  []string
 }
 
@@ -334,7 +340,24 @@ func runBuildWithOutput(container *TestRunnerContainer, buildParams BuildParams)
 	if buildParams.ResolvedBaseImagesOutput != "" {
 		args = append(args, "--resolved-base-images-output", buildParams.ResolvedBaseImagesOutput)
 	}
-	// Add separator and extra args if provided
+	if buildParams.RHSMEntitlements != "" {
+		args = append(args, "--rhsm-entitlements", buildParams.RHSMEntitlements)
+	}
+	if buildParams.RHSMActivationKey != "" {
+		args = append(args, "--rhsm-activation-key", buildParams.RHSMActivationKey)
+	}
+	if buildParams.RHSMOrg != "" {
+		args = append(args, "--rhsm-org", buildParams.RHSMOrg)
+	}
+	if buildParams.RHSMActivationMount != "" {
+		args = append(args, "--rhsm-activation-mount", buildParams.RHSMActivationMount)
+	}
+	if buildParams.RHSMActivationPreregister {
+		args = append(args, "--rhsm-activation-preregister")
+	}
+	if buildParams.RHSMMountCACerts != "" {
+		args = append(args, "--rhsm-mount-ca-certs", buildParams.RHSMMountCACerts)
+	}
 	if len(buildParams.ExtraArgs) > 0 {
 		args = append(args, "--")
 		args = append(args, buildParams.ExtraArgs...)
@@ -3209,11 +3232,8 @@ COPY --from={shortWithTag} /etc/os-release /tmp/os-release
 
 		// make it possible to test the canonicalization of image refs,
 		// e.g. if the containerfile has just "ubi10/ubi-micro" we want to make it fully qualified
-		registriesConfContent := `unqualified-search-registries = ["registry.access.redhat.com"]`
-		registriesConfPath := filepath.Join(contextDir, "registries.conf")
-		Expect(os.WriteFile(registriesConfPath, []byte(registriesConfContent), 0644)).To(Succeed())
-
-		container.CopyFileIntoContainer(registriesConfPath, "/tmp/registries.conf")
+		container.CreateFileInContainer(
+			"/tmp/registries.conf", `unqualified-search-registries = ["registry.access.redhat.com"]`)
 
 		err := runBuild(container, buildParams)
 		Expect(err).ToNot(HaveOccurred())
@@ -3276,5 +3296,193 @@ COPY --from=builder /etc/os-release /tmp/os-release
 		Expect(lines).To(ConsistOf(
 			fmt.Sprintf("%s %s", baseImage, baseImage),
 		))
+	})
+
+	t.Run("RHSM", func(t *testing.T) {
+		SetupGomega(t)
+
+		t.Run("DisablesHostIntegration", func(t *testing.T) {
+			SetupGomega(t)
+
+			contextDir := setupTestContext(t)
+
+			writeContainerfile(contextDir, fmt.Sprintf(`
+FROM %s
+
+RUN bash -e <<EOF
+if [[ -d /run/secrets/etc-pki-entitlement ]]; then
+    echo "FAIL: entitlements from host mounted!"
+    exit 1
+else
+    echo "OK: entitlements from host NOT mounted"
+fi
+
+if [[ -d /run/secrets/rhsm ]]; then
+    echo "FAIL: rhsm from host mounted!"
+    exit 1
+else
+    echo "OK: rhsm from host NOT mounted"
+fi
+EOF
+`, baseImage))
+
+			outputRef := "localhost/rhsm-disables-host-integration:" + GenerateUniqueTag(t)
+
+			buildParams := BuildParams{
+				Context:   contextDir,
+				OutputRef: outputRef,
+				Push:      false,
+				// Note: KBC always disables RHSM host integration, even if no RHSM params used
+			}
+
+			container := setupBuildContainerWithCleanup(t, buildParams, nil,
+				// need root to create the files below
+				WithUser("root"), maybeMountContainerStorage(rootStoragePath, "root"))
+
+			// Files that need to exist in the container to simulate a host with enabled RHSM integration
+			filesToCreate := map[string]string{
+				// /etc/containers/mounts.conf takes priority over /usr/share/containers/mounts.conf,
+				// use that one to ensure our config is respected
+				"/etc/containers/mounts.conf":                                   "/usr/share/rhel/secrets:/run/secrets",
+				"/usr/share/rhel/secrets/etc-pki-entitlement/some-cert.pem":     "some entitlement certificate",
+				"/usr/share/rhel/secrets/etc-pki-entitlement/some-cert-key.pem": "some entitlement key",
+				"/usr/share/rhel/secrets/rhsm/ca/redhat-uep.pem":                "the CA cert for RHSM",
+			}
+			for path, content := range filesToCreate {
+				Expect(container.ExecuteCommand("mkdir", "-p", filepath.Dir(path))).To(Succeed())
+				Expect(container.CreateFileInContainer(path, content)).To(Succeed())
+			}
+
+			_, stderr, err := runBuildWithOutput(container, buildParams)
+			Expect(err).ToNot(HaveOccurred())
+
+			Expect(stderr).To(ContainSubstring("OK: entitlements from host NOT mounted"))
+			Expect(stderr).To(ContainSubstring("OK: rhsm from host NOT mounted"))
+		})
+
+		t.Run("Entitlements", func(t *testing.T) {
+			SetupGomega(t)
+
+			contextDir := setupTestContext(t)
+
+			writeContainerfile(contextDir, fmt.Sprintf(`
+FROM %s
+
+RUN echo "cert.pem=$(cat /etc/pki/entitlement/cert.pem)" && \
+    echo "cert-key.pem=$(cat /etc/pki/entitlement/cert-key.pem)" && \
+    echo "ca-from-host.pem=$(cat /etc/rhsm/ca/ca-from-host.pem)"
+
+# Modify the certs to test that this doesn't modify the original host files
+RUN echo modified > /etc/pki/entitlement/cert.pem && \
+    echo modified > /etc/pki/entitlement/cert-key.pem && \
+    echo modified > /etc/rhsm/ca/ca-from-host.pem
+`, baseImage))
+
+			outputRef := "localhost/rhsm-entitlements:" + GenerateUniqueTag(t)
+
+			buildParams := BuildParams{
+				Context:          contextDir,
+				OutputRef:        outputRef,
+				Push:             false,
+				RHSMEntitlements: "/tmp/entitlements",
+			}
+
+			container := setupBuildContainerWithCleanup(t, buildParams, nil)
+
+			filesToCreate := map[string]string{
+				"/tmp/entitlements/cert.pem":     "entitlement-cert",
+				"/tmp/entitlements/cert-key.pem": "entitlement-key",
+				"/etc/rhsm/ca/ca-from-host.pem":  "CA from host",
+			}
+			for path, content := range filesToCreate {
+				Expect(container.ExecuteCommand("mkdir", "-p", filepath.Dir(path))).To(Succeed())
+				Expect(container.CreateFileInContainer(path, content)).To(Succeed())
+			}
+
+			_, stderr, err := runBuildWithOutput(container, buildParams)
+			Expect(err).ToNot(HaveOccurred())
+
+			Expect(stderr).To(ContainSubstring("cert.pem=entitlement-cert"))
+			Expect(stderr).To(ContainSubstring("cert-key.pem=entitlement-key"))
+			Expect(stderr).To(ContainSubstring("ca-from-host.pem=CA from host"))
+
+			// Verify the build wasn't able to modify the original host files
+			Expect(container.GetFileContent("/tmp/entitlements/cert.pem")).To(Equal("entitlement-cert"))
+			Expect(container.GetFileContent("/tmp/entitlements/cert-key.pem")).To(Equal("entitlement-key"))
+			Expect(container.GetFileContent("/etc/rhsm/ca/ca-from-host.pem")).To(Equal("CA from host"))
+		})
+
+		t.Run("ActivationKeyMount", func(t *testing.T) {
+			SetupGomega(t)
+
+			contextDir := setupTestContext(t)
+
+			writeContainerfile(contextDir, fmt.Sprintf(`
+FROM %s
+
+RUN echo "activationkey=$(cat /activation-key/activationkey)" && \
+    echo "org=$(cat /activation-key/org)"
+
+RUN bash -e <<EOF
+if [[ -e /etc/rhsm/ca/ca-from-host.pem ]]; then
+    echo "the build does self-registration, ca-from-host.pem should not have been mounted!"
+    exit 1
+fi
+EOF
+
+# 'subscription-manager register' creates files in these directories.
+# Create them ourselves to test that they don't persist in the built image.
+RUN mkdir -p /etc/pki/entitlement && echo new-entitlement-cert > /etc/pki/entitlement/cert.pem && \
+    mkdir -p /etc/pki/consumer    && echo new-consumer-cert    > /etc/pki/consumer/cert.pem
+
+# Modify the secrets to test that this doesn't modify the original host files
+RUN echo modified > /activation-key/activationkey && \
+    echo modified > /activation-key/org
+`, baseImage))
+
+			outputRef := "localhost/rhsm-activation-key:" + GenerateUniqueTag(t)
+
+			buildParams := BuildParams{
+				Context:             contextDir,
+				OutputRef:           outputRef,
+				Push:                false,
+				RHSMActivationKey:   "/tmp/activation-key.txt",
+				RHSMOrg:             "/tmp/org.txt",
+				RHSMActivationMount: "/activation-key",
+			}
+
+			container := setupBuildContainerWithCleanup(t, buildParams, nil)
+
+			filesToCreate := map[string]string{
+				"/tmp/activation-key.txt": "my-activation-key",
+				"/tmp/org.txt":            "my-org",
+				// create the cert to verify kbc *does not* mount it
+				"/etc/rhsm/ca/ca-from-host.pem": "CA from host",
+			}
+			for path, content := range filesToCreate {
+				Expect(container.CreateFileInContainer(path, content)).To(Succeed())
+			}
+
+			_, stderr, err := runBuildWithOutput(container, buildParams)
+			Expect(err).ToNot(HaveOccurred())
+
+			Expect(stderr).To(ContainSubstring("activationkey=my-activation-key"))
+			Expect(stderr).To(ContainSubstring("org=my-org"))
+
+			// Verify the build wasn't able to modify the original host files
+			Expect(container.GetFileContent("/tmp/activation-key.txt")).To(Equal("my-activation-key"))
+			Expect(container.GetFileContent("/tmp/org.txt")).To(Equal("my-org"))
+
+			// Verify that the certs created during the build don't persist in the built image
+			entitlementExists := fileExistsInOutputImage(container, outputRef, "/etc/pki/entitlement/cert.pem")
+			Expect(entitlementExists).To(BeFalse(), "/etc/pki/entitlement/cert.pem should not be in the built image!")
+			consumerExists := fileExistsInOutputImage(container, outputRef, "/etc/pki/consumer/cert.pem")
+			Expect(consumerExists).To(BeFalse(), "/etc/pki/consumer/cert.pem should not be in the built image!")
+		})
+
+		// Pre-registration isn't testable without either a working activation key
+		// (and a dependency on the actual RHSM servers) or a local RHSM deployment
+		// (which is a nightmare). Pre-registration has unit test coverage instead.
+		//t.Run("ActivationKeyPreregistration", func(t *testing.T) {})
 	})
 }

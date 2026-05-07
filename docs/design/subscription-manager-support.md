@@ -136,7 +136,7 @@ This solves both problems:
 
 Konflux-build-cli already wraps the `buildah build` call in multiple levels of wrappers,
 e.g. `buildah unshare -- konflux-build-cli internal in-user-namespace -- buildah build ...`.
-The `internal in-user-namespace` command will get a new `--rhsm-disable-host-integration` flag
+The `internal in-user-namespace` command will get a new `--disable-rhsm-host-integration` flag
 with the effect of mounting a tmpfs over the `/usr/share/rhel/secrets` directory if it exists.
 
 Same as the buildah task, the CLI will *always* disable host integration,
@@ -158,10 +158,10 @@ approach not viable.
 ### RHSM CA cert
 
 The buildah task's handling of the CA cert doesn't make a lot of sense. To improve coherence,
-the CLI will take `--rhsm-mount-ca-cert=always|auto|never`.
+the CLI will take `--rhsm-mount-ca-certs=always|auto|never`.
 
 * `always` always mounts the cert, fails if it doesn't exist on the host
-* `auto` mounts the cert for the activation key self-registration path (like the current buildah task)
+* `auto` mounts the cert for the activation key pre-registration path (like the current buildah task)
   and the entitlement cert path (unlike the current buildah task, which forgets to do this).
   If the cert doesn't exist on the host, logs a warning and proceeds.
 * `never` never mounts the cert

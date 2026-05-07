@@ -317,6 +317,24 @@ func (c *TestRunnerContainer) CopyFileIntoContainer(hostPath, containerPath stri
 	return err
 }
 
+func (c *TestRunnerContainer) CreateFileInContainer(path string, content string) error {
+	f, err := os.CreateTemp("", filepath.Base(path)+"-*")
+	if err != nil {
+		return err
+	}
+	defer os.Remove(f.Name())
+
+	if _, err = f.WriteString(content); err != nil {
+		_ = f.Close()
+		return err
+	}
+	if err := f.Close(); err != nil {
+		return err
+	}
+
+	return c.CopyFileIntoContainer(f.Name(), path)
+}
+
 // GetFileContent reads file inside the container.
 func (c *TestRunnerContainer) GetFileContent(path string) (string, error) {
 	c.ensureContainerRunning()
