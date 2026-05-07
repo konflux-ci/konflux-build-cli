@@ -386,6 +386,7 @@ func Test_retrieveTagsFromImageLabel(t *testing.T) {
 
 			isScopeoInspectCalled = true
 			g.Expect(args.ImageRef).To(Equal(imageRef))
+			g.Expect(args.ExtraArgs).To(BeEmpty())
 			g.Expect(args.Format).To(Equal(fmt.Sprintf(`{{ index .Labels "%s" }}`, labelName)))
 			return "tag1 tag2", nil
 		}
@@ -458,6 +459,43 @@ func Test_retrieveTagsFromImageLabel(t *testing.T) {
 
 			isScopeoInspectCalled = true
 			g.Expect(args.ImageRef).To(Equal(imageRef))
+			g.Expect(args.Format).To(Equal(fmt.Sprintf(`{{ index .Labels "%s" }}`, labelName)))
+			return "tag1 tag2", nil
+		}
+
+		tags, err := c.retrieveTagsFromImageLabel(labelName)
+		g.Expect(isScopeoRawInspectCalled).To(BeTrue())
+		g.Expect(isScopeoInspectCalled).To(BeTrue())
+		g.Expect(err).ToNot(HaveOccurred())
+		g.Expect(tags).To(Equal([]string{"tag1", "tag2"}))
+	})
+
+	t.Run("should pass override-arch and override-os for image index with platform info", func(t *testing.T) {
+		isScopeoRawInspectCalled := false
+		isScopeoInspectCalled := false
+		mockSkopeoCli.InspectFunc = func(args *cliwrappers.SkopeoInspectArgs) (string, error) {
+			if args.Raw {
+				isScopeoRawInspectCalled = true
+				g.Expect(args.ImageRef).To(Equal(indexRef))
+				imageIndexJson := fmt.Sprintf(`{
+				    "mediaType":"application/vnd.oci.image.index.v1+json",
+					"manifests": [
+						{
+							"mediaType": "application/vnd.oci.image.manifest.v1+json",
+							"digest": "%s",
+							"platform": {
+								"architecture": "amd64",
+								"os": "windows"
+							}
+						}
+					]
+				}`, imageDigest)
+				return imageIndexJson, nil
+			}
+
+			isScopeoInspectCalled = true
+			g.Expect(args.ImageRef).To(Equal(imageRef))
+			g.Expect(args.ExtraArgs).To(Equal([]string{"--override-arch", "amd64", "--override-os", "windows"}))
 			g.Expect(args.Format).To(Equal(fmt.Sprintf(`{{ index .Labels "%s" }}`, labelName)))
 			return "tag1 tag2", nil
 		}

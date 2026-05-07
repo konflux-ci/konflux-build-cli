@@ -144,9 +144,14 @@ func (c *ApplyTags) Run() error {
 //     In case of an image index, get image manifest for any architecture (we need only labels).
 //  2. Perform actual inspect request on the image manifest.
 func (c *ApplyTags) retrieveTagsFromImageLabel(labelName string) ([]string, error) {
+	type imagePlatform struct {
+		Architecture string `json:"architecture,omitempty"`
+		OS           string `json:"os,omitempty"`
+	}
 	type imageManifest struct {
-		MediaType string `json:"mediaType,omitempty"`
-		Digest    string `json:"digest,omitempty"`
+		MediaType string         `json:"mediaType,omitempty"`
+		Digest    string         `json:"digest,omitempty"`
+		Platform  *imagePlatform `json:"platform,omitempty"`
 	}
 	type imageIndexManifest struct {
 		MediaType string          `json:"mediaType,omitempty"`
@@ -177,6 +182,7 @@ func (c *ApplyTags) retrieveTagsFromImageLabel(labelName string) ([]string, erro
 
 	// Image reference to inspect labels onto.
 	targetImageReference := ""
+	var manifestPlatform *imagePlatform
 
 	if strings.Contains(imageIndex.MediaType, ".index.") || strings.Contains(imageIndex.MediaType, ".manifest.list.") {
 		// Provided by user reference is image index, e.g. "application/vnd.oci.image.index.v1+json"
@@ -185,6 +191,7 @@ func (c *ApplyTags) retrieveTagsFromImageLabel(labelName string) ([]string, erro
 		for _, manifest := range imageIndex.Manifests {
 			if strings.Contains(manifest.MediaType, ".manifest.") {
 				digest = manifest.Digest
+				manifestPlatform = manifest.Platform
 				break
 			}
 		}
@@ -209,6 +216,16 @@ func (c *ApplyTags) retrieveTagsFromImageLabel(labelName string) ([]string, erro
 		Format:     fmt.Sprintf(`{{ index .Labels "%s" }}`, labelName),
 		RetryTimes: 3,
 		NoTags:     true,
+	}
+	// When inspecting a manifest from an image index, pass the manifest's platform
+	// to skopeo to avoid defaulting to the host's os/arch (and failing, if hosts's os/arch is not present)
+	if manifestPlatform != nil {
+		if manifestPlatform.Architecture != "" {
+			inspectArgs.ExtraArgs = append(inspectArgs.ExtraArgs, "--override-arch", manifestPlatform.Architecture)
+		}
+		if manifestPlatform.OS != "" {
+			inspectArgs.ExtraArgs = append(inspectArgs.ExtraArgs, "--override-os", manifestPlatform.OS)
+		}
 	}
 	tagsLabelValue, err := c.CliWrappers.SkopeoCli.Inspect(inspectArgs)
 	if err != nil {
