@@ -2,8 +2,9 @@
 
 This repository contains helper CLI used in Konflux tasks of build pieplines.
 
-[Building and testing the CLI](docs/build-and-test.md)
+For a short description see [AGENTS.md](AGENTS.md).
+`AGENTS.md` should be reviewed each quarter.
 
-[Information about command architecture](docs/command.md)
+Documentation is in [docs directory](docs/).
 
-[Integration with Tekton pipelines](docs/tekton.md)
+ADRs can be found in the [design directory](docs/design/).
