@@ -16,6 +16,21 @@ type DockerfileSearchOpts struct {
 	Dockerfile string
 }
 
+// Like filepath.Join, but absolute path elements replace the preceding elements.
+//
+// Example:
+// joinOrReplace("/abs1", "rel1", "/abs2", "rel2") => /abs2/rel2
+func joinOrReplace(pathElem ...string) string {
+	var actualPathElems []string
+	for _, elem := range pathElem {
+		if filepath.IsAbs(elem) {
+			actualPathElems = actualPathElems[:0]
+		}
+		actualPathElems = append(actualPathElems, elem)
+	}
+	return filepath.Join(actualPathElems...)
+}
+
 // SearchDockerfile searches for a Dockerfile under the given source directory.
 //
 // Search for the Dockerfile under source/context/ first, then under source/.
@@ -36,8 +51,8 @@ func SearchDockerfile(opts DockerfileSearchOpts) (string, error) {
 
 	var _search = func(dockerfile string) (string, error) {
 		possibleDockerfiles := []string{
-			filepath.Join(opts.SourceDir, contextDir, dockerfile),
-			filepath.Join(opts.SourceDir, dockerfile),
+			joinOrReplace(opts.SourceDir, contextDir, dockerfile),
+			joinOrReplace(opts.SourceDir, dockerfile),
 		}
 		for _, dockerfilePath := range possibleDockerfiles {
 			if _, err := os.Stat(dockerfilePath); err != nil {

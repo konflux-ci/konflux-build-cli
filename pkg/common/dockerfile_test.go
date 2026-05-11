@@ -178,6 +178,36 @@ func TestSearchDockerfile(t *testing.T) {
 			expectedDockerfile: "/Dockerfile",
 		},
 		{
+			name: "absolute context dir path",
+			searchOpts: DockerfileSearchOpts{
+				SourceDir:  "delay to setup",
+				ContextDir: "delay to setup",
+				Dockerfile: "./Dockerfile",
+			},
+			setup: func(t *testing.T, tc *TestCase) {
+				opts := &tc.searchOpts
+				opts.SourceDir = t.TempDir()
+				opts.ContextDir = createDir(t, opts.SourceDir, "components")
+				writeFile(t, filepath.Join(opts.ContextDir, "Dockerfile"), dockerfileContent)
+			},
+			expectedDockerfile: "/components/Dockerfile",
+		},
+		{
+			name: "absolute Dockerfile path",
+			searchOpts: DockerfileSearchOpts{
+				SourceDir:  "delay to setup",
+				ContextDir: ".",
+				Dockerfile: "delay to setup",
+			},
+			setup: func(t *testing.T, tc *TestCase) {
+				opts := &tc.searchOpts
+				opts.SourceDir = t.TempDir()
+				opts.Dockerfile = filepath.Join(opts.SourceDir, "Dockerfile")
+				writeFile(t, opts.Dockerfile, dockerfileContent)
+			},
+			expectedDockerfile: "/Dockerfile",
+		},
+		{
 			name: "both source and context point to .",
 			searchOpts: DockerfileSearchOpts{
 				SourceDir:  ".",
