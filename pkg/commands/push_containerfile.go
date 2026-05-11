@@ -188,6 +188,10 @@ func (c *PushContainerfile) Run() error {
 		return nil
 	}
 
+	if err := c.verifyContainerfileIsInSourceDir(containerfilePath); err != nil {
+		return fmt.Errorf("checking containerfile is inside source directory: %w", err)
+	}
+
 	l.Logger.Debugf("Got Containerfile: %s", containerfilePath)
 
 	l.Logger.Debugf("Select registry authentication for %s", imageUrl)
@@ -285,6 +289,21 @@ func (c *PushContainerfile) Run() error {
 		}
 	}
 
+	return nil
+}
+
+func (c *PushContainerfile) verifyContainerfileIsInSourceDir(containerfilePath string) error {
+	resolvedSource, err := common.ResolvePath(c.Params.Source)
+	if err != nil {
+		return fmt.Errorf("resolving source path: %w", err)
+	}
+	resolvedContainerfile, err := common.ResolvePath(containerfilePath)
+	if err != nil {
+		return fmt.Errorf("resolving containerfile path: %w", err)
+	}
+	if !resolvedContainerfile.IsRelativeTo(resolvedSource) {
+		return fmt.Errorf("'%s' is outside '%s'", containerfilePath, c.Params.Source)
+	}
 	return nil
 }
 

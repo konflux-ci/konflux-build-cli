@@ -16,19 +16,15 @@ type DockerfileSearchOpts struct {
 	Dockerfile string
 }
 
-// SearchDockerfile searches Dockerfile from given source directory.
+// SearchDockerfile searches for a Dockerfile under the given source directory.
 //
-// Dockerfile must be present under the source and possibly the specified build context directory.
-// Caller is responsible for determining the source directory is a relative or absolute path.
-// SearchDockerfile does not make assumption on it and search just happens under the passed source directory.
+// Search for the Dockerfile under source/context/ first, then under source/.
+// If Dockerfile is not specified, search ./Containerfile then ./Dockerfile.
 //
-// Escape from the source directory is checked. If the source itself is a symbolic link,
-// SearchDockerfile does not treat it as an error.
+// Note that the result path is not guaranteed to be a subpath of the source directory.
+// If that is important, check with [RealPath.IsRelativeTo].
 //
-// If Dockerfile option is not specified, SearchDockerfile searches ./Containerfile by default,
-// then the ./Dockerfile if Containerfile is not found.
-//
-// Returning empty string to indicate neither is found.
+// Return an empty string if nothing is found.
 func SearchDockerfile(opts DockerfileSearchOpts) (string, error) {
 	if opts.SourceDir == "" {
 		return "", fmt.Errorf("missing source directory")
@@ -38,28 +34,19 @@ func SearchDockerfile(opts DockerfileSearchOpts) (string, error) {
 		contextDir = "."
 	}
 
-	sourceDir, err := ResolvePath(opts.SourceDir)
-	if err != nil {
-		return "", fmt.Errorf("resolving source dir: %w", err)
-	}
-
 	var _search = func(dockerfile string) (string, error) {
 		possibleDockerfiles := []string{
 			filepath.Join(opts.SourceDir, contextDir, dockerfile),
 			filepath.Join(opts.SourceDir, dockerfile),
 		}
 		for _, dockerfilePath := range possibleDockerfiles {
-			resolvedPath, err := ResolvePath(dockerfilePath)
-			if err != nil {
+			if _, err := os.Stat(dockerfilePath); err != nil {
 				if os.IsNotExist(err) {
 					continue
 				}
-				return "", fmt.Errorf("resolving dockerfile path: %w", err)
+				return "", fmt.Errorf("checking dockerfile existence: %w", err)
 			}
-			if !resolvedPath.IsRelativeTo(sourceDir) {
-				return "", fmt.Errorf("Dockerfile %s is not present under source '%s'", dockerfile, sourceDir) //nolint:staticcheck // ST1005: "Dockerfile" is a proper name
-			}
-			return resolvedPath.String(), nil
+			return dockerfilePath, nil
 		}
 		// No Dockerfile is found.
 		return "", nil
