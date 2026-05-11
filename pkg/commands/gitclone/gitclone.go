@@ -227,14 +227,6 @@ func (c *GitClone) verifyCheckoutDirContainment() error {
 		baseDir = "."
 	}
 
-	resolvedOutput, err := filepath.Abs(baseDir)
-	if err != nil {
-		return fmt.Errorf("failed to resolve output directory: %w", err)
-	}
-	if evaluated, evalErr := filepath.EvalSymlinks(resolvedOutput); evalErr == nil {
-		resolvedOutput = evaluated
-	}
-
 	// Walk each component of Subdirectory under OutputDir. If any existing
 	// component is a symlink, reject it.
 	parts := strings.Split(filepath.Clean(c.Params.Subdirectory), string(filepath.Separator))
@@ -257,15 +249,15 @@ func (c *GitClone) verifyCheckoutDirContainment() error {
 	// check as belt-and-suspenders.
 	checkoutDir := c.getCheckoutDir()
 	if _, statErr := os.Lstat(checkoutDir); statErr == nil {
-		resolvedCheckout, evalErr := filepath.EvalSymlinks(checkoutDir)
-		if evalErr != nil {
-			return fmt.Errorf("failed to resolve checkout directory: %w", evalErr)
-		}
-		resolvedCheckout, err = filepath.Abs(resolvedCheckout)
+		resolvedOutput, err := common.ResolvePath(baseDir)
 		if err != nil {
-			return fmt.Errorf("failed to get absolute checkout path: %w", err)
+			return fmt.Errorf("failed to resolve output directory: %w", err)
 		}
-		if resolvedCheckout != resolvedOutput && !strings.HasPrefix(resolvedCheckout, resolvedOutput+string(filepath.Separator)) {
+		resolvedCheckout, err := common.ResolvePath(checkoutDir)
+		if err != nil {
+			return fmt.Errorf("failed to resolve checkout directory: %w", err)
+		}
+		if !resolvedCheckout.IsRelativeTo(resolvedOutput) {
 			return fmt.Errorf("checkout directory %s resolves to %s which is outside output directory %s", checkoutDir, resolvedCheckout, resolvedOutput)
 		}
 	}
