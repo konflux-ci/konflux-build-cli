@@ -714,37 +714,19 @@ func (c *Build) validateParams() error {
 }
 
 func (c *Build) detectContainerfile() error {
-	if c.Params.Containerfile != "" {
-		// Try the filepath as-is first
-		if stat, err := os.Stat(c.Params.Containerfile); err == nil && !stat.IsDir() {
-			c.containerfilePath = c.Params.Containerfile
-			l.Logger.Infof("Using containerfile: %s", c.containerfilePath)
-			return nil
-		}
-
-		// Fallback: try relative to context directory
-		fallbackPath := filepath.Join(c.Params.Context, c.Params.Containerfile)
-		if stat, err := os.Stat(fallbackPath); err == nil && !stat.IsDir() {
-			c.containerfilePath = fallbackPath
-			l.Logger.Infof("Using containerfile: %s", c.containerfilePath)
-			return nil
-		}
-
-		return fmt.Errorf("containerfile '%s' not found", c.Params.Containerfile)
+	containerfile, err := common.SearchDockerfile(common.DockerfileSearchOpts{
+		SourceDir:  ".",
+		ContextDir: c.Params.Context,
+		Dockerfile: c.Params.Containerfile,
+	})
+	if err != nil {
+		return fmt.Errorf("looking for containerfile: %w", err)
 	}
-
-	// Auto-detection: look only in context directory (same as buildah)
-	candidates := []string{"Containerfile", "Dockerfile"}
-	for _, candidate := range candidates {
-		candidatePath := filepath.Join(c.Params.Context, candidate)
-		if stat, err := os.Stat(candidatePath); err == nil && !stat.IsDir() {
-			c.containerfilePath = candidatePath
-			l.Logger.Infof("Auto-detected containerfile: %s", c.containerfilePath)
-			return nil
-		}
+	if containerfile == "" {
+		return fmt.Errorf("containerfile does not exist")
 	}
-
-	return fmt.Errorf("no Containerfile or Dockerfile found in context directory '%s'", c.Params.Context)
+	c.containerfilePath = containerfile
+	return nil
 }
 
 func (c *Build) setSecretArgs() error {

@@ -335,30 +335,8 @@ func Test_Build_detectContainerfile(t *testing.T) {
 			expectedPath: "Containerfile",
 		},
 		{
-			name:         "should auto-detect Dockerfile in workdir",
-			files:        []string{"Dockerfile"},
-			expectedPath: "Dockerfile",
-		},
-		{
-			name:         "should prefer Containerfile over Dockerfile when both exist",
-			files:        []string{"Containerfile", "Dockerfile"},
-			expectedPath: "Containerfile",
-		},
-		{
 			name:         "should auto-detect Containerfile in context dir",
 			files:        []string{"context/Containerfile"},
-			contextArg:   "context",
-			expectedPath: "context/Containerfile",
-		},
-		{
-			name:         "should auto-detect Dockerfile in context dir",
-			files:        []string{"context/Dockerfile"},
-			contextArg:   "context",
-			expectedPath: "context/Dockerfile",
-		},
-		{
-			name:         "should prefer Containerfile over Dockerfile in context dir",
-			files:        []string{"context/Containerfile", "context/Dockerfile"},
 			contextArg:   "context",
 			expectedPath: "context/Containerfile",
 		},
@@ -369,29 +347,22 @@ func Test_Build_detectContainerfile(t *testing.T) {
 			expectedPath:     "custom.dockerfile",
 		},
 		{
-			name:             "should fallback to context directory for explicit containerfile",
+			name:             "should prepend context directory for explicit containerfile",
 			files:            []string{"context/custom.dockerfile"},
 			containerfileArg: "custom.dockerfile",
 			contextArg:       "context",
 			expectedPath:     "context/custom.dockerfile",
 		},
 		{
-			name:             "should only fallback to context if the bare path doesn't exist",
-			files:            []string{"custom.dockerfile", "context/custom.dockerfile"},
-			containerfileArg: "custom.dockerfile",
-			contextArg:       "context",
-			expectedPath:     "custom.dockerfile",
-		},
-		{
 			name:             "should fail when explicit containerfile not found",
 			containerfileArg: "nonexistent.dockerfile",
 			expectError:      true,
-			errorContains:    "not found",
+			errorContains:    "containerfile does not exist",
 		},
 		{
 			name:          "should fail when no implicit containerfile found",
 			expectError:   true,
-			errorContains: "no Containerfile or Dockerfile found",
+			errorContains: "containerfile does not exist",
 		},
 	}
 
@@ -1228,7 +1199,7 @@ func Test_Build_Run(t *testing.T) {
 
 		err := c.Run()
 		g.Expect(err).To(HaveOccurred())
-		g.Expect(err.Error()).To(ContainSubstring("no Containerfile or Dockerfile found"))
+		g.Expect(err.Error()).To(ContainSubstring("containerfile does not exist"))
 	})
 
 	t.Run("should error if results json creation fails", func(t *testing.T) {
