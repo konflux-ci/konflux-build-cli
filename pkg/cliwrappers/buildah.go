@@ -278,8 +278,10 @@ func (b *BuildahCli) Push(args *BuildahPushArgs) (string, error) {
 		return "", err
 	}
 	digestFile := tmpFile.Name()
-	tmpFile.Close()
-	defer os.Remove(digestFile)
+	if err := tmpFile.Close(); err != nil {
+		return "", err
+	}
+	defer func() { _ = os.Remove(digestFile) }()
 
 	buildahArgs := []string{"push", "--digestfile", digestFile, args.Image}
 	if args.Destination != "" {
@@ -604,8 +606,10 @@ func (b *BuildahCli) ManifestPush(args *BuildahManifestPushArgs) (string, error)
 		return "", err
 	}
 	digestFile := tmpFile.Name()
-	tmpFile.Close()
-	defer os.Remove(digestFile)
+	if err := tmpFile.Close(); err != nil {
+		return "", err
+	}
+	defer func() { _ = os.Remove(digestFile) }()
 
 	buildahArgs := []string{"manifest", "push", "--digestfile", digestFile}
 

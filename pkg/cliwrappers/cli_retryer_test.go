@@ -79,7 +79,7 @@ func TestRetryer_Config(t *testing.T) {
 			g.Expect(retryer.DelayFactor).To(BeNumerically(">", 0.0))
 			g.Expect(retryer.MaxAttempts).To(BeNumerically(">", 0))
 
-			g.Expect(oldRetryer).ToNot(Equal(retryer))
+			g.Expect(&oldRetryer).ToNot(Equal(retryer))
 		}
 	})
 }

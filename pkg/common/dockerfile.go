@@ -42,7 +42,7 @@ func isRelativeTo(path, base string) bool {
 // Returning empty string to indicate neither is found.
 func SearchDockerfile(opts DockerfileSearchOpts) (string, error) {
 	if opts.SourceDir == "" {
-		return "", fmt.Errorf("Missing source directory")
+		return "", fmt.Errorf("missing source directory")
 	}
 	contextDir := opts.ContextDir
 	if contextDir == "" {
@@ -51,12 +51,12 @@ func SearchDockerfile(opts DockerfileSearchOpts) (string, error) {
 
 	absSourceDir, err := filepath.Abs(opts.SourceDir)
 	if err != nil {
-		return "", fmt.Errorf("Error :%w", err)
+		return "", err
 	}
 
 	actualAbsSourcePath, err := filepath.EvalSymlinks(absSourceDir)
 	if err != nil {
-		return "", fmt.Errorf("Error on evaluating symlink for source %s: %w", absSourceDir, err)
+		return "", fmt.Errorf("evaluating symlink for source %s: %w", absSourceDir, err)
 	}
 
 	var _search = func(dockerfile string) (string, error) {
@@ -67,11 +67,11 @@ func SearchDockerfile(opts DockerfileSearchOpts) (string, error) {
 		for _, dockerfilePath := range possibleDockerfiles {
 			if actualDockerfilePath, err := filepath.EvalSymlinks(dockerfilePath); err != nil {
 				if !os.IsNotExist(err) {
-					return "", fmt.Errorf("Error on evaluating symlink for Dockerfile path %s: %w", dockerfilePath, err)
+					return "", fmt.Errorf("evaluating symlink for Dockerfile path %s: %w", dockerfilePath, err)
 				}
 			} else {
 				if !isRelativeTo(actualDockerfilePath, actualAbsSourcePath) {
-					return "", fmt.Errorf("Dockerfile %s is not present under source '%s'.", dockerfile, actualAbsSourcePath)
+					return "", fmt.Errorf("Dockerfile %s is not present under source '%s'", dockerfile, actualAbsSourcePath) //nolint:staticcheck // ST1005: "Dockerfile" is a proper name
 				}
 				return actualDockerfilePath, nil
 			}

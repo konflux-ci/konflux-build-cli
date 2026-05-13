@@ -495,7 +495,7 @@ func Test_retrieveTagsFromImageLabel(t *testing.T) {
 		g.Expect(isScopeoRawInspectCalled).To(BeTrue())
 		g.Expect(isScopeoInspectCalled).To(BeFalse())
 		g.Expect(err).ToNot(HaveOccurred())
-		g.Expect(tags).To(HaveLen(0))
+		g.Expect(tags).To(BeEmpty())
 	})
 
 	t.Run("should skip tags from label if provided reference is not image manifest or image index", func(t *testing.T) {
@@ -516,7 +516,7 @@ func Test_retrieveTagsFromImageLabel(t *testing.T) {
 		g.Expect(isScopeoRawInspectCalled).To(BeTrue())
 		g.Expect(isScopeoInspectCalled).To(BeFalse())
 		g.Expect(err).ToNot(HaveOccurred())
-		g.Expect(tags).To(HaveLen(0))
+		g.Expect(tags).To(BeEmpty())
 	})
 
 	t.Run("should fail if scopeo failed to inspect image raw", func(t *testing.T) {

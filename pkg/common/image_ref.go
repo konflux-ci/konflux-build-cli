@@ -58,9 +58,8 @@ func NormalizeImageRefWithDigest(imageRef string) string {
 	}
 
 	// Get the base named reference (without tag)
-	named := canonical.(reference.Named)
 	// TrimNamed removes any tag from the named reference
-	baseName := reference.TrimNamed(named)
+	baseName := reference.TrimNamed(canonical)
 
 	// Create a new canonical reference with just name@digest
 	normalized, err := reference.WithDigest(baseName, canonical.Digest())

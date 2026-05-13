@@ -720,6 +720,7 @@ type unsupportedCall struct {
 func TestInject_OnUnsupported(t *testing.T) {
 	g := NewWithT(t)
 
+	//nolint:dupword // Multiple RUN instructions in Dockerfile
 	input := dedent(`
 		FROM alpine:latest
 
@@ -746,6 +747,7 @@ func TestInject_OnUnsupported(t *testing.T) {
 	result, err := injector.Inject(input, "INJECTED ")
 	g.Expect(err).ToNot(HaveOccurred())
 
+	//nolint:dupword // Multiple RUN instructions in Dockerfile
 	g.Expect(result).To(Equal(dedent(`
 		FROM alpine:latest
 

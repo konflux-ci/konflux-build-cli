@@ -216,7 +216,7 @@ func TestSkopeoCli_Inspect(t *testing.T) {
 		g.Expect(stdout).To(Equal(output))
 	})
 
-	t.Run("should inspect image with with extra options", func(t *testing.T) {
+	t.Run("should inspect image with extra options", func(t *testing.T) {
 		skopeoCli, executor := setupSkopeoCli()
 		var capturedArgs []string
 		executor.executeFunc = func(cmd cliwrappers.Cmd) (string, string, int, error) {

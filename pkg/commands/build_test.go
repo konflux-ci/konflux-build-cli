@@ -99,7 +99,7 @@ func Test_Build_validateParams(t *testing.T) {
 			errSubstring: "is not a directory",
 		},
 		{
-			name: "should fail when when legacy-build-timestamp and source-date-epoch are used together",
+			name: "should fail when legacy-build-timestamp and source-date-epoch are used together",
 			params: BuildParams{
 				OutputRef:            "quay.io/org/image:tag",
 				Context:              tempDir,
@@ -1750,6 +1750,7 @@ func Test_Build_injectBuildinfo(t *testing.T) {
 
 	// labels.json created in tempWorkdir/buildinfo with valid JSON
 	labelsContent, err := os.ReadFile(filepath.Join(c.tempWorkdir, "buildinfo", "labels.json"))
+	g.Expect(err).NotTo(HaveOccurred())
 	g.Expect(string(labelsContent)).To(Equal("{}\n"))
 
 	// buildinfoBuildContext points to the buildinfo dir

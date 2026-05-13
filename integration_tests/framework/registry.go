@@ -27,7 +27,7 @@ type ImageRegistry interface {
 	// empty string otherwise.
 	GetCaCertPath() string
 	// Returns true if given image exists in the test namespace of the registry.
-	CheckTagExistance(imageName, tag string) (bool, error)
+	CheckTagExistence(imageName, tag string) (bool, error)
 	// Return image index information, primarily the list of included manifests.
 	GetImageIndexInfo(imageName, tag string) (*ImageIndexManifest, error)
 }

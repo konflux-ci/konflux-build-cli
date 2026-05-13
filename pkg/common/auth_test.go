@@ -95,7 +95,7 @@ func TestSelectAuth(t *testing.T) {
 				if err == nil {
 					t.Errorf("selectRegistryAuth does not return error")
 				}
-				if !strings.Contains(err.Error(), "Registry authentication is not configured") {
+				if !strings.Contains(err.Error(), "registry authentication is not configured") {
 					t.Errorf("selectRegistryAuth does not return error representing token is not found.")
 				}
 				return

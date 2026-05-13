@@ -75,7 +75,7 @@ func TestValidateParams(t *testing.T) {
 				t.Errorf("Expected getting error for invalid tag suffix, but no error is return.")
 				return
 			}
-			if !regexp.MustCompile("^Tag suffix includes invalid char.+").MatchString(err.Error()) {
+			if !regexp.MustCompile("^tag suffix includes invalid char.+").MatchString(err.Error()) {
 				t.Errorf("Error is not about invalid tag suffix, got: %s", err.Error())
 			}
 		}
@@ -282,7 +282,7 @@ func TestRun(t *testing.T) {
 		}
 
 		err := cmd.Run()
-		expectedErrMsg := "Registry authentication is not configured for other-registry.io/app"
+		expectedErrMsg := "registry authentication is not configured for other-registry.io/app"
 		g.Expect(err).Should(MatchError(ContainSubstring(expectedErrMsg)))
 	})
 

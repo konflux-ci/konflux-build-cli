@@ -1235,7 +1235,7 @@ func Test_readFileWithLimit(t *testing.T) {
 		data, err := readFileWithLimit(tmpFile, 1024)
 
 		g.Expect(err).ToNot(HaveOccurred())
-		g.Expect(len(data)).To(Equal(1024))
+		g.Expect(data).To(HaveLen(1024))
 	})
 }
 

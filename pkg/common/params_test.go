@@ -511,7 +511,7 @@ func TestParseParameters(t *testing.T) {
 		err := ParseParameters(cmd, paramsConfig, params)
 
 		g.Expect(err).ToNot(HaveOccurred())
-		g.Expect(params.BoolParam).To(Equal(true))
+		g.Expect(params.BoolParam).To(BeTrue())
 	})
 
 	t.Run("should use default value when bool parameter not provided", func(t *testing.T) {
@@ -532,7 +532,7 @@ func TestParseParameters(t *testing.T) {
 		err := ParseParameters(cmd, paramsConfig, params)
 
 		g.Expect(err).ToNot(HaveOccurred())
-		g.Expect(params.BoolParam).To(Equal(true))
+		g.Expect(params.BoolParam).To(BeTrue())
 	})
 
 	t.Run("should return error for required bool parameter not provided", func(t *testing.T) {

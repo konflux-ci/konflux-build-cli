@@ -93,8 +93,8 @@ func TestApplyTags(t *testing.T) {
 
 	// Check the result
 	for _, tag := range append(newTagsFromArg, newTagsFromLabel...) {
-		tagExists, err := imageRegistry.CheckTagExistance(imageRepoUrl, tag)
-		Expect(err).ToNot(HaveOccurred(), fmt.Sprintf("failed to check for %s tag existance", tag))
+		tagExists, err := imageRegistry.CheckTagExistence(imageRepoUrl, tag)
+		Expect(err).ToNot(HaveOccurred(), fmt.Sprintf("failed to check for %s tag existence", tag))
 		Expect(tagExists).To(BeTrue(), fmt.Sprintf("Expected %s:%s to exist", imageRepoUrl, tag))
 	}
 }
@@ -156,8 +156,8 @@ func TestApplyTagsWithImageIndex(t *testing.T) {
 
 	// Check the result
 	for _, tag := range append(newTagsFromArg, newTagsFromLabel...) {
-		tagExists, err := imageRegistry.CheckTagExistance(imageRepoUrl, tag)
-		Expect(err).ToNot(HaveOccurred(), fmt.Sprintf("failed to check for %s tag existance", tag))
+		tagExists, err := imageRegistry.CheckTagExistence(imageRepoUrl, tag)
+		Expect(err).ToNot(HaveOccurred(), fmt.Sprintf("failed to check for %s tag existence", tag))
 		Expect(tagExists).To(BeTrue(), fmt.Sprintf("Expected %s:%s to exist", imageRepoUrl, tag))
 
 		// We need to be sure that the tag is applied to the image index, not a specific image.

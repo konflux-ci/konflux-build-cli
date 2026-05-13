@@ -708,7 +708,7 @@ LABEL %s="1h"
 		lastColon := strings.LastIndex(outputRef, ":")
 		tag := outputRef[lastColon+1:]
 
-		tagExists, err := imageRegistry.CheckTagExistance(imageRepoUrl, tag)
+		tagExists, err := imageRegistry.CheckTagExistence(imageRepoUrl, tag)
 		Expect(err).ToNot(HaveOccurred(), fmt.Sprintf("failed to check for %s tag existence", tag))
 		Expect(tagExists).To(BeTrue(), fmt.Sprintf("Expected %s to exist in registry", outputRef))
 	})
@@ -1266,10 +1266,10 @@ LABEL test.label="envs-test"
 # overrides default annotation
 org.opencontainers.image.created=never
 
-annotation.from.file=overriden-below
+annotation.from.file=overridden-below
 annotation.from.file=annotation-from-file
 
-common.annotation=overriden-by-cli-annotation
+common.annotation=overridden-by-cli-annotation
 `
 		testutil.WriteFileTree(t, contextDir, map[string]string{
 			"annotations.cfg": annotationsFileContent,
@@ -1638,7 +1638,7 @@ RUN echo "this instruction also creates an intermediate layer" > /tmp/bar.txt
 				SourceDateEpoch: "882921600", // 1997-12-24
 				BuildArgs:       []string{"FOO=foo"},
 				Envs:            []string{"BAR=bar"},
-				Labels:          []string{"cli.label=value-gets-overriden", "cli.label=label-from-CLI"},
+				Labels:          []string{"cli.label=value-gets-overridden", "cli.label=label-from-CLI"},
 			}
 
 			container := setupBuildContainerWithCleanup(t, buildParams, nil)
@@ -1717,16 +1717,16 @@ RUN echo "this instruction also creates an intermediate layer" > /tmp/bar.txt
 # Real base image
 FROM %s AS stage1
 
-LABEL stage1.label=value-gets-overriden
+LABEL stage1.label=value-gets-overridden
 LABEL stage1.label=label-from-stage1
 
-LABEL common.build.label=overriden-in-stage-2
-LABEL common.label=overriden-in-final-stage
+LABEL common.build.label=overridden-in-stage-2
+LABEL common.label=overridden-in-final-stage
 
 
 FROM stage1 AS stage2
 
-LABEL stage2.label=value-gets-overriden
+LABEL stage2.label=value-gets-overridden
 LABEL stage2.label=label-from-stage2
 
 LABEL common.build.label=common-build-stage2
@@ -1740,7 +1740,7 @@ LABEL unused.stage.label=label-from-unused-stage
 
 FROM stage2
 
-LABEL final.stage.label=value-gets-overriden
+LABEL final.stage.label=value-gets-overridden
 LABEL final.stage.label=label-from-final-stage
 
 LABEL common.label=common-final-stage
@@ -1884,7 +1884,7 @@ LABEL io.buildah.version=0.0.1
 
 			injectedLabels := getLabelsFromLabelsJson(container, outputRef)
 			Expect(injectedLabels).To(HaveKey("io.buildah.version"))
-			// The auto-injected buildah version label cannot be overriden by anything
+			// The auto-injected buildah version label cannot be overridden by anything
 			Expect(injectedLabels["io.buildah.version"]).To(Not(HavePrefix("0")))
 
 			imageMeta := getImageMeta(container, outputRef)
@@ -2226,7 +2226,7 @@ LABEL stage1.label=label-from-stage1
 
 FROM stage1
 
-LABEL final.stage.label=value-gets-overriden
+LABEL final.stage.label=value-gets-overridden
 LABEL final.stage.label=label-from-final-stage
 `, baseImage))
 
@@ -3483,6 +3483,6 @@ RUN echo modified > /activation-key/activationkey && \
 		// Pre-registration isn't testable without either a working activation key
 		// (and a dependency on the actual RHSM servers) or a local RHSM deployment
 		// (which is a nightmare). Pre-registration has unit test coverage instead.
-		//t.Run("ActivationKeyPreregistration", func(t *testing.T) {})
+		// t.Run("ActivationKeyPreregistration", func(t *testing.T) {})
 	})
 }

@@ -182,12 +182,12 @@ func TestBuildImageIndex_MultipleImages(t *testing.T) {
 	))
 
 	// Verify the index was pushed to registry
-	tagExists, err := imageRegistry.CheckTagExistance(baseImageRepo, tag)
+	tagExists, err := imageRegistry.CheckTagExistence(baseImageRepo, tag)
 	Expect(err).ToNot(HaveOccurred())
 	Expect(tagExists).To(BeTrue(), fmt.Sprintf("Expected %s to exist", indexImage))
 
 	// Verify additional tag was created
-	tagExists, err = imageRegistry.CheckTagExistance(baseImageRepo, "test-tag-1")
+	tagExists, err = imageRegistry.CheckTagExistence(baseImageRepo, "test-tag-1")
 	Expect(err).ToNot(HaveOccurred())
 	Expect(tagExists).To(BeTrue(), fmt.Sprintf("Expected %s:test-tag-1 to exist", baseImageRepo))
 
@@ -292,7 +292,7 @@ func TestBuildImageIndex_DockerFormat(t *testing.T) {
 	))
 
 	// Verify the index was pushed to registry
-	tagExists, err := imageRegistry.CheckTagExistance(baseImageRepo, tag)
+	tagExists, err := imageRegistry.CheckTagExistence(baseImageRepo, tag)
 	Expect(err).ToNot(HaveOccurred())
 	Expect(tagExists).To(BeTrue(), fmt.Sprintf("Expected %s to exist", indexImage))
 
@@ -411,7 +411,7 @@ func TestBuildImageIndex_SingleImageAlwaysBuildIndex(t *testing.T) {
 	Expect(results.Images).To(Equal(baseImageRepo + "@" + digest))
 
 	// Verify the index was pushed to registry
-	tagExists, err := imageRegistry.CheckTagExistance(baseImageRepo, tag)
+	tagExists, err := imageRegistry.CheckTagExistence(baseImageRepo, tag)
 	Expect(err).ToNot(HaveOccurred())
 	Expect(tagExists).To(BeTrue(), fmt.Sprintf("Expected %s to exist", indexImage))
 
@@ -680,7 +680,7 @@ func TestBuildImageIndex_ImagesWithTagAndDigest(t *testing.T) {
 	))
 
 	// Verify the index was pushed to registry
-	tagExists, err := imageRegistry.CheckTagExistance(baseImageRepo, tag)
+	tagExists, err := imageRegistry.CheckTagExistence(baseImageRepo, tag)
 	Expect(err).ToNot(HaveOccurred())
 	Expect(tagExists).To(BeTrue(), fmt.Sprintf("Expected %s to exist", indexImage))
 
