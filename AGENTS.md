@@ -18,6 +18,12 @@ The commands should be able to run:
 - `integration_tests` all integration tests.
 - `integration_tests/framework` framework to run integration tests.
 
+## Development
+
+After making any code changes, always make sure that:
+- unit tests pass
+- all linters pass
+
 ## References
 
 [Documentation index](docs/index.md) which includes all docs articles.
