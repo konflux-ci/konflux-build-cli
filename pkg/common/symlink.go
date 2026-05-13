@@ -5,7 +5,6 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"strings"
 
 	l "github.com/konflux-ci/konflux-build-cli/pkg/logger"
 )
@@ -15,14 +14,9 @@ import (
 func CheckSymlinks(dir string) error {
 	l.Logger.Debugf("Checking for symlinks pointing outside the directory %s", dir)
 
-	// Resolve the directory to handle symlinks in the path itself (e.g., on macOS /tmp -> /private/tmp)
-	absBaseDir, err := filepath.Abs(dir)
+	baseDir, err := ResolvePath(dir)
 	if err != nil {
-		return fmt.Errorf("failed to get absolute path of directory: %w", err)
-	}
-	absBaseDir, err = filepath.EvalSymlinks(absBaseDir)
-	if err != nil {
-		return fmt.Errorf("failed to resolve symlinks in directory path: %w", err)
+		return fmt.Errorf("failed to resolve directory path: %w", err)
 	}
 
 	var invalidSymlinks []string
@@ -33,22 +27,15 @@ func CheckSymlinks(dir string) error {
 		}
 
 		if d.Type()&os.ModeSymlink != 0 {
-			// This is a symlink
-			target, err := filepath.EvalSymlinks(path)
+			resolvedTarget, err := ResolvePath(path)
 			if err != nil {
 				l.Logger.Errorf("Broken symlink found: %s", path)
 				invalidSymlinks = append(invalidSymlinks, path)
 				return nil //nolint:nilerr
 			}
 
-			absTarget, err := filepath.Abs(target)
-			if err != nil {
-				return fmt.Errorf("failed to get absolute path of symlink target: %w", err)
-			}
-
-			// Check if target is inside the base directory
-			if !strings.HasPrefix(absTarget, absBaseDir+string(os.PathSeparator)) && absTarget != absBaseDir {
-				l.Logger.Errorf("Symlink points outside directory: %s -> %s", path, target)
+			if !resolvedTarget.IsRelativeTo(baseDir) {
+				l.Logger.Errorf("Symlink points outside directory: %s -> %s", path, resolvedTarget)
 				invalidSymlinks = append(invalidSymlinks, path)
 			}
 		}

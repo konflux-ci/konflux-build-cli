@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 )
 
 type DockerfileSearchOpts struct {
@@ -17,29 +16,30 @@ type DockerfileSearchOpts struct {
 	Dockerfile string
 }
 
-// isRelativeTo returns true if given path is relative to the base
-// path. Otherwise, false is returned.
-func isRelativeTo(path, base string) bool {
-	rel, err := filepath.Rel(base, path)
-	if err != nil {
-		return false
+// Like filepath.Join, but absolute path elements replace the preceding elements.
+//
+// Example:
+// joinOrReplace("/abs1", "rel1", "/abs2", "rel2") => /abs2/rel2
+func joinOrReplace(pathElem ...string) string {
+	var actualPathElems []string
+	for _, elem := range pathElem {
+		if filepath.IsAbs(elem) {
+			actualPathElems = actualPathElems[:0]
+		}
+		actualPathElems = append(actualPathElems, elem)
 	}
-	return !strings.HasPrefix(rel, "..")
+	return filepath.Join(actualPathElems...)
 }
 
-// SearchDockerfile searches Dockerfile from given source directory.
+// SearchDockerfile searches for a Dockerfile under the given source directory.
 //
-// Dockerfile must be present under the source and possibly the specified build context directory.
-// Caller is responsible for determining the source directory is a relative or absolute path.
-// SearchDockerfile does not make assumption on it and search just happens under the passed source directory.
+// Search for the Dockerfile under source/context/ first, then under source/.
+// If Dockerfile is not specified, search ./Containerfile then ./Dockerfile.
 //
-// Escape from the source directory is checked. If the source itself is a symbolic link,
-// SearchDockerfile does not treat it as an error.
+// Note that the result path is not guaranteed to be a subpath of the source directory.
+// If that is important, check with [RealPath.IsRelativeTo].
 //
-// If Dockerfile option is not specified, SearchDockerfile searches ./Containerfile by default,
-// then the ./Dockerfile if Containerfile is not found.
-//
-// Returning empty string to indicate neither is found.
+// Return an empty string if nothing is found.
 func SearchDockerfile(opts DockerfileSearchOpts) (string, error) {
 	if opts.SourceDir == "" {
 		return "", fmt.Errorf("missing source directory")
@@ -49,50 +49,31 @@ func SearchDockerfile(opts DockerfileSearchOpts) (string, error) {
 		contextDir = "."
 	}
 
-	absSourceDir, err := filepath.Abs(opts.SourceDir)
-	if err != nil {
-		return "", err
-	}
-
-	actualAbsSourcePath, err := filepath.EvalSymlinks(absSourceDir)
-	if err != nil {
-		return "", fmt.Errorf("evaluating symlink for source %s: %w", absSourceDir, err)
-	}
-
-	var _search = func(dockerfile string) (string, error) {
-		possibleDockerfiles := []string{
-			filepath.Join(actualAbsSourcePath, contextDir, dockerfile),
-			filepath.Join(actualAbsSourcePath, dockerfile),
+	var possibleDockerfiles []string
+	if opts.Dockerfile != "" {
+		// Look in the context dir first, then in the source dir.
+		// This is the opposite order compared to buildah, kept for backwards compatibility.
+		possibleDockerfiles = []string{
+			joinOrReplace(opts.SourceDir, contextDir, opts.Dockerfile),
+			joinOrReplace(opts.SourceDir, opts.Dockerfile),
 		}
-		for _, dockerfilePath := range possibleDockerfiles {
-			if actualDockerfilePath, err := filepath.EvalSymlinks(dockerfilePath); err != nil {
-				if !os.IsNotExist(err) {
-					return "", fmt.Errorf("evaluating symlink for Dockerfile path %s: %w", dockerfilePath, err)
-				}
-			} else {
-				if !isRelativeTo(actualDockerfilePath, actualAbsSourcePath) {
-					return "", fmt.Errorf("Dockerfile %s is not present under source '%s'", dockerfile, actualAbsSourcePath) //nolint:staticcheck // ST1005: "Dockerfile" is a proper name
-				}
-				return actualDockerfilePath, nil
-			}
+	} else {
+		// Look for Containerfile/Dockerfile (in that order) in context dir, same as buildah
+		possibleDockerfiles = []string{
+			joinOrReplace(opts.SourceDir, contextDir, "Containerfile"),
+			joinOrReplace(opts.SourceDir, contextDir, "Dockerfile"),
 		}
-		// No Dockerfile is found.
-		return "", nil
 	}
 
-	if opts.Dockerfile == "" {
-		for _, dockerfile := range []string{"./Containerfile", "./Dockerfile"} {
-			dockerfilePath, err := _search(dockerfile)
-			if err != nil {
-				return "", err
+	for _, dockerfilePath := range possibleDockerfiles {
+		if _, err := os.Stat(dockerfilePath); err != nil {
+			if os.IsNotExist(err) {
+				continue
 			}
-			if dockerfilePath != "" {
-				return dockerfilePath, nil
-			}
+			return "", fmt.Errorf("checking dockerfile existence: %w", err)
 		}
-		// Tried all. Nothing is found.
-		return "", nil
+		return dockerfilePath, nil
 	}
 
-	return _search(opts.Dockerfile)
+	return "", nil
 }

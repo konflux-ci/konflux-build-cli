@@ -43,7 +43,7 @@ var BuildParamsConfig = map[string]common.Parameter{
 		EnvVarName:   "KBC_BUILD_CONTAINERFILE",
 		TypeKind:     reflect.String,
 		DefaultValue: "",
-		Usage:        "Path to Containerfile. If not specified, uses Containerfile/Dockerfile from the context directory.",
+		Usage:        "Path to Containerfile. Tries with prepended --context first before falling back to the direct path.\nIf not specified, uses Containerfile/Dockerfile from the context directory.",
 	},
 	"context": {
 		Name:         "context",
@@ -52,6 +52,14 @@ var BuildParamsConfig = map[string]common.Parameter{
 		TypeKind:     reflect.String,
 		DefaultValue: ".",
 		Usage:        "Build context directory.",
+	},
+	"source": {
+		Name:         "source",
+		ShortName:    "s",
+		EnvVarName:   "KBC_BUILD_SOURCE",
+		TypeKind:     reflect.String,
+		DefaultValue: "",
+		Usage:        "Path to a directory containing the source code.\nIf specified, the --containerfile and --context are treated as (and verified to be) relative to the source.",
 	},
 	"output-ref": {
 		Name:       "output-ref",
@@ -343,6 +351,7 @@ var BuildParamsConfig = map[string]common.Parameter{
 type BuildParams struct {
 	Containerfile              string   `paramName:"containerfile"`
 	Context                    string   `paramName:"context"`
+	Source                     string   `paramName:"source"`
 	OutputRef                  string   `paramName:"output-ref"`
 	Push                       bool     `paramName:"push"`
 	SecretDirs                 []string `paramName:"secret-dirs"`
@@ -449,6 +458,14 @@ func NewBuild(cmd *cobra.Command, extraArgs []string) (*Build, error) {
 	build.ResultsWriter = common.NewResultsWriter()
 
 	return build, nil
+}
+
+func (c *Build) effectiveContextDir() string {
+	if c.Params.Source != "" && !filepath.IsAbs(c.Params.Context) {
+		return filepath.Join(c.Params.Source, c.Params.Context)
+	} else {
+		return c.Params.Context
+	}
 }
 
 func (c *Build) cleanup() {
@@ -651,13 +668,27 @@ func (c *Build) validateParams() error {
 		return fmt.Errorf("output-ref '%s' is invalid", c.Params.OutputRef)
 	}
 
-	if stat, err := os.Stat(c.Params.Context); err != nil {
+	if stat, err := os.Stat(c.effectiveContextDir()); err != nil {
 		if os.IsNotExist(err) {
-			return fmt.Errorf("context directory '%s' does not exist", c.Params.Context)
+			return fmt.Errorf("context directory '%s' does not exist", c.effectiveContextDir())
 		}
 		return fmt.Errorf("failed to stat context directory: %w", err)
 	} else if !stat.IsDir() {
-		return fmt.Errorf("context path '%s' is not a directory", c.Params.Context)
+		return fmt.Errorf("context path '%s' is not a directory", c.effectiveContextDir())
+	}
+
+	if c.Params.Source != "" {
+		resolvedSource, err := common.ResolvePath(c.Params.Source)
+		if err != nil {
+			return fmt.Errorf("resolving source directory: %w", err)
+		}
+		resolvedContext, err := common.ResolvePath(c.effectiveContextDir())
+		if err != nil {
+			return fmt.Errorf("resolving context directory: %w", err)
+		}
+		if !resolvedContext.IsRelativeTo(resolvedSource) {
+			return fmt.Errorf("context directory '%s' is outside source directory '%s'", c.Params.Context, c.Params.Source)
+		}
 	}
 
 	if c.Params.LegacyBuildTimestamp != "" && c.Params.SourceDateEpoch != "" {
@@ -714,37 +745,38 @@ func (c *Build) validateParams() error {
 }
 
 func (c *Build) detectContainerfile() error {
-	if c.Params.Containerfile != "" {
-		// Try the filepath as-is first
-		if stat, err := os.Stat(c.Params.Containerfile); err == nil && !stat.IsDir() {
-			c.containerfilePath = c.Params.Containerfile
-			l.Logger.Infof("Using containerfile: %s", c.containerfilePath)
-			return nil
-		}
-
-		// Fallback: try relative to context directory
-		fallbackPath := filepath.Join(c.Params.Context, c.Params.Containerfile)
-		if stat, err := os.Stat(fallbackPath); err == nil && !stat.IsDir() {
-			c.containerfilePath = fallbackPath
-			l.Logger.Infof("Using containerfile: %s", c.containerfilePath)
-			return nil
-		}
-
-		return fmt.Errorf("containerfile '%s' not found", c.Params.Containerfile)
+	source := c.Params.Source
+	if source == "" {
+		source = "."
+	}
+	containerfile, err := common.SearchDockerfile(common.DockerfileSearchOpts{
+		SourceDir:  source,
+		ContextDir: c.Params.Context,
+		Dockerfile: c.Params.Containerfile,
+	})
+	if err != nil {
+		return fmt.Errorf("looking for containerfile: %w", err)
+	}
+	if containerfile == "" {
+		return fmt.Errorf("containerfile does not exist")
 	}
 
-	// Auto-detection: look only in context directory (same as buildah)
-	candidates := []string{"Containerfile", "Dockerfile"}
-	for _, candidate := range candidates {
-		candidatePath := filepath.Join(c.Params.Context, candidate)
-		if stat, err := os.Stat(candidatePath); err == nil && !stat.IsDir() {
-			c.containerfilePath = candidatePath
-			l.Logger.Infof("Auto-detected containerfile: %s", c.containerfilePath)
-			return nil
+	if c.Params.Source != "" {
+		resolvedSource, err := common.ResolvePath(c.Params.Source)
+		if err != nil {
+			return fmt.Errorf("resolving source directory: %w", err)
+		}
+		resolvedContainerfile, err := common.ResolvePath(containerfile)
+		if err != nil {
+			return fmt.Errorf("resolving containerfile path: %w", err)
+		}
+		if !resolvedContainerfile.IsRelativeTo(resolvedSource) {
+			return fmt.Errorf("containerfile '%s' is outside source directory '%s'", containerfile, c.Params.Source)
 		}
 	}
 
-	return fmt.Errorf("no Containerfile or Dockerfile found in context directory '%s'", c.Params.Context)
+	c.containerfilePath = containerfile
+	return nil
 }
 
 func (c *Build) setSecretArgs() error {
@@ -2142,7 +2174,7 @@ func (c *Build) buildImage() (err error) {
 	if err != nil {
 		return err
 	}
-	if err := os.Chdir(c.Params.Context); err != nil {
+	if err := os.Chdir(c.effectiveContextDir()); err != nil {
 		return fmt.Errorf("couldn't cd to context directory: %w", err)
 	}
 	defer func() {
@@ -2158,7 +2190,7 @@ func (c *Build) buildImage() (err error) {
 
 	buildArgs := &cliWrappers.BuildahBuildArgs{
 		Containerfile:    containerfilePath,
-		ContextDir:       c.Params.Context,
+		ContextDir:       c.effectiveContextDir(),
 		OutputRef:        c.Params.OutputRef,
 		Secrets:          c.buildahSecrets,
 		Volumes:          c.buildahVolumes,
@@ -2177,7 +2209,7 @@ func (c *Build) buildImage() (err error) {
 	}
 	if c.Params.WorkdirMount != "" {
 		buildArgs.Volumes = append(buildArgs.Volumes, cliWrappers.BuildahVolume{
-			HostDir: c.Params.Context, ContainerDir: c.Params.WorkdirMount, Options: "z"})
+			HostDir: c.effectiveContextDir(), ContainerDir: c.Params.WorkdirMount, Options: "z"})
 	}
 	if c.buildinfoBuildContext != nil {
 		buildArgs.BuildContexts = []cliWrappers.BuildahBuildContext{*c.buildinfoBuildContext}

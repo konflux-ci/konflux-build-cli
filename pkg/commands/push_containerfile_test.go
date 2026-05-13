@@ -233,6 +233,27 @@ func TestRun(t *testing.T) {
 		}
 	})
 
+	t.Run("should return error when containerfile resolves outside source directory", func(t *testing.T) {
+		outsideDir := filepath.Join(workDir, "outside")
+		os.MkdirAll(outsideDir, 0755)
+		os.WriteFile(filepath.Join(outsideDir, "Containerfile"), []byte("FROM fedora"), 0644)
+
+		cmd := &PushContainerfile{
+			Params: &PushContainerfileParams{
+				ImageUrl:      "localhost.reg.io/app",
+				ImageDigest:   imageDigest,
+				Source:        "source",
+				Containerfile: "../outside/Containerfile",
+				Context:       ".",
+				TagSuffix:     ".containerfile",
+			},
+			ResultsWriter: &common.ResultsWriter{},
+		}
+
+		err := cmd.Run()
+		g.Expect(err).Should(MatchError(ContainSubstring("'outside/Containerfile' is outside 'source'")))
+	})
+
 	t.Run("should not push and exits as normal if specified Containerfile is not found", func(t *testing.T) {
 		logFilename := filepath.Join(t.TempDir(), "logfile")
 		logFile, _ := os.OpenFile(logFilename, os.O_CREATE|os.O_WRONLY, 0644)
