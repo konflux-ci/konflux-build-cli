@@ -1,9 +1,10 @@
 /konflux-build-cli
 
-coverage.out
-
 /.vscode
 /.idea
+/bin
+
+coverage.out
 
 zotdata
 .test-containers-storage
