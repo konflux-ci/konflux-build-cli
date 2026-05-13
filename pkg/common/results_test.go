@@ -115,7 +115,7 @@ func TestResultsWriter_CreateResultJson(t *testing.T) {
 
 		g.Expect(obtainedResult.StringResult).To(Equal(stringResult))
 		g.Expect(obtainedResult.IntResult).To(Equal(intResult))
-		g.Expect(obtainedResult.BoolResult).To(Equal(boolResult))
+		g.Expect(obtainedResult.BoolResult).To(BeTrue())
 		g.Expect(obtainedResult.ArrayResult).To(Equal(arrResult))
 	})
 
@@ -151,7 +151,7 @@ func TestResultsWriter_CreateResultJson(t *testing.T) {
 
 		g.Expect(obtainedResult.StringResult).To(Equal(stringResult))
 		g.Expect(obtainedResult.IntResult).To(Equal(intResult))
-		g.Expect(obtainedResult.BoolResult).To(Equal(boolResult))
+		g.Expect(obtainedResult.BoolResult).To(BeTrue())
 		g.Expect(obtainedResult.ArrayResult).To(Equal(arrResult))
 	})
 
@@ -190,7 +190,7 @@ func TestResultsWriter_CreateResultJson(t *testing.T) {
 	t.Run("should error if failed to create json string", func(t *testing.T) {
 		g := NewWithT(t)
 
-		var nanFloat float64 = math.NaN()
+		var nanFloat = math.NaN()
 
 		writer := NewResultsWriter()
 		_, err := writer.CreateResultJson(nanFloat)

@@ -169,7 +169,7 @@ func (c *PushContainerfile) Run() error {
 
 	curDir, err := os.Getwd()
 	if err != nil {
-		return fmt.Errorf("Error getting current directory: %w", err)
+		return fmt.Errorf("error getting current directory: %w", err)
 	}
 	l.Logger.Debugf("Using current directory: %s\n", curDir)
 
@@ -179,7 +179,7 @@ func (c *PushContainerfile) Run() error {
 		Dockerfile: c.Params.Containerfile,
 	})
 	if err != nil {
-		return fmt.Errorf("Error on searching Container: %w", err)
+		return fmt.Errorf("error on searching Container: %w", err)
 	}
 
 	if containerfilePath == "" {
@@ -193,27 +193,31 @@ func (c *PushContainerfile) Run() error {
 	l.Logger.Debugf("Select registry authentication for %s", imageUrl)
 	registryAuth, err := common.SelectRegistryAuthFromDefaultAuthFile(imageUrl)
 	if err != nil {
-		return fmt.Errorf("Cannot select registry authentication for image %s: %w", imageUrl, err)
+		return fmt.Errorf("cannot select registry authentication for image %s: %w", imageUrl, err)
 	}
 
 	registryConfigFile, err := os.CreateTemp("", "oras-push-registry-config-*")
 	if err != nil {
-		return fmt.Errorf("Error on creating temporary file for registry config: %w", err)
+		return fmt.Errorf("error on creating temporary file for registry config: %w", err)
 	}
-	_, err = registryConfigFile.WriteString(fmt.Sprintf(`{"auths":{"%s":{"auth":"%s"}}}`, registryAuth.Registry, registryAuth.Token))
+	_, err = fmt.Fprintf(registryConfigFile, `{"auths":{"%s":{"auth":"%s"}}}`, registryAuth.Registry, registryAuth.Token)
 	if err != nil {
-		return fmt.Errorf("Error on writing registry config file: %w", err)
+		return fmt.Errorf("error on writing registry config file: %w", err)
 	}
 	if err = registryConfigFile.Close(); err != nil {
-		return fmt.Errorf("Error on closing registry config file after write: %w", err)
+		return fmt.Errorf("error on closing registry config file after write: %w", err)
 	}
-	defer os.Remove(registryConfigFile.Name())
+	defer func() {
+		if err := os.Remove(registryConfigFile.Name()); err != nil {
+			l.Logger.Warnf("failed to remove %s: %s", registryConfigFile.Name(), err.Error())
+		}
+	}()
 
 	tag := c.generateContainerfileImageTag()
 
 	absContainerfilePath, err := filepath.Abs(containerfilePath)
 	if err != nil {
-		return fmt.Errorf("Error on getting absolute path of %s: %w", containerfilePath, err)
+		return fmt.Errorf("error on getting absolute path of %s: %w", containerfilePath, err)
 	}
 
 	var pushFilename string
@@ -223,15 +227,19 @@ func (c *PushContainerfile) Run() error {
 		pushFilename = filepath.Base(c.Params.AlternativeFilename)
 		workDir, err = os.MkdirTemp("", "push-containerfile-")
 		if err != nil {
-			return fmt.Errorf("Error on creating temporary directory: %w", err)
+			return fmt.Errorf("error on creating temporary directory: %w", err)
 		}
-		defer os.RemoveAll(workDir)
+		defer func() {
+			if err := os.RemoveAll(workDir); err != nil {
+				l.Logger.Warnf("failed to remove '%s' directory: %s", workDir, err.Error())
+			}
+		}()
 		content, err := os.ReadFile(absContainerfilePath)
 		if err != nil {
-			return fmt.Errorf("Error on reading file %s: %w", absContainerfilePath, err)
+			return fmt.Errorf("error on reading file %s: %w", absContainerfilePath, err)
 		}
 		if err := os.WriteFile(filepath.Join(workDir, pushFilename), content, 0644); err != nil {
-			return fmt.Errorf("Error on writing file: %w", err)
+			return fmt.Errorf("error on writing file: %w", err)
 		}
 	} else {
 		pushFilename = filepath.Base(absContainerfilePath)
@@ -239,9 +247,13 @@ func (c *PushContainerfile) Run() error {
 	}
 
 	if err := os.Chdir(workDir); err != nil {
-		return fmt.Errorf("Error on changing directory to %s: %w", workDir, err)
+		return fmt.Errorf("error on changing directory to %s: %w", workDir, err)
 	}
-	defer os.Chdir(curDir)
+	defer func() {
+		if err := os.Chdir(curDir); err != nil {
+			l.Logger.Warnf("failed to chdir to '%s' directory: %s", curDir, err.Error())
+		}
+	}()
 
 	stdout, _, err := c.CliWrappers.OrasCli.Push(&cliwrappers.OrasPushArgs{
 		ArtifactType:     c.Params.ArtifactType,
@@ -252,7 +264,7 @@ func (c *PushContainerfile) Run() error {
 		FileName:         pushFilename,
 	})
 	if err != nil {
-		return fmt.Errorf("Error on pushing Containerfile %s: %w", containerfilePath, err)
+		return fmt.Errorf("error on pushing Containerfile %s: %w", containerfilePath, err)
 	}
 
 	l.Logger.Infof("Containerfile '%s' is pushed to registry with tag: %s", containerfilePath, tag)
@@ -261,7 +273,7 @@ func (c *PushContainerfile) Run() error {
 
 	c.Results.ImageRef = artifactImageRef
 	if resultsJson, err := c.ResultsWriter.CreateResultJson(c.Results); err != nil {
-		return fmt.Errorf("Error on creating results JSON: %w", err)
+		return fmt.Errorf("error on creating results JSON: %w", err)
 	} else {
 		fmt.Print(resultsJson)
 	}
@@ -269,7 +281,7 @@ func (c *PushContainerfile) Run() error {
 	if c.Params.ResultPathImageRef != "" {
 		err = c.ResultsWriter.WriteResultString(artifactImageRef, c.Params.ResultPathImageRef)
 		if err != nil {
-			return fmt.Errorf("Error on writing result image digest: %w", err)
+			return fmt.Errorf("error on writing result image digest: %w", err)
 		}
 	}
 
@@ -292,15 +304,15 @@ func (c *PushContainerfile) validateParams() error {
 
 	tagSuffix := c.Params.TagSuffix
 	if !regexp.MustCompile(tagSuffixRegex).MatchString(tagSuffix) {
-		return fmt.Errorf("Tag suffix includes invalid characters or exceeds the max length of 57 characters.")
+		return fmt.Errorf("tag suffix includes invalid characters or exceeds the max length of 57 characters")
 	}
 
 	altFilename := c.Params.AlternativeFilename
 	if strings.Contains(altFilename, "/") {
-		return fmt.Errorf("Path is included in alternative file name '%s'", altFilename)
+		return fmt.Errorf("path is included in alternative file name '%s'", altFilename)
 	}
 	if len(altFilename) > 100 {
-		return fmt.Errorf("Alternative file name exceeds 100 characters.")
+		return fmt.Errorf("alternative file name exceeds 100 characters")
 	}
 
 	return nil

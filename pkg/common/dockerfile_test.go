@@ -323,7 +323,7 @@ func TestSearchDockerfile(t *testing.T) {
 			}
 			if tc.name == "Ignore symlink source directory" {
 				if !strings.HasSuffix(result, "/outside/Dockerfile") {
-					t.Errorf("Expected getting Dockerfile from outside/ directroy, but got: '%s'", result)
+					t.Errorf("Expected getting Dockerfile from outside/ directory, but got: '%s'", result)
 				}
 			} else {
 				absSourceDir, _ := filepath.Abs(tc.searchOpts.SourceDir)

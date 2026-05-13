@@ -531,7 +531,11 @@ func (c *Build) copyToTempWorkdir(filePath string) (copyPath string, err error) 
 	if err != nil {
 		return "", err
 	}
-	defer infile.Close()
+	defer func() {
+		if e := infile.Close(); e != nil && err == nil {
+			err = e
+		}
+	}()
 
 	outfile, err := os.CreateTemp(c.tempWorkdir, filepath.Base(filePath)+"-*")
 	if err != nil {
@@ -1077,7 +1081,7 @@ func (c *Build) copyPrefetchDir() (string, error) {
 }
 
 // Copy srcPath to dstPath, preserving permissions.
-func copyFile(srcPath, dstPath string) error {
+func copyFile(srcPath, dstPath string) (err error) {
 	info, err := os.Stat(srcPath)
 	if err != nil {
 		return err
@@ -1087,7 +1091,11 @@ func copyFile(srcPath, dstPath string) error {
 	if err != nil {
 		return err
 	}
-	defer src.Close()
+	defer func() {
+		if e := src.Close(); e != nil && err == nil {
+			err = e
+		}
+	}()
 
 	dst, err := os.OpenFile(dstPath, os.O_CREATE|os.O_WRONLY|os.O_EXCL, info.Mode().Perm())
 	if err != nil {
@@ -2126,17 +2134,22 @@ func getFromRefsInCommands(stage *dockerfile.Stage) []string {
 	return refs
 }
 
-func (c *Build) buildImage() error {
+func (c *Build) buildImage() (err error) {
 	l.Logger.Info("Building container image...")
 
-	originalCwd, err := os.Getwd()
+	var originalCwd string
+	originalCwd, err = os.Getwd()
 	if err != nil {
 		return err
 	}
 	if err := os.Chdir(c.Params.Context); err != nil {
 		return fmt.Errorf("couldn't cd to context directory: %w", err)
 	}
-	defer os.Chdir(originalCwd)
+	defer func() {
+		if e := os.Chdir(originalCwd); e != nil && err == nil {
+			err = e
+		}
+	}()
 
 	containerfilePath := c.containerfilePath
 	if c.containerfileCopyPath != "" {
@@ -2327,7 +2340,7 @@ func (c *Build) resolveBaseImages(pulledImages []string) ([]string, error) {
 			return nil, fmt.Errorf("buildah images %s: %w", bareImage, err)
 		}
 		if len(entries) == 0 {
-			return nil, fmt.Errorf("'buildah images %s' succeeded but returned 0 entries!", bareImage)
+			return nil, fmt.Errorf("'buildah images %s' succeeded but returned 0 entries", bareImage)
 		}
 
 		var resolvedRef reference.Named

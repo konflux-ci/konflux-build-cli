@@ -38,7 +38,7 @@ func CheckSymlinks(dir string) error {
 			if err != nil {
 				l.Logger.Errorf("Broken symlink found: %s", path)
 				invalidSymlinks = append(invalidSymlinks, path)
-				return nil
+				return nil //nolint:nilerr
 			}
 
 			absTarget, err := filepath.Abs(target)

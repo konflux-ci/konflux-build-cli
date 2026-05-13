@@ -42,7 +42,7 @@ type AuthEntry struct {
 func SelectRegistryAuth(imageRef string, authFilePath string) (*RegistryAuth, error) {
 	imageRepo := GetImageName(imageRef)
 	if imageRepo == "" {
-		return nil, fmt.Errorf("Invalid image reference '%s'", imageRef)
+		return nil, fmt.Errorf("invalid image reference '%s'", imageRef)
 	}
 
 	registryAuths, err := readAuthFile(authFilePath)
@@ -52,7 +52,7 @@ func SelectRegistryAuth(imageRef string, authFilePath string) (*RegistryAuth, er
 
 	token := findAuth(registryAuths, imageRepo)
 	if token == "" {
-		return nil, fmt.Errorf("Registry authentication is not configured for %s.", imageRepo)
+		return nil, fmt.Errorf("registry authentication is not configured for %s", imageRepo)
 	}
 
 	return &RegistryAuth{

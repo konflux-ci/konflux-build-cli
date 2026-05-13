@@ -56,7 +56,7 @@ func (r *Retryer) Run() (stdout string, stderr string, errCode int, err error) {
 	for attempt := 1; attempt <= r.MaxAttempts; attempt++ {
 		stdout, stderr, errCode, err = r.cliCall()
 		if err == nil {
-			return
+			return //nolint:nilerr
 		}
 
 		if slices.Contains(r.stopExitCodes, errCode) {

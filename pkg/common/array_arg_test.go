@@ -9,7 +9,7 @@ import (
 
 func TestExpandArrayParameters(t *testing.T) {
 
-	setupTestCommands := func() (*cobra.Command, *cobra.Command) {
+	setupTestCommands := func() {
 		// Clear existing array params
 		arrayParamsInCommands = map[*cobra.Command][]string{}
 
@@ -20,8 +20,6 @@ func TestExpandArrayParameters(t *testing.T) {
 		recordArrayParamForCommand(subCmd, "--array-param")
 		recordArrayParamForCommand(subCmd, "-a")
 		recordArrayParamForCommand(subCmd, "--multi")
-
-		return rootCmd, subCmd
 	}
 
 	t.Run("should handle command without array parameters", func(t *testing.T) {
@@ -94,7 +92,7 @@ func TestExpandArrayParameters(t *testing.T) {
 		g.Expect(result).To(Equal(expected))
 	})
 
-	t.Run("should handle array parameters with equals syntax when a paramter with equals syntax exists", func(t *testing.T) {
+	t.Run("should handle array parameters with equals syntax when a parameter with equals syntax exists", func(t *testing.T) {
 		g := NewWithT(t)
 
 		setupTestCommands()
@@ -156,9 +154,9 @@ func TestExpandArrayParameters(t *testing.T) {
 
 	// TODO improve array parameters expansion.
 	// Note, that:
-	// - persistant flags could have a value unless the flag is of boolen type.
-	// - subcommands can also have persistant flags that could be passed even before the subcommand itself.
-	// - the root command has list of only own persistant flags.
+	// - persistent flags could have a value unless the flag is of boolen type.
+	// - subcommands can also have persistent flags that could be passed even before the subcommand itself.
+	// - the root command has list of only own persistent flags.
 	// t.Run("should handle array parameters when global flag is passed before subcommand", func(t *testing.T) {
 	// 	g := NewWithT(t)
 
@@ -188,7 +186,7 @@ func TestRecordArrayParamForCommand(t *testing.T) {
 		params := arrayParamsInCommands[cmd]
 		g.Expect(params).To(ContainElement("--test-param"))
 		g.Expect(params).To(ContainElement("-t"))
-		g.Expect(len(params)).To(Equal(2))
+		g.Expect(params).To(HaveLen(2))
 	})
 }
 

@@ -198,9 +198,9 @@ func (z *ZotRegistry) GetCredentials() (string, string) {
 	return zotRegistryUser, zotRegistryPassword
 }
 
-// CheckTagExistance quaries Zot API to check the tag existance.
+// CheckTagExistence quaries Zot API to check the tag existence.
 // Args example: localhost:5000/image, tag
-func (z *ZotRegistry) CheckTagExistance(imageName, tag string) (bool, error) {
+func (z *ZotRegistry) CheckTagExistence(imageName, tag string) (bool, error) {
 	// Remove registry domain, e.g. localhost:5000/image -> image
 	repoParts := strings.Split(imageName, "/")
 	if len(repoParts) > 1 {

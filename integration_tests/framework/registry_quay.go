@@ -127,9 +127,9 @@ func (q *QuayRegistry) GetCaCertPath() string {
 	return ""
 }
 
-// CheckTagExistance quaries Quay API to check the tag existance.
+// CheckTagExistence quaries Quay API to check the tag existence.
 // Args example: quay.io/namespace/repo, tag
-func (q *QuayRegistry) CheckTagExistance(repo string, tag string) (bool, error) {
+func (q *QuayRegistry) CheckTagExistence(repo string, tag string) (bool, error) {
 	repoParts := strings.Split(repo, "/")
 	if len(repoParts) != 3 {
 		return false, fmt.Errorf("invalid image format, expected quay.io/namespace/repo")
