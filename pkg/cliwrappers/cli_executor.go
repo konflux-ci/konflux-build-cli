@@ -12,8 +12,6 @@ import (
 	l "github.com/konflux-ci/konflux-build-cli/pkg/logger"
 )
 
-var executorLog = l.Logger.WithField("logger", "CliExecutor")
-
 type Cmd struct {
 	Name       string   // the name passed to [exec.Command]
 	Args       []string // the args passed to [exec.Command]
@@ -76,10 +74,10 @@ func (e *CliExecutor) Execute(c Cmd) (string, string, int, error) {
 		tee := io.TeeReader(r, buf)
 		scanner := bufio.NewScanner(tee)
 		for scanner.Scan() {
-			executorLog.Info(linePrefix + scanner.Text())
+			l.Logger.Info(linePrefix + scanner.Text())
 		}
 		if scanner.Err() != nil {
-			executorLog.Warnf("%sstopped logging output: %s", linePrefix, scanner.Err())
+			l.Logger.Warnf("%sstopped logging output: %s", linePrefix, scanner.Err())
 			// Read the rest of the pipe directly into buf.
 			//
 			// At this point, buf contains everything that was read from r via the scanner
