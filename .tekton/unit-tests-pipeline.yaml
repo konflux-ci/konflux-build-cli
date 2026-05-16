@@ -15,7 +15,7 @@ spec:
       taskSpec:
         steps:
           - name: clone
-            image: quay.io/konflux-ci/task-runner:1.4.1@sha256:d9feec6f2ce9b10cfb76b45ea14f83b5ed9f231de7d6083291550aebe8eb09ea
+            image: quay.io/konflux-ci/task-runner:1.7.0@sha256:1c0582a85dae0949f3ec94aca95695c5d7698b371f1b76c5a78822a6249073dc
             env:
               - name: PARAM_SNAPSHOT
                 value: "$(params.SNAPSHOT)"
@@ -41,7 +41,7 @@ spec:
             - name: source
               mountPath: /source
           - name: run-tests
-            image: quay.io/konflux-ci/task-runner:1.4.1@sha256:d9feec6f2ce9b10cfb76b45ea14f83b5ed9f231de7d6083291550aebe8eb09ea
+            image: quay.io/konflux-ci/task-runner:1.7.0@sha256:1c0582a85dae0949f3ec94aca95695c5d7698b371f1b76c5a78822a6249073dc
             securityContext:
               runAsUser: 0
             computeResources:
@@ -59,7 +59,7 @@ spec:
             - name: source
               mountPath: /source
           - name: upload-coverage
-            image: quay.io/konflux-ci/task-runner:1.4.1@sha256:d9feec6f2ce9b10cfb76b45ea14f83b5ed9f231de7d6083291550aebe8eb09ea
+            image: quay.io/konflux-ci/task-runner:1.7.0@sha256:1c0582a85dae0949f3ec94aca95695c5d7698b371f1b76c5a78822a6249073dc
             onError: continue
             env:
               - name: CODECOV_TOKEN
