@@ -39,7 +39,7 @@ spec:
   - name: prefetch-input
     value: '{"path": ".", "type": "gomod"}'
   - name: buildah-format
-    value: oci
+    value: docker
   pipelineRef:
     name: build-pipeline
   taskRunTemplate:

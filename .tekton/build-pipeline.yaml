@@ -213,7 +213,7 @@ spec:
     - name: SQUASH
       value: "true"
     - name: OMIT_HISTORY
-      value: "true"
+      value: "false"
     runAfter:
     - prefetch-dependencies
     taskRef:
