@@ -38,8 +38,6 @@ spec:
     value: "true"
   - name: prefetch-input
     value: '{"path": ".", "type": "gomod"}'
-  - name: privileged-nested
-    value: 'true'
   pipelineRef:
     name: build-pipeline
   taskRunTemplate:
