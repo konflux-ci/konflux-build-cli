@@ -38,6 +38,8 @@ spec:
     value: "true"
   - name: prefetch-input
     value: '{"path": ".", "type": "gomod"}'
+  - name: buildah-format
+    value: oci
   pipelineRef:
     name: build-pipeline
   taskRunTemplate:
