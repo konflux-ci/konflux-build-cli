@@ -210,6 +210,12 @@ spec:
       value: $(tasks.prefetch-dependencies.results.CACHI2_ARTIFACT)
     - name: IMAGE_APPEND_PLATFORM
       value: "true"
+    - name: ADD_CAPABILITIES
+      value: "SYS_ADMIN"
+    - name: SQUASH
+      value: "true"
+    - name: OMIT_HISTORY
+      value: "true"
     runAfter:
     - prefetch-dependencies
     taskRef:
