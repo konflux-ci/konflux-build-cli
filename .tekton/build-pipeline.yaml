@@ -219,9 +219,9 @@ spec:
     taskRef:
       params:
       - name: name
-        value: buildah-remote-oci-ta
+        value: buildah-oci-ta
       - name: bundle
-        value: quay.io/acmiel-test/tekton-catalog/task-buildah-remote-oci:010-from-kbc-pr
+        value: quay.io/acmiel-test/tekton-catalog/task-buildah-oci-ta:010-from-kbc-pr
       - name: kind
         value: task
       resolver: bundles
