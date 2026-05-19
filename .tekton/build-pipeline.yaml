@@ -221,7 +221,7 @@ spec:
       - name: name
         value: buildah-remote-oci-ta
       - name: bundle
-        value: quay.io/acmiel-test/tekton-catalog/task-buildah-remote-oci:buildah-with-kbc
+        value: quay.io/acmiel-test/tekton-catalog/task-buildah-remote-oci:010-from-kbc-pr
       - name: kind
         value: task
       resolver: bundles
