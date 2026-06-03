@@ -1,0 +1,137 @@
+kind: Pipeline
+apiVersion: tekton.dev/v1
+metadata:
+  name: konflux-build-cli-integration-tests
+spec:
+  params:
+    - name: SNAPSHOT
+      type: string
+      description: 'Snapshot of the application'
+    - name: host-access-secret-name
+      type: string
+      description: 'secret name containing the ssh credentials'
+      default: ssh-secrets-$(context.pipelineRun.name)
+  tasks:
+    - name: provision-virtual-machine
+      taskRef:
+        resolver: git
+        params:
+          - name: url
+            value: https://github.com/konflux-ci/tekton-integration-catalog.git
+          # using a stable version of fedora-vm-provision task, need to be updated when next stable version of the task is available
+          - name: revision
+            value: eb2ed3198212e2bab0a347df57365c0737cf012c
+          - name: pathInRepo
+            value: tasks/mapt-oci/fedora-virtual-machine/provision/0.1/fedora-vm-provision.yaml
+      params:
+        - name: secret-aws-credentials
+          value: mapt-kind-secret
+        - name: id
+          value: $(context.pipelineRun.name)
+        - name: host-access-secret-name
+          value: $(params.host-access-secret-name)
+        - name: tags
+          value: 'owner=konflux-devprod@redhat.com,project=Konflux,created-by=integration-pipeline,component=konflux-build-cli'
+        - name: ownerKind
+          value: PipelineRun
+        - name: ownerName
+          value: $(context.pipelineRun.name)
+        - name: ownerUid
+          value: $(context.pipelineRun.uid)
+        - name: spot
+          value: 'false'
+        - name: debug
+          value: 'false'
+    - name: run-integration-tests
+      runAfter:
+        - provision-virtual-machine
+      params:
+        - name: SNAPSHOT
+          value: "$(params.SNAPSHOT)"
+      taskSpec:
+        steps:
+          - name: clone-repo-and-run-tests
+            image: quay.io/konflux-ci/task-runner:1.4.1@sha256:d9feec6f2ce9b10cfb76b45ea14f83b5ed9f231de7d6083291550aebe8eb09ea
+            env:
+            - name: USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: $(params.host-access-secret-name)
+                  key: username
+            - name: HOST
+              valueFrom:
+                secretKeyRef:
+                  name: $(params.host-access-secret-name)
+                  key: host
+            - name: ID_RSA
+              valueFrom:
+                secretKeyRef:
+                  name: $(params.host-access-secret-name)
+                  key: id_rsa
+            - name: PARAM_SNAPSHOT
+              value: "$(params.SNAPSHOT)"
+            script: |
+              #!/bin/bash
+              set -e
+
+              # Setup local SSH configuration directory
+              mkdir -p ~/.ssh
+              chmod 700 ~/.ssh
+
+              # create the id_rsa and adjust permission
+              echo -n "${ID_RSA}" > ~/.ssh/id_rsa
+              trap 'rm -f ~/.ssh/id_rsa' EXIT
+              chmod 600 ~/.ssh/id_rsa
+
+              # Disable strict host checking
+              echo "StrictHostKeyChecking accept-new" >> ~/.ssh/config
+              
+              # Extract git_url and git_revision from snapshot
+              jq -c '.components[0]' >/tmp/component.json <<< "${PARAM_SNAPSHOT}"
+              git_url=$(jq -r '.source.git.url' </tmp/component.json)
+              git_revision=$(jq -r '.source.git.revision' </tmp/component.json)
+
+              # Validate git_url and git_revision
+              [[ -z "$git_url" || "$git_url" == "null" ]] && echo 'ERROR: git_url not found in SNAPSHOT' && exit 1
+              [[ -z "$git_revision" || "$git_revision" == "null" ]] && echo 'ERROR: git_revision not found in SNAPSHOT' && exit 1
+              
+              if [[ $git_revision =~ ^[0-9a-f]{40}$ ]]; then
+                echo "Valid Git SHA."
+              else
+                echo "Error: Invalid Git revision format." >&2
+                exit 1
+              fi
+
+              # Login and execute the script remotely
+              echo "Connecting to ${HOST} as ${USERNAME} ..."
+              ssh -i ~/.ssh/id_rsa "${USERNAME}@${HOST}" << EOF
+                # install the tools needed for running the tests
+                sudo dnf install git golang httpd-tools -y
+
+                # Clone the repo
+                mkdir -p ~/source
+                git clone "$git_url" ~/source
+                git config --global --add safe.directory ~/source
+                cd ~/source
+                git checkout "$git_revision"
+
+                # Run the integration tests
+                go test -timeout 20m ./integration_tests
+              EOF
+  finally:
+    - name: deprovision-virtual-machine
+      taskRef:
+        resolver: git
+        params:
+          - name: url
+            value: https://github.com/konflux-ci/tekton-integration-catalog.git
+          # using a stable version of fedora-vm-deprovision task, need to be updated when next stable version of the task is available
+          - name: revision
+            value: eb2ed3198212e2bab0a347df57365c0737cf012c
+          - name: pathInRepo
+            value: tasks/mapt-oci/fedora-virtual-machine/deprovision/0.1/fedora-vm-deprovision.yaml
+      params:
+        - name: secret-aws-credentials
+          value: mapt-kind-secret
+        - name: id
+          value: $(context.pipelineRun.name)
