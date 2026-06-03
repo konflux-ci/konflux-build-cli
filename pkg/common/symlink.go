@@ -5,18 +5,28 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"regexp"
+	"strings"
 
 	l "github.com/konflux-ci/konflux-build-cli/pkg/logger"
 )
 
 // CheckSymlinks walks the given directory tree and returns an error if any
 // symlink points to a target outside the directory.
-func CheckSymlinks(dir string) error {
+// excludePatterns are path patterns matched against each symlink's path (not its target);
+// matching symlinks are skipped entirely. Patterns use * and ? wildcards (* matches across '/').
+func CheckSymlinks(dir string, excludePatterns []string) error {
 	l.Logger.Debugf("Checking for symlinks pointing outside the directory %s", dir)
 
 	baseDir, err := ResolvePath(dir)
 	if err != nil {
 		return fmt.Errorf("failed to resolve directory path: %w", err)
+	}
+
+	checkoutRoot := filepath.Clean(dir)
+	compiledExcludes, err := compileExcludePatterns(excludePatterns)
+	if err != nil {
+		return err
 	}
 
 	var invalidSymlinks []string
@@ -27,6 +37,12 @@ func CheckSymlinks(dir string) error {
 		}
 
 		if d.Type()&os.ModeSymlink != 0 {
+			cleanPath := filepath.Clean(path)
+			if symlinkPathExcluded(cleanPath, checkoutRoot, compiledExcludes) {
+				l.Logger.Debugf("Skipping symlink check for excluded path: %s", cleanPath)
+				return nil
+			}
+
 			resolvedTarget, err := ResolvePath(path)
 			if err != nil {
 				l.Logger.Errorf("Broken symlink found: %s", path)
@@ -52,4 +68,71 @@ func CheckSymlinks(dir string) error {
 
 	l.Logger.Debug("Symlink check passed")
 	return nil
+}
+
+type compiledExcludePattern struct {
+	absolute bool
+	re       *regexp.Regexp
+}
+
+// compileExcludePatterns validates and pre-compiles exclusion patterns.
+func compileExcludePatterns(patterns []string) ([]compiledExcludePattern, error) {
+	var out []compiledExcludePattern
+	for _, pattern := range patterns {
+		pattern = strings.TrimSpace(pattern)
+		if pattern == "" {
+			continue
+		}
+		re, err := pathPatternToRegexp(pattern)
+		if err != nil {
+			return nil, fmt.Errorf("invalid exclusion pattern %q: %w", pattern, err)
+		}
+		out = append(out, compiledExcludePattern{
+			absolute: filepath.IsAbs(pattern) || strings.HasPrefix(pattern, "/"),
+			re:       re,
+		})
+	}
+	return out, nil
+}
+
+func symlinkPathExcluded(path, checkoutRoot string, patterns []compiledExcludePattern) bool {
+	for _, p := range patterns {
+		if p.absolute {
+			if p.re.MatchString(filepath.ToSlash(path)) {
+				return true
+			}
+			continue
+		}
+		rel, err := filepath.Rel(checkoutRoot, path)
+		if err != nil {
+			continue
+		}
+		if p.re.MatchString(filepath.ToSlash(rel)) {
+			return true
+		}
+	}
+	return false
+}
+
+// pathPatternToRegexp converts a path pattern to an anchored regexp.
+// Wildcards: * matches any run of characters including '/';
+// ? matches any single character. Other characters are literal.
+func pathPatternToRegexp(pattern string) (*regexp.Regexp, error) {
+	var b strings.Builder
+	b.WriteString("^")
+	for i := 0; i < len(pattern); i++ {
+		switch pattern[i] {
+		case '*':
+			b.WriteString(".*")
+		case '?':
+			b.WriteString(".")
+		case '.', '+', '(', ')', '|', '^', '$', '[', ']', '{', '}', '\\':
+			b.WriteByte('\\')
+			b.WriteByte(pattern[i])
+		default:
+			b.WriteByte(pattern[i])
+		}
+	}
+	b.WriteString("$")
+	return regexp.Compile(b.String())
 }
