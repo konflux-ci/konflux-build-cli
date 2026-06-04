@@ -114,7 +114,7 @@ func (c *GitClone) Run() error {
 	if c.Params.EnableSymlinkCheck {
 		exclude, err := parseCSV(c.Params.SymlinkCheckIgnorePattern)
 		if err != nil {
-			return fmt.Errorf("symlink-check-ignore-pattern: %w", err)
+			return fmt.Errorf("failed to parse symlink-check-ignore-pattern: %w", err)
 		}
 		if err := common.CheckSymlinks(c.getCheckoutDir(), exclude); err != nil {
 			return fmt.Errorf("symlink check: %w", err)

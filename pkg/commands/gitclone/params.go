@@ -97,7 +97,7 @@ var ParamsConfig = map[string]common.Parameter{
 		EnvVarName:   "KBC_GIT_CLONE_SYMLINK_CHECK_IGNORE_PATTERN",
 		TypeKind:     reflect.String,
 		DefaultValue: "",
-		Usage: "Comma-separated path patterns; symlinks whose paths match are not checked. " +
+		Usage: "CSV list of path patterns to exclude from the symlink check. Symlinks whose paths match are not checked. " +
 			"Patterns are relative to the checkout directory unless they start with '/'. " +
 			"Use '*' and '?' as wildcards ('*' matches across '/'). " +
 			"Quote patterns containing commas using CSV double quotes.",
