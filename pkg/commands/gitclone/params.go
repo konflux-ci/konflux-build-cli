@@ -98,7 +98,7 @@ var ParamsConfig = map[string]common.Parameter{
 		TypeKind:     reflect.String,
 		DefaultValue: "",
 		Usage: "CSV list of path patterns to exclude from the symlink check. Symlinks whose paths match are not checked. " +
-			"Patterns are relative to the checkout directory unless they start with '/'. " +
+			"Patterns are relative to the checkout directory and must not start with '/'. " +
 			"Use '*' and '?' as wildcards ('*' matches across '/'). " +
 			"Quote patterns containing commas using CSV double quotes.",
 	},

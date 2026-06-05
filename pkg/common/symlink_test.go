@@ -3,6 +3,7 @@ package common
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -209,13 +210,16 @@ func TestCheckSymlinks(t *testing.T) {
 		}
 	})
 
-	t.Run("absolute exclusion pattern", func(t *testing.T) {
+	t.Run("rejects absolute exclusion pattern", func(t *testing.T) {
 		dir := t.TempDir()
-		mustExternalSymlink(t, dir, filepath.Join("vendor", "link"))
+		mustExternalSymlink(t, dir, "link")
 
-		pattern := filepath.Join(dir, "vendor", "*")
-		if err := CheckSymlinks(dir, []string{pattern}); err != nil {
-			t.Fatalf("expected pass with absolute pattern %q: %v", pattern, err)
+		err := CheckSymlinks(dir, []string{"/vendor/*"})
+		if err == nil {
+			t.Fatal("expected error for absolute exclusion pattern")
+		}
+		if !strings.Contains(err.Error(), "must not start with '/'") {
+			t.Fatalf("unexpected error: %v", err)
 		}
 	})
 

@@ -13,8 +13,9 @@ import (
 
 // CheckSymlinks walks the given directory tree and returns an error if any
 // symlink points to a target outside the directory.
-// excludePatterns are path patterns matched against each symlink's path (not its target);
-// matching symlinks are skipped entirely. Patterns use * and ? wildcards (* matches across '/').
+// excludePatterns are path patterns matched against each symlink's path (not its target),
+// relative to dir; patterns must not start with '/'. Matching symlinks are skipped entirely.
+// Patterns use * and ? wildcards (* matches across '/').
 func CheckSymlinks(dir string, excludePatterns []string) error {
 	l.Logger.Debugf("Checking for symlinks pointing outside the directory %s", dir)
 
@@ -70,44 +71,34 @@ func CheckSymlinks(dir string, excludePatterns []string) error {
 	return nil
 }
 
-type compiledExcludePattern struct {
-	absolute bool
-	re       *regexp.Regexp
-}
-
 // compileExcludePatterns validates and pre-compiles exclusion patterns.
-func compileExcludePatterns(patterns []string) ([]compiledExcludePattern, error) {
-	var out []compiledExcludePattern
+func compileExcludePatterns(patterns []string) ([]*regexp.Regexp, error) {
+	var out []*regexp.Regexp
 	for _, pattern := range patterns {
 		pattern = strings.TrimSpace(pattern)
 		if pattern == "" {
 			continue
 		}
+		if strings.HasPrefix(pattern, "/") || filepath.IsAbs(pattern) {
+			return nil, fmt.Errorf("exclusion pattern %q must be relative to the checkout directory (must not start with '/')", pattern)
+		}
 		re, err := pathPatternToRegexp(pattern)
 		if err != nil {
 			return nil, fmt.Errorf("invalid exclusion pattern %q: %w", pattern, err)
 		}
-		out = append(out, compiledExcludePattern{
-			absolute: filepath.IsAbs(pattern) || strings.HasPrefix(pattern, "/"),
-			re:       re,
-		})
+		out = append(out, re)
 	}
 	return out, nil
 }
 
-func symlinkPathExcluded(path, checkoutRoot string, patterns []compiledExcludePattern) bool {
-	for _, p := range patterns {
-		if p.absolute {
-			if p.re.MatchString(filepath.ToSlash(path)) {
-				return true
-			}
-			continue
-		}
-		rel, err := filepath.Rel(checkoutRoot, path)
-		if err != nil {
-			continue
-		}
-		if p.re.MatchString(filepath.ToSlash(rel)) {
+func symlinkPathExcluded(path, checkoutRoot string, patterns []*regexp.Regexp) bool {
+	rel, err := filepath.Rel(checkoutRoot, path)
+	if err != nil {
+		return false
+	}
+	rel = filepath.ToSlash(rel)
+	for _, re := range patterns {
+		if re.MatchString(rel) {
 			return true
 		}
 	}
