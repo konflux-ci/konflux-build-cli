@@ -120,18 +120,51 @@ spec:
               EOF
   finally:
     - name: deprovision-virtual-machine
-      taskRef:
-        resolver: git
-        params:
-          - name: url
-            value: https://github.com/konflux-ci/tekton-integration-catalog.git
-          # using a stable version of fedora-vm-deprovision task, need to be updated when next stable version of the task is available
-          - name: revision
-            value: eb2ed3198212e2bab0a347df57365c0737cf012c
-          - name: pathInRepo
-            value: tasks/mapt-oci/fedora-virtual-machine/deprovision/0.1/fedora-vm-deprovision.yaml
-      params:
-        - name: secret-aws-credentials
-          value: mapt-kind-secret
-        - name: id
-          value: $(context.pipelineRun.name)
+      # Inlined from tekton-integration-catalog fedora-vm-deprovision 0.1
+      # at revision eb2ed3198212e2bab0a347df57365c0737cf012c
+      # with increased memory limits (original: 200Mi/600Mi)
+      taskSpec:
+        volumes:
+          - name: aws-credentials
+            secret:
+              secretName: mapt-kind-secret
+        steps:
+          - name: destroy
+            image: quay.io/redhat-developer/mapt:v1.0.0-dev
+            imagePullPolicy: Always
+            env:
+              - name: HOME
+                value: /opt/mapt/run
+            volumeMounts:
+              - name: aws-credentials
+                mountPath: /opt/aws-credentials
+            script: |
+              #!/bin/bash
+
+              set -euo pipefail
+
+              echo "deprovision: inlined taskSpec, memory limit 2Gi"
+
+              AWS_ACCESS_KEY_ID=$(cat /opt/aws-credentials/access-key)
+              export AWS_ACCESS_KEY_ID
+              AWS_SECRET_ACCESS_KEY=$(cat /opt/aws-credentials/secret-key)
+              export AWS_SECRET_ACCESS_KEY
+              AWS_DEFAULT_REGION=$(cat /opt/aws-credentials/region)
+              export AWS_DEFAULT_REGION
+              BUCKET=$(cat /opt/aws-credentials/bucket)
+
+              cmd="mapt aws fedora destroy "
+              cmd+="--project-name mapt-fedora-$(context.pipelineRun.name) "
+              cmd+="--backed-url s3://${BUCKET}/mapt/fedora/$(context.pipelineRun.name) "
+              cmd+="--force-destroy "
+
+              eval "${cmd}"
+
+              echo "memory.peak: $(cat /sys/fs/cgroup/memory.peak 2>/dev/null || cat /sys/fs/cgroup/memory/memory.max_usage_in_bytes 2>/dev/null || echo unknown)"
+
+            computeResources:
+              requests:
+                memory: "2Gi"
+                cpu: "100m"
+              limits:
+                memory: "2Gi"
