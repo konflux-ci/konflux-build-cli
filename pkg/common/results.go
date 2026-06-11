@@ -27,7 +27,7 @@ func (r *ResultsWriter) WriteResultString(result, path string) error {
 		return nil
 	}
 
-	if err := os.WriteFile(path, []byte(result), 0644); err != nil {
+	if err := os.WriteFile(path, []byte(result), 0644); err != nil { //nolint:gosec // result files need to be readable
 		return fmt.Errorf("failed to write into result file '%s': %w", path, err)
 	}
 

@@ -74,6 +74,3 @@ issues:
   # Set to 0 to disable.
   # Default: 3
   max-same-issues: 5
-  # Show only new issues created after the best common ancestor (merge-base against HEAD).
-  # Default: ""
-  new-from-merge-base: main

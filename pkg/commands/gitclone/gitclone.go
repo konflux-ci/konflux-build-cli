@@ -274,7 +274,7 @@ func (c *GitClone) performClone() error {
 	checkoutDir := c.getCheckoutDir()
 
 	// Ensure checkout directory exists
-	if err := os.MkdirAll(checkoutDir, 0755); err != nil {
+	if err := os.MkdirAll(checkoutDir, 0755); err != nil { //nolint:gosec // checkout directory needs standard permissions
 		return fmt.Errorf("failed to create checkout directory: %w", err)
 	}
 

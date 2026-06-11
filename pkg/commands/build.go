@@ -621,7 +621,7 @@ func (c *Build) copyToTempWorkdir(filePath string) (copyPath string, err error) 
 		return "", err
 	}
 
-	infile, err := os.Open(filePath)
+	infile, err := os.Open(filePath) //nolint:gosec // filePath is from build context
 	if err != nil {
 		return "", err
 	}
@@ -1153,7 +1153,7 @@ func (c *Build) copyPrefetchDir() (string, error) {
 	prefetchDirCopy := c.Params.PrefetchDirCopy
 
 	if prefetchDirCopy != "" {
-		err := os.Mkdir(prefetchDirCopy, 0755)
+		err := os.Mkdir(prefetchDirCopy, 0755) //nolint:gosec // build tool needs standard directory permissions
 		if err != nil {
 			return "", err
 		}
@@ -1206,13 +1206,13 @@ func (c *Build) copyPrefetchDir() (string, error) {
 
 		switch d.Type() {
 		case os.ModeDir:
-			return os.Mkdir(dstPath, 0755)
+			return os.Mkdir(dstPath, 0755) //nolint:gosec // copying directory structure with standard permissions
 		case os.ModeSymlink:
 			target, err := os.Readlink(srcPath)
 			if err != nil {
 				return err
 			}
-			return os.Symlink(target, dstPath)
+			return os.Symlink(target, dstPath) //nolint:gosec // copying symlinks from prefetch dir
 		case 0: // regular
 			return copyFile(srcPath, dstPath)
 		default:
@@ -1238,7 +1238,7 @@ func copyFile(srcPath, dstPath string) (err error) {
 		return err
 	}
 
-	src, err := os.Open(srcPath)
+	src, err := os.Open(srcPath) //nolint:gosec // srcPath is from prefetch directory
 	if err != nil {
 		return err
 	}
@@ -1248,7 +1248,7 @@ func copyFile(srcPath, dstPath string) (err error) {
 		}
 	}()
 
-	dst, err := os.OpenFile(dstPath, os.O_CREATE|os.O_WRONLY|os.O_EXCL, info.Mode().Perm())
+	dst, err := os.OpenFile(dstPath, os.O_CREATE|os.O_WRONLY|os.O_EXCL, info.Mode().Perm()) //nolint:gosec // dstPath is from prefetch directory copy
 	if err != nil {
 		return err
 	}
@@ -1298,7 +1298,7 @@ func (c *Build) injectPrefetchEnvToContainerfile(envMountPath string) error {
 		return fmt.Errorf("modifying containerfile to apply prefetch env: %w", err)
 	}
 
-	if err := os.WriteFile(c.containerfileCopyPath, []byte(result), 0644); err != nil {
+	if err := os.WriteFile(c.containerfileCopyPath, []byte(result), 0644); err != nil { //nolint:gosec // containerfile needs to be readable
 		return fmt.Errorf("writing modified containerfile: %w", err)
 	}
 	return nil
@@ -1324,7 +1324,7 @@ func (c *Build) prepareYumReposMount(prefetchResources *prefetchResources) error
 	mergedDir := filepath.Join(c.tempWorkdir, "yum.repos.d")
 	// For backwards compatibility, make the directory rwx to everyone.
 	// This enables any user inside the containerfile to write to the mount point.
-	if err := os.Mkdir(mergedDir, 0777); err != nil {
+	if err := os.Mkdir(mergedDir, 0777); err != nil { //nolint:gosec // yum.repos.d needs broad access for container users
 		return fmt.Errorf("creating yum.repos.d/ in temporary workdir: %w", err)
 	}
 
@@ -1354,11 +1354,11 @@ func (c *Build) prepareYumReposMount(prefetchResources *prefetchResources) error
 			srcPath := filepath.Join(srcDir, filename)
 			dstPath := filepath.Join(mergedDir, filename)
 
-			content, err := os.ReadFile(srcPath)
+			content, err := os.ReadFile(srcPath) //nolint:gosec // srcPath is from yum repos directory
 			if err != nil {
 				return fmt.Errorf("reading %s: %w", srcPath, err)
 			}
-			if err := os.WriteFile(dstPath, content, 0666); err != nil {
+			if err := os.WriteFile(dstPath, content, 0666); err != nil { //nolint:gosec // yum repo files need broad read access
 				return fmt.Errorf("writing %s: %w", dstPath, err)
 			}
 
@@ -1407,7 +1407,7 @@ func chmodAddRWX(rootDir string) error {
 		if entry.IsDir() || info.Mode()&0111 != 0 {
 			perm |= 0111 // +x for user, group, other
 		}
-		return os.Chmod(path, perm)
+		return os.Chmod(path, perm) //nolint:gosec // intentionally fixing permissions in WalkDir callback
 	})
 }
 
@@ -1479,7 +1479,7 @@ func (c *Build) gatherRHSMresources() (*rhsmResources, error) {
 
 	mkWorkdir := func(dirname string, outPath *string) error {
 		path := filepath.Join(c.tempWorkdir, dirname)
-		if err := os.Mkdir(path, 0755); err != nil {
+		if err := os.Mkdir(path, 0755); err != nil { //nolint:gosec // standard directory permissions
 			return fmt.Errorf("creating temporary directory for RHSM files: %w", err)
 		}
 		*outPath = path
@@ -1728,7 +1728,7 @@ func (c *Build) processLabelsAndAnnotations() error {
 		}
 	}
 
-	mergedLabels := append(defaultLabels, c.Params.Labels...)
+	mergedLabels := slices.Concat(defaultLabels, c.Params.Labels)
 
 	mergedAnnotations := defaultAnnotations
 	if c.Params.AnnotationsFile != "" {
@@ -1856,7 +1856,7 @@ func (c *Build) createBuildinfoDir() (string, error) {
 	}
 
 	buildinfoDir := filepath.Join(c.tempWorkdir, "buildinfo")
-	if err := os.Mkdir(buildinfoDir, 0755); err != nil {
+	if err := os.Mkdir(buildinfoDir, 0755); err != nil { //nolint:gosec // standard directory permissions
 		return "", err
 	}
 
@@ -1873,7 +1873,7 @@ func writeBuildinfoJSON(buildinfoDir string, value any, filename string) error {
 
 	filePath := filepath.Join(buildinfoDir, filename)
 	// For backwards compatibility, buildinfo files should be readable to all
-	if err := os.WriteFile(filePath, append(jsonContent, '\n'), 0644); err != nil {
+	if err := os.WriteFile(filePath, append(jsonContent, '\n'), 0644); err != nil { //nolint:gosec // buildinfo files need to be readable
 		return err
 	}
 
@@ -1881,7 +1881,7 @@ func writeBuildinfoJSON(buildinfoDir string, value any, filename string) error {
 }
 
 func appendToFile(filePath, content string) error {
-	file, err := os.OpenFile(filePath, os.O_WRONLY|os.O_APPEND, 0)
+	file, err := os.OpenFile(filePath, os.O_WRONLY|os.O_APPEND, 0) //nolint:gosec // filePath is from buildinfo directory
 	if err != nil {
 		return err
 	}
@@ -1897,7 +1897,7 @@ func appendToFile(filePath, content string) error {
 // Return them wrapped in a "content manifest" (a deprecated format still needed by Clair).
 // https://github.com/konflux-ci/buildah-container/blob/5fd8a4b1163079c7978e79100ec51b41504e0f20/scripts/icm-injection-scripts/inject-icm.sh
 func determineContentSets(prefetchSbomFile string) (map[string]any, error) {
-	sbomContent, err := os.ReadFile(prefetchSbomFile)
+	sbomContent, err := os.ReadFile(prefetchSbomFile) //nolint:gosec // prefetchSbomFile is from prefetch directory
 	if err != nil {
 		return nil, fmt.Errorf("reading prefetch SBOM: %w", err)
 	}
@@ -2431,7 +2431,7 @@ func (c *Build) writeContainerfileJson(containerfile *dockerfile.Dockerfile, out
 		return fmt.Errorf("failed to marshal Containerfile to JSON: %w", err)
 	}
 
-	if err := os.WriteFile(outputPath, jsonData, 0644); err != nil {
+	if err := os.WriteFile(outputPath, jsonData, 0644); err != nil { //nolint:gosec // output files need to be readable
 		return fmt.Errorf("failed to write Containerfile JSON: %w", err)
 	}
 
@@ -2460,7 +2460,7 @@ func (c *Build) writeResolvedBaseImages(pulledImages []string, outputPath string
 		s.WriteByte('\n')
 	}
 
-	err = os.WriteFile(outputPath, []byte(s.String()), 0644)
+	err = os.WriteFile(outputPath, []byte(s.String()), 0644) //nolint:gosec // output files need to be readable
 	if err != nil {
 		return fmt.Errorf("writing resolved base images: %w", err)
 	}

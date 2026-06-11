@@ -17,12 +17,12 @@ func WriteFileTree(t *testing.T, baseDir string, files map[string]string) {
 		fullPath := filepath.Join(baseDir, path)
 
 		dir := filepath.Dir(fullPath)
-		err := os.MkdirAll(dir, 0755)
+		err := os.MkdirAll(dir, 0755) //nolint:gosec // test utility, standard directory permissions
 		if err != nil {
 			t.Fatalf("Failed to create directory %s: %s", dir, err)
 		}
 
-		err = os.WriteFile(fullPath, []byte(content), 0644)
+		err = os.WriteFile(fullPath, []byte(content), 0644) //nolint:gosec // test utility, standard file permissions
 		if err != nil {
 			t.Fatalf("Failed to create file %s: %s", path, err)
 		}
