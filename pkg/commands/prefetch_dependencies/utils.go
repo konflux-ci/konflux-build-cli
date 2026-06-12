@@ -183,7 +183,7 @@ func injectSSLOptions(input any, ssl map[string]any) any {
 }
 
 func cpFile(sourcePath, destinationPath string) error {
-	if err := os.MkdirAll(filepath.Dir(destinationPath), 0755); err != nil { //nolint:gosec // standard directory permissions for file copy
+	if err := os.MkdirAll(filepath.Dir(destinationPath), 0755); err != nil { //nolint:gosec // G703: path from controlled prefetch directory
 		return err
 	}
 
@@ -192,7 +192,7 @@ func cpFile(sourcePath, destinationPath string) error {
 		return err
 	}
 
-	return os.WriteFile(destinationPath, data, readOnlyFileMode) //nolint:gosec // destination path is from controlled directory
+	return os.WriteFile(destinationPath, data, readOnlyFileMode) //nolint:gosec // G703: path from controlled prefetch directory
 }
 
 func fileExists(path string) bool {
@@ -246,11 +246,11 @@ func setupGitBasicAuth(authDir, sourceDir string) error {
 		}
 
 		gitCredentialsContent := fmt.Sprintf("https://%s:%s@%s", username, password, hostname)
-		if err := os.WriteFile(filepath.Join(home, ".git-credentials"), []byte(gitCredentialsContent), readOnlyFileMode); err != nil { //nolint:gosec // writing git credentials to HOME
+		if err := os.WriteFile(filepath.Join(home, ".git-credentials"), []byte(gitCredentialsContent), readOnlyFileMode); err != nil { //nolint:gosec // G703: writing git credentials to HOME
 			return err
 		}
 		gitConfigContent := fmt.Sprintf("[credential \"https://%s\"]\nhelper = store", hostname)
-		if err := os.WriteFile(filepath.Join(home, ".gitconfig"), []byte(gitConfigContent), readOnlyFileMode); err != nil { //nolint:gosec // writing git config to HOME
+		if err := os.WriteFile(filepath.Join(home, ".gitconfig"), []byte(gitConfigContent), readOnlyFileMode); err != nil { //nolint:gosec // G703: writing git config to HOME
 			return err
 		}
 
@@ -319,5 +319,5 @@ func dropGoProxyFrom(configFile string) error {
 
 	result := strings.Join(modifiedConfigFileContent, "\n")
 	log.Debugf("Using modified config file content:\n%s", result)
-	return os.WriteFile(configFile, []byte(result), readOnlyFileMode) //nolint:gosec // configFile path is from controlled input
+	return os.WriteFile(configFile, []byte(result), readOnlyFileMode) //nolint:gosec // G703: configFile path from controlled input
 }

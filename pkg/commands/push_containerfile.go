@@ -242,7 +242,7 @@ func (c *PushContainerfile) Run() error {
 		if err != nil {
 			return fmt.Errorf("error on reading file %s: %w", absContainerfilePath, err)
 		}
-		if err := os.WriteFile(filepath.Join(workDir, pushFilename), content, 0644); err != nil { //nolint:gosec // containerfile needs to be readable
+		if err := os.WriteFile(filepath.Join(workDir, pushFilename), content, 0644); err != nil { //nolint:gosec // G703: path from controlled work directory
 			return fmt.Errorf("error on writing file: %w", err)
 		}
 	} else {

@@ -1153,7 +1153,7 @@ func (c *Build) copyPrefetchDir() (string, error) {
 	prefetchDirCopy := c.Params.PrefetchDirCopy
 
 	if prefetchDirCopy != "" {
-		err := os.Mkdir(prefetchDirCopy, 0755) //nolint:gosec // build tool needs standard directory permissions
+		err := os.Mkdir(prefetchDirCopy, 0755)
 		if err != nil {
 			return "", err
 		}
@@ -1206,13 +1206,13 @@ func (c *Build) copyPrefetchDir() (string, error) {
 
 		switch d.Type() {
 		case os.ModeDir:
-			return os.Mkdir(dstPath, 0755) //nolint:gosec // copying directory structure with standard permissions
+			return os.Mkdir(dstPath, 0755)
 		case os.ModeSymlink:
 			target, err := os.Readlink(srcPath)
 			if err != nil {
 				return err
 			}
-			return os.Symlink(target, dstPath) //nolint:gosec // copying symlinks from prefetch dir
+			return os.Symlink(target, dstPath) //nolint:gosec // G122: copying symlinks from prefetch dir in WalkDir
 		case 0: // regular
 			return copyFile(srcPath, dstPath)
 		default:
@@ -1298,7 +1298,7 @@ func (c *Build) injectPrefetchEnvToContainerfile(envMountPath string) error {
 		return fmt.Errorf("modifying containerfile to apply prefetch env: %w", err)
 	}
 
-	if err := os.WriteFile(c.containerfileCopyPath, []byte(result), 0644); err != nil { //nolint:gosec // containerfile needs to be readable
+	if err := os.WriteFile(c.containerfileCopyPath, []byte(result), 0644); err != nil { //nolint:gosec // G703: path from build context
 		return fmt.Errorf("writing modified containerfile: %w", err)
 	}
 	return nil
@@ -1324,7 +1324,7 @@ func (c *Build) prepareYumReposMount(prefetchResources *prefetchResources) error
 	mergedDir := filepath.Join(c.tempWorkdir, "yum.repos.d")
 	// For backwards compatibility, make the directory rwx to everyone.
 	// This enables any user inside the containerfile to write to the mount point.
-	if err := os.Mkdir(mergedDir, 0777); err != nil { //nolint:gosec // yum.repos.d needs broad access for container users
+	if err := os.Mkdir(mergedDir, 0777); err != nil {
 		return fmt.Errorf("creating yum.repos.d/ in temporary workdir: %w", err)
 	}
 
@@ -1358,7 +1358,7 @@ func (c *Build) prepareYumReposMount(prefetchResources *prefetchResources) error
 			if err != nil {
 				return fmt.Errorf("reading %s: %w", srcPath, err)
 			}
-			if err := os.WriteFile(dstPath, content, 0666); err != nil { //nolint:gosec // yum repo files need broad read access
+			if err := os.WriteFile(dstPath, content, 0666); err != nil { //nolint:gosec // G703: path from yum repos directory
 				return fmt.Errorf("writing %s: %w", dstPath, err)
 			}
 
@@ -1407,7 +1407,7 @@ func chmodAddRWX(rootDir string) error {
 		if entry.IsDir() || info.Mode()&0111 != 0 {
 			perm |= 0111 // +x for user, group, other
 		}
-		return os.Chmod(path, perm) //nolint:gosec // intentionally fixing permissions in WalkDir callback
+		return os.Chmod(path, perm) //nolint:gosec // G122: intentionally fixing permissions in WalkDir callback
 	})
 }
 
@@ -1479,7 +1479,7 @@ func (c *Build) gatherRHSMresources() (*rhsmResources, error) {
 
 	mkWorkdir := func(dirname string, outPath *string) error {
 		path := filepath.Join(c.tempWorkdir, dirname)
-		if err := os.Mkdir(path, 0755); err != nil { //nolint:gosec // standard directory permissions
+		if err := os.Mkdir(path, 0755); err != nil {
 			return fmt.Errorf("creating temporary directory for RHSM files: %w", err)
 		}
 		*outPath = path
@@ -1856,7 +1856,7 @@ func (c *Build) createBuildinfoDir() (string, error) {
 	}
 
 	buildinfoDir := filepath.Join(c.tempWorkdir, "buildinfo")
-	if err := os.Mkdir(buildinfoDir, 0755); err != nil { //nolint:gosec // standard directory permissions
+	if err := os.Mkdir(buildinfoDir, 0755); err != nil {
 		return "", err
 	}
 
@@ -1873,7 +1873,7 @@ func writeBuildinfoJSON(buildinfoDir string, value any, filename string) error {
 
 	filePath := filepath.Join(buildinfoDir, filename)
 	// For backwards compatibility, buildinfo files should be readable to all
-	if err := os.WriteFile(filePath, append(jsonContent, '\n'), 0644); err != nil { //nolint:gosec // buildinfo files need to be readable
+	if err := os.WriteFile(filePath, append(jsonContent, '\n'), 0644); err != nil {
 		return err
 	}
 
@@ -2431,7 +2431,7 @@ func (c *Build) writeContainerfileJson(containerfile *dockerfile.Dockerfile, out
 		return fmt.Errorf("failed to marshal Containerfile to JSON: %w", err)
 	}
 
-	if err := os.WriteFile(outputPath, jsonData, 0644); err != nil { //nolint:gosec // output files need to be readable
+	if err := os.WriteFile(outputPath, jsonData, 0644); err != nil {
 		return fmt.Errorf("failed to write Containerfile JSON: %w", err)
 	}
 
@@ -2460,7 +2460,7 @@ func (c *Build) writeResolvedBaseImages(pulledImages []string, outputPath string
 		s.WriteByte('\n')
 	}
 
-	err = os.WriteFile(outputPath, []byte(s.String()), 0644) //nolint:gosec // output files need to be readable
+	err = os.WriteFile(outputPath, []byte(s.String()), 0644)
 	if err != nil {
 		return fmt.Errorf("writing resolved base images: %w", err)
 	}

@@ -339,8 +339,8 @@ func (z *ZotRegistry) Prepare() error {
 	}
 
 	// Check SSL cert chain
-	if !FileExists(z.rootKeyPath) || !FileExists(z.rootCertPath) ||
-		!FileExists(z.zotKeyPath) || !FileExists(z.zotCertPath) {
+	if !(FileExists(z.rootKeyPath) && FileExists(z.rootCertPath) &&
+		FileExists(z.zotKeyPath) && FileExists(z.zotCertPath)) {
 		if err := z.generateCerts(executor); err != nil {
 			return err
 		}

@@ -309,7 +309,7 @@ func (c *BuildImageIndex) buildManifestIndex() error {
 	c.images = platformImages
 
 	if c.Params.OutputManifestPath != "" {
-		if err := os.WriteFile(c.Params.OutputManifestPath, []byte(manifestJson), 0644); err != nil { //nolint:gosec // manifest output needs to be readable
+		if err := os.WriteFile(c.Params.OutputManifestPath, []byte(manifestJson), 0644); err != nil {
 			return fmt.Errorf("failed to write manifest file: %w", err)
 		}
 		l.Logger.Infof("Manifest data saved to %s", c.Params.OutputManifestPath)
