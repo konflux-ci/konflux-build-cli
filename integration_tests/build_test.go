@@ -218,9 +218,24 @@ func cleanupContainerStorageDir(containerStoragePath string) error {
 // DeleteIfExists() on the container for cleanup.
 func setupBuildContainer(buildParams BuildParams, imageRegistry ImageRegistry, opts ...ContainerOption) (*TestRunnerContainer, error) {
 	container := NewBuildCliRunnerContainer("kbc-build", BuildImage, opts...)
+
 	// As of buildah v1.44.0, the user running 'buildah build' must own the context directory.
-	// Add :U to make podman change the owner to the container user.
-	container.AddVolumeWithOptions(buildParams.Context, "/workspace", "z,U")
+	// :U makes podman change the owner to the container user, but docker doesn't support :U.
+	mountOptions := "z"
+	if GetContainerTool() != "docker" {
+		mountOptions = "z,U"
+	}
+	container.AddVolumeWithOptions(buildParams.Context, "/workspace", mountOptions)
+
+	if GetContainerTool() == "docker" {
+		// With docker, buildah fails with:
+		//   Error during unshare(CLONE_NEWUSER): Operation not permitted
+		//
+		// Making the test container privileged fixes this.
+		// Limit privileged containers only to docker so that we can still
+		// test unprivileged ones with podman/buildah.
+		container.SetPrivileged(true)
+	}
 
 	var err error
 	if imageRegistry != nil {
