@@ -85,7 +85,7 @@ spec:
 
               # Disable strict host checking
               echo "StrictHostKeyChecking accept-new" >> ~/.ssh/config
-              
+
               # Extract git_url and git_revision from snapshot
               jq -c '.components[0]' >/tmp/component.json <<< "${PARAM_SNAPSHOT}"
               git_url=$(jq -r '.source.git.url' </tmp/component.json)
@@ -94,7 +94,7 @@ spec:
               # Validate git_url and git_revision
               [[ -z "$git_url" || "$git_url" == "null" ]] && echo 'ERROR: git_url not found in SNAPSHOT' && exit 1
               [[ -z "$git_revision" || "$git_revision" == "null" ]] && echo 'ERROR: git_revision not found in SNAPSHOT' && exit 1
-              
+
               if [[ $git_revision =~ ^[0-9a-f]{40}$ ]]; then
                 echo "Valid Git SHA."
               else
@@ -102,9 +102,13 @@ spec:
                 exit 1
               fi
 
+              # 'go test' runs completely silently, which makes the connection look idle.
+              # Send "heartbeat" packets every 60 seconds to prevent the connection from dropping.
+              ssh_opts=(-o ServerAliveInterval=60)
+
               # Login and execute the script remotely
               echo "Connecting to ${HOST} as ${USERNAME} ..."
-              ssh -i ~/.ssh/id_rsa "${USERNAME}@${HOST}" << EOF
+              ssh -i ~/.ssh/id_rsa "${ssh_opts[@]}" "${USERNAME}@${HOST}" << EOF
                 # install the tools needed for running the tests
                 sudo dnf install git golang httpd-tools -y
 
