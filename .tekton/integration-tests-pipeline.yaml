@@ -85,7 +85,7 @@ spec:
 
               # Disable strict host checking
               echo "StrictHostKeyChecking accept-new" >> ~/.ssh/config
-              
+
               # Extract git_url and git_revision from snapshot
               jq -c '.components[0]' >/tmp/component.json <<< "${PARAM_SNAPSHOT}"
               git_url=$(jq -r '.source.git.url' </tmp/component.json)
@@ -94,7 +94,7 @@ spec:
               # Validate git_url and git_revision
               [[ -z "$git_url" || "$git_url" == "null" ]] && echo 'ERROR: git_url not found in SNAPSHOT' && exit 1
               [[ -z "$git_revision" || "$git_revision" == "null" ]] && echo 'ERROR: git_revision not found in SNAPSHOT' && exit 1
-              
+
               if [[ $git_revision =~ ^[0-9a-f]{40}$ ]]; then
                 echo "Valid Git SHA."
               else
@@ -104,7 +104,7 @@ spec:
 
               # Login and execute the script remotely
               echo "Connecting to ${HOST} as ${USERNAME} ..."
-              ssh -i ~/.ssh/id_rsa "${USERNAME}@${HOST}" << EOF
+              ssh -v -i ~/.ssh/id_rsa "${USERNAME}@${HOST}" << EOF
                 # install the tools needed for running the tests
                 sudo dnf install git golang httpd-tools -y
 
@@ -116,7 +116,7 @@ spec:
                 git checkout "$git_revision"
 
                 # Run the integration tests
-                go test -timeout 20m ./integration_tests
+                go test -v -timeout 20m ./integration_tests
               EOF
   finally:
     - name: deprovision-virtual-machine
