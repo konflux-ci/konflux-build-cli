@@ -1899,6 +1899,61 @@ LABEL containerfile.label=label-from-containerfile
 			Expect(legacyPathExists).To(BeFalse(), "Should not have injected /root/buildinfo/labels.json by default")
 		})
 
+		t.Run("LabelsWithQuotes", func(t *testing.T) {
+			SetupGomega(t)
+
+			contextDir := setupTestContext(t)
+
+			writeContainerfile(contextDir, `
+FROM scratch
+
+LABEL with.single.quotes='label with single quotes'
+LABEL with.double.quotes="label with double quotes"
+
+ARG SINGLE_QUOTED_ARG='arg with single quotes'
+ARG DOUBLE_QUOTED_ARG="arg with double quotes"
+
+LABEL unquoted.arg.with.single.quotes=$SINGLE_QUOTED_ARG
+LABEL unquoted.arg.with.double.quotes=$DOUBLE_QUOTED_ARG
+
+LABEL quoted.arg.with.single.quotes="$SINGLE_QUOTED_ARG"
+LABEL quoted.arg.with.double.quotes="$DOUBLE_QUOTED_ARG"
+
+LABEL literal.argname.1='$SINGLE_QUOTED_ARG'
+LABEL literal.argname.2='$DOUBLE_QUOTED_ARG'
+`)
+
+			outputRef := "localhost/test-injecting-buildinfo-labels-with-quotes:" + GenerateUniqueTag(t)
+
+			buildParams := BuildParams{
+				Context:   contextDir,
+				OutputRef: outputRef,
+				Push:      false,
+			}
+
+			container := setupBuildContainerWithCleanup(t, buildParams, nil)
+
+			err := runBuild(container, buildParams)
+			Expect(err).ToNot(HaveOccurred())
+
+			injectedLabels := getLabelsFromLabelsJson(container, outputRef)
+			// LABEL commands follow shell expansion rules for quotes
+			Expect(injectedLabels).To(SatisfyAll(
+				HaveKeyWithValue("with.single.quotes", "label with single quotes"),
+				HaveKeyWithValue("with.double.quotes", "label with double quotes"),
+				HaveKeyWithValue("unquoted.arg.with.single.quotes", "arg with single quotes"),
+				HaveKeyWithValue("unquoted.arg.with.double.quotes", "arg with double quotes"),
+				HaveKeyWithValue("quoted.arg.with.single.quotes", "arg with single quotes"),
+				HaveKeyWithValue("quoted.arg.with.double.quotes", "arg with double quotes"),
+				HaveKeyWithValue("literal.argname.1", "$SINGLE_QUOTED_ARG"),
+				HaveKeyWithValue("literal.argname.2", "$DOUBLE_QUOTED_ARG"),
+			))
+
+			imageMeta := getImageMeta(container, outputRef)
+			expectEqualMaps(injectedLabels, imageMeta.labels,
+				"Expected labels.json (top) to match the actual image labels (bottom)")
+		})
+
 		t.Run("AvoidsContainerignore", func(t *testing.T) {
 			SetupGomega(t)
 
@@ -2220,71 +2275,6 @@ LABEL final.stage.label=label-from-final-stage
 
 				exists2 := fileExistsInOutputImage(container, outputRef, "/root/buildinfo/labels.json")
 				Expect(exists2).To(BeFalse(), "Should not have injected /root/buildinfo/labels.json")
-			})
-
-			t.Run("LabelsWithQuotes", func(t *testing.T) {
-				SetupGomega(t)
-
-				contextDir := setupTestContext(t)
-
-				writeContainerfile(contextDir, `
-FROM scratch
-
-LABEL with.single.quotes='label with single quotes'
-LABEL with.double.quotes="label with double quotes"
-
-ARG SINGLE_QUOTED_ARG='arg with single quotes'
-ARG DOUBLE_QUOTED_ARG="arg with double quotes"
-
-LABEL unquoted.arg.with.single.quotes=$SINGLE_QUOTED_ARG
-LABEL unquoted.arg.with.double.quotes=$DOUBLE_QUOTED_ARG
-
-LABEL quoted.arg.with.single.quotes="$SINGLE_QUOTED_ARG"
-LABEL quoted.arg.with.double.quotes="$DOUBLE_QUOTED_ARG"
-
-LABEL literal.argname.1='$SINGLE_QUOTED_ARG'
-LABEL literal.argname.2='$DOUBLE_QUOTED_ARG'
-`)
-
-				outputRef := "localhost/test-injecting-buildinfo-labels-with-quotes:" + GenerateUniqueTag(t)
-
-				buildParams := BuildParams{
-					Context:   contextDir,
-					OutputRef: outputRef,
-					Push:      false,
-				}
-
-				container := setupBuildContainerWithCleanup(t, buildParams, nil)
-
-				err := runBuild(container, buildParams)
-				Expect(err).ToNot(HaveOccurred())
-
-				imageMeta := getImageMeta(container, outputRef)
-				injectedLabels := getLabelsFromLabelsJson(container, outputRef)
-
-				// The actual labels follow shell expansion rules for quotes
-				Expect(formatAsKeyValuePairs(imageMeta.labels)).To(ContainElements(
-					`with.single.quotes=label with single quotes`,
-					`with.double.quotes=label with double quotes`,
-					`unquoted.arg.with.single.quotes=arg with single quotes`,
-					`unquoted.arg.with.double.quotes=arg with double quotes`,
-					`quoted.arg.with.single.quotes=arg with single quotes`,
-					`quoted.arg.with.double.quotes=arg with double quotes`,
-					`literal.argname.1=$SINGLE_QUOTED_ARG`,
-					`literal.argname.2=$DOUBLE_QUOTED_ARG`,
-				))
-
-				// Quote handling is broken in dockerfile-json, so labels.json is equally broken
-				Expect(formatAsKeyValuePairs(injectedLabels)).To(ContainElements(
-					`with.single.quotes='label with single quotes'`,
-					`with.double.quotes="label with double quotes"`,
-					`unquoted.arg.with.single.quotes='arg with single quotes'`,
-					`unquoted.arg.with.double.quotes="arg with double quotes"`,
-					`quoted.arg.with.single.quotes="'arg with single quotes'"`,
-					`quoted.arg.with.double.quotes=""arg with double quotes""`,
-					`literal.argname.1=''arg with single quotes''`,
-					`literal.argname.2='"arg with double quotes"'`,
-				))
 			})
 		})
 	})
