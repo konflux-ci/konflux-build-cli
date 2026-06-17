@@ -115,6 +115,10 @@ func WithWorkdir(workdir string) ContainerOption {
 	}
 }
 
+func (c *TestRunnerContainer) GetUser() string {
+	return c.user
+}
+
 func (c *TestRunnerContainer) SetUser(user string) {
 	c.ensureContainerNotStarted()
 	c.user = user

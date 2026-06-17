@@ -220,13 +220,7 @@ func setupBuildContainer(buildParams BuildParams, imageRegistry ImageRegistry, o
 	container := NewBuildCliRunnerContainer("kbc-build", BuildImage, opts...)
 
 	// As of buildah v1.44.0, the user running 'buildah build' must own the context directory.
-	// With podman, the :U volume option recursively chowns the mounted files to match the
-	// container user. Docker does not support :U, so we handle ownership separately below.
-	mountOptions := "z"
-	if GetContainerTool() != "docker" {
-		mountOptions = "z,U"
-	}
-	container.AddVolumeWithOptions(buildParams.Context, "/workspace", mountOptions)
+	container.AddVolumeWithOptions(buildParams.Context, "/workspace", "z")
 
 	if GetContainerTool() == "docker" {
 		// With docker, buildah fails with:
@@ -248,13 +242,11 @@ func setupBuildContainer(buildParams BuildParams, imageRegistry ImageRegistry, o
 		return container, err
 	}
 
-	if GetContainerTool() == "docker" {
-		// Docker doesn't support podman's :U volume option, so replicate its effect:
-		// chown the workspace to the container user. We stat /proc/1 to discover the
-		// UID:GID of the container's configured user (the entrypoint process), then
-		// chown as root (which works because the container is privileged).
+	// Chown the workspace to the container user so that buildah can access it.
+	// Works for both docker and podman (replaces podman's :U volume option).
+	if user := container.GetUser(); user != "" && user != "root" {
 		if err := container.ExecuteCommandAsUser(
-			"root", "bash", "-c", "chown -R $(stat -c '%u:%g' /proc/1) /workspace",
+			"root", "chown", "-R", user, "/workspace",
 		); err != nil {
 			return container, err
 		}
