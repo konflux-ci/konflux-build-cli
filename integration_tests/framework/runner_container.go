@@ -397,6 +397,21 @@ func (c *TestRunnerContainer) ExecuteCommand(command string, args ...string) err
 	return err
 }
 
+// ExecuteCommandAsUser executes a command in the container as the specified user.
+func (c *TestRunnerContainer) ExecuteCommandAsUser(user, command string, args ...string) error {
+	c.ensureContainerRunning()
+	execArgs := []string{"exec", "--user", user, c.name}
+	execArgs = append(execArgs, command)
+	execArgs = append(execArgs, args...)
+
+	stdout, stderr, _, err := c.executor.Execute(cliWrappers.Cmd{Name: containerTool, Args: execArgs, LogOutput: true})
+	if err != nil {
+		l.Logger.Infof("[stdout]:\n%s\n", stdout)
+		l.Logger.Infof("[stderr]:\n%s\n", stderr)
+	}
+	return err
+}
+
 func (c *TestRunnerContainer) debugBuildCli(cliArgs ...string) (string, string, error) {
 	c.ensureContainerRunning()
 
