@@ -220,16 +220,19 @@ func setupBuildContainer(buildParams BuildParams, imageRegistry ImageRegistry, o
 	container := NewBuildCliRunnerContainer("kbc-build", BuildImage, opts...)
 
 	// As of buildah v1.44.0, the user running 'buildah build' must own the context directory.
-	container.AddVolumeWithOptions(buildParams.Context, "/workspace", "z")
-
 	if GetContainerTool() == "docker" {
-		// With docker, buildah fails with:
+		// Docker does not support podman's :U volume option.
+		container.AddVolumeWithOptions(buildParams.Context, "/workspace", "z")
+
+		// Buildah inside docker fails with:
 		//   Error during unshare(CLONE_NEWUSER): Operation not permitted
-		//
-		// Making the test container privileged fixes this.
-		// Limit privileged containers only to docker so that we can still
-		// test unprivileged ones with podman/buildah.
-		container.SetPrivileged(true)
+		// because seccomp and AppArmor block user namespace creation.
+		// Disable them to allow buildah's user namespace operations.
+		container.AddSecurityOpt("seccomp=unconfined")
+		container.AddSecurityOpt("apparmor=unconfined")
+	} else {
+		// :U makes podman chown the volume contents to the in-container UID.
+		container.AddVolumeWithOptions(buildParams.Context, "/workspace", "z,U")
 	}
 
 	var err error
@@ -242,13 +245,14 @@ func setupBuildContainer(buildParams BuildParams, imageRegistry ImageRegistry, o
 		return container, err
 	}
 
-	// Chown the workspace to the container user so that buildah can access it.
-	// Works for both docker and podman (replaces podman's :U volume option).
-	if user := container.GetUser(); user != "" && user != "root" {
-		if err := container.ExecuteCommandAsUser(
-			"root", "chown", "-R", user, "/workspace",
-		); err != nil {
-			return container, err
+	// For docker, chown the workspace to the container user since :U is not available.
+	if GetContainerTool() == "docker" {
+		if user := container.GetUser(); user != "" && user != "root" {
+			if err := container.ExecuteCommandAsUser(
+				"root", "chown", "-R", user, "/workspace",
+			); err != nil {
+				return container, err
+			}
 		}
 	}
 

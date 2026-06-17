@@ -28,16 +28,17 @@ const (
 type TestRunnerContainer struct {
 	ReplaceEntrypoint bool
 
-	name       string
-	image      string
-	workdir    string
-	user       string
-	privileged bool
-	env        map[string]string
-	volumes    map[string]hostMount // container dir => (host dir, options)
-	ports      map[string]string
-	networks   []string
-	results    map[string]string
+	name         string
+	image        string
+	workdir      string
+	user         string
+	privileged   bool
+	securityOpts []string
+	env          map[string]string
+	volumes      map[string]hostMount // container dir => (host dir, options)
+	ports        map[string]string
+	networks     []string
+	results      map[string]string
 
 	executor cliWrappers.CliExecutorInterface
 
@@ -196,6 +197,17 @@ func WithPrivileged(privileged bool) ContainerOption {
 	}
 }
 
+func (c *TestRunnerContainer) AddSecurityOpt(opt string) {
+	c.ensureContainerNotStarted()
+	c.securityOpts = append(c.securityOpts, opt)
+}
+
+func WithSecurityOpt(opt string) ContainerOption {
+	return func(c *TestRunnerContainer) {
+		c.AddSecurityOpt(opt)
+	}
+}
+
 // ContainerExists checks for container with the same name.
 func (c *TestRunnerContainer) ContainerExists(isRunning bool) (bool, error) {
 	args := []string{"ps", "-q"}
@@ -262,6 +274,9 @@ func (c *TestRunnerContainer) Start() error {
 	}
 	if c.privileged {
 		args = append(args, "--privileged")
+	}
+	for _, opt := range c.securityOpts {
+		args = append(args, "--security-opt", opt)
 	}
 
 	if c.ReplaceEntrypoint {
