@@ -18,9 +18,14 @@ See [integration tests settings](#integration-tests-settings) for more details
 
 Integration tests are located under `integration_tests` directory.
 
-To run specific test from terminal execute:
+To run specific test (test function) from terminal execute:
 ```sh
 go test -timeout 5m -run ^TestMyCommand$ ./integration_tests
+```
+or if the test function has nested `t.Run`s:
+```sh
+go test -timeout 5m -run ^TestBuild$/^UsesRunInstruction$ ./integration_tests
+go test -timeout 5m -run ^TestBuild$/^UsesRunInstruction$/^AsRoot$ ./integration_tests
 ```
 or use your IDE to run or debug one.
 
@@ -46,7 +51,7 @@ If golang caches the test results with a message like:
 ok  	github.com/konflux-ci/konflux-build-cli/integration_tests	(cached)
 ```
 and it's needed to rerun the tests anyway, add `-count=1` argument to the test command:
-```
+```sh
 go test -count=1 ./integration_tests
 ```
 

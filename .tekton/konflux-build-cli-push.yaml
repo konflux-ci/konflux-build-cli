@@ -7,9 +7,17 @@ metadata:
     build.appstudio.redhat.com/target_branch: '{{target_branch}}'
     pipelinesascode.tekton.dev/cancel-in-progress: "false"
     pipelinesascode.tekton.dev/max-keep-runs: "3"
-    pipelinesascode.tekton.dev/on-cel-expression: event == "push" && target_branch
-      == "main"
-  creationTimestamp: null
+    pipelinesascode.tekton.dev/on-cel-expression: |
+      event == "push" && target_branch == "main"
+      && (
+        ".tekton/**".pathChanged()
+        || "cmd/**".pathChanged()
+        || "pkg/**".pathChanged()
+        || "Dockerfile".pathChanged()
+        || "go.mod".pathChanged()
+        || "go.sum".pathChanged()
+        || "main.go".pathChanged()
+      )
   labels:
     appstudio.openshift.io/application: konflux-build-cli
     appstudio.openshift.io/component: konflux-build-cli
