@@ -84,9 +84,10 @@ func NewBuildCliRunnerContainer(name, image string, opts ...ContainerOption) *Te
 		container.AddPort("2345", "2345")
 	}
 	container.AddEnv("KBC_LOG_LEVEL", "debug")
-	// On macOS, containers run in a Linux VM; overlay storage driver
-	// doesn't work reliably with host volume mounts through the VM
-	if runtime.GOOS == "darwin" {
+	// The overlay storage driver doesn't work reliably inside docker
+	// containers (chown fails on overlay scaffolding) or on macOS where
+	// containers run in a Linux VM with host-mounted volumes.
+	if containerTool == "docker" || runtime.GOOS == "darwin" {
 		container.AddEnv("STORAGE_DRIVER", "vfs")
 	}
 
