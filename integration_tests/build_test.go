@@ -3012,6 +3012,60 @@ RUN ["/bin/sh", "-c", "echo \"exec: PREFETCH_ENV_VAR=${PREFETCH_ENV_VAR-unset}\"
 			Expect(stderr).To(ContainSubstring("skipping unsupported RUN instruction on line 10 (exec form)"))
 		})
 
+		t.Run("SecretMountSupportsAllRunForms", func(t *testing.T) {
+			SetupGomega(t)
+
+			prefetchDir := t.TempDir()
+			Expect(os.Chmod(prefetchDir, 0775)).To(Succeed())
+
+			testutil.WriteFileTree(t, prefetchDir, map[string]string{
+				"prefetch.env":      "export PREFETCH_ENV_VAR=foo",
+				"prefetch-env.json": `[{"name":"PREFETCH_ENV_VAR","value":"foo"}]`,
+			})
+
+			contextDir := setupTestContext(t)
+			writeContainerfile(contextDir, fmt.Sprintf(`
+FROM %s
+
+# shell form
+RUN echo "shell: PREFETCH_ENV_VAR=${PREFETCH_ENV_VAR-unset}"
+
+# heredoc without interpreter - unsupported by Containerfile editing, supported by secret mounts
+RUN <<EOF
+echo "heredoc: PREFETCH_ENV_VAR=${PREFETCH_ENV_VAR-unset}"
+EOF
+
+# exec form - unsupported by Containerfile editing, supported by secret mounts
+RUN ["/bin/sh", "-c", "echo \"exec: PREFETCH_ENV_VAR=${PREFETCH_ENV_VAR-unset}\""]
+`, baseImage))
+
+			outputRef := "localhost/test-prefetch:" + GenerateUniqueTag(t)
+
+			buildParams := BuildParams{
+				Context:     contextDir,
+				OutputRef:   outputRef,
+				Push:        false,
+				PrefetchDir: "/prefetch",
+			}
+
+			container := setupBuildContainerWithCleanup(t, buildParams, nil,
+				WithVolumeWithOptions(prefetchDir, "/prefetch", "z"))
+
+			_, stderr, err := runBuildWithOutput(container, buildParams)
+			Expect(err).ToNot(HaveOccurred())
+
+			Expect(stderr).To(ContainSubstring("Using buildah secret env mounts"))
+
+			Expect(stderr).To(ContainSubstring("shell: PREFETCH_ENV_VAR=foo"))
+			Expect(stderr).To(ContainSubstring("heredoc: PREFETCH_ENV_VAR=foo"))
+			Expect(stderr).To(ContainSubstring("exec: PREFETCH_ENV_VAR=foo"))
+
+			Expect(stderr).ToNot(ContainSubstring("skipping unsupported"))
+
+			// Containerfile should not have been modified (no copy created)
+			Expect(stderr).ToNot(ContainSubstring("Modifying containerfile"))
+		})
+
 		t.Run("InjectDoesntMangleHeredocs", func(t *testing.T) {
 			SetupGomega(t)
 

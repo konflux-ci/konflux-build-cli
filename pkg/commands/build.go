@@ -494,6 +494,7 @@ type Build struct {
 
 	// pre-computed buildah arguments
 	buildahSecrets        []cliWrappers.BuildahSecret
+	buildahMounts         []cliWrappers.BuildahMount
 	buildahVolumes        []cliWrappers.BuildahVolume
 	mergedLabels          []string
 	mergedAnnotations     []string
@@ -1026,10 +1027,11 @@ func isRegular(entry os.DirEntry, dir string) (bool, error) {
 }
 
 type prefetchResources struct {
-	outputDir string
-	envFile   string
-	yumReposD string
-	sbomFile  string
+	outputDir   string
+	envFile     string
+	envJsonFile string
+	yumReposD   string
+	sbomFile    string
 }
 
 func findPrefetchResources(prefetchDir string) (*prefetchResources, error) {
@@ -1053,6 +1055,14 @@ func findPrefetchResources(prefetchDir string) (*prefetchResources, error) {
 		} else if !os.IsNotExist(err) {
 			return nil, err
 		}
+	}
+
+	envJsonFile := filepath.Join(prefetchDir, "prefetch-env.json")
+	if _, err := os.Lstat(envJsonFile); err == nil {
+		l.Logger.Debugf("Found prefetch env JSON file: %s", envJsonFile)
+		resources.envJsonFile = envJsonFile
+	} else if !os.IsNotExist(err) {
+		return nil, err
 	}
 
 	currentArch := goArchToRpmArch(runtime.GOARCH)
@@ -1106,7 +1116,15 @@ func (c *Build) integrateWithPrefetch() (*prefetchResources, error) {
 		})
 	}
 
-	if resources.envFile != "" {
+	if resources.envJsonFile != "" && slices.Compare(c.parsedBuildahVersion, []int{1, 44, 0}) >= 0 {
+		l.Logger.Debug("Using buildah secret env mounts for prefetch env vars (buildah >= 1.44.0)")
+		if err := c.setPrefetchEnvSecrets(resources.envJsonFile); err != nil {
+			return nil, fmt.Errorf("setting up prefetch env secrets: %w", err)
+		}
+	} else if resources.envJsonFile != "" && resources.envFile == "" {
+		l.Logger.Warn("prefetch-env.json exists but buildah < 1.44.0 and no prefetch.env fallback; " +
+			"prefetch env vars will not be injected into the build")
+	} else if resources.envFile != "" {
 		envMountPath := c.Params.PrefetchEnvMount
 		if envMountPath == "" {
 			envMountPath = defaultPrefetchEnvMount
@@ -1261,6 +1279,58 @@ func copyFile(srcPath, dstPath string) (err error) {
 	}
 
 	return dst.Close()
+}
+
+// Sets up prefetch environment variables using buildah's --secret/--mount flags (buildah >= 1.44.0)
+// instead of editing the Containerfile. Parses prefetch-env.json ([{"name": "X", "value": "Y"}, ...])
+// and creates one --secret + --mount=type=secret,env=X per variable. Each variable value must be in
+// its own file because buildah reads the entire file content as the secret value.
+// The secret IDs are generated (prefetch-env-0, prefetch-env-1, ...) to avoid any dependency on
+// the env var names being filesystem-safe or CLI-arg-safe.
+func (c *Build) setPrefetchEnvSecrets(envJsonFile string) error {
+	if err := c.ensureTempWorkdirExists(); err != nil {
+		return err
+	}
+
+	data, err := os.ReadFile(envJsonFile) //nolint:gosec // G304: envJsonFile is from prefetch directory
+	if err != nil {
+		return fmt.Errorf("reading prefetch env JSON: %w", err)
+	}
+
+	type envVar struct {
+		Name  string `json:"name"`
+		Value string `json:"value"`
+	}
+
+	var envVars []envVar
+	if err := json.Unmarshal(data, &envVars); err != nil {
+		return fmt.Errorf("parsing prefetch env JSON: %w", err)
+	}
+
+	secretsDir := filepath.Join(c.tempWorkdir, "prefetch-env-secrets")
+	if err := os.Mkdir(secretsDir, 0755); err != nil {
+		return fmt.Errorf("creating prefetch env secrets dir: %w", err)
+	}
+
+	for i, ev := range envVars {
+		secretID := fmt.Sprintf("prefetch-env-%d", i)
+		secretFile := filepath.Join(secretsDir, secretID)
+		if err := os.WriteFile(secretFile, []byte(ev.Value), 0600); err != nil {
+			return fmt.Errorf("writing secret file for %s: %w", ev.Name, err)
+		}
+		c.buildahSecrets = append(c.buildahSecrets, cliWrappers.BuildahSecret{
+			Src: secretFile,
+			Id:  secretID,
+		})
+		c.buildahMounts = append(c.buildahMounts, cliWrappers.BuildahMount{
+			Type: "secret",
+			Id:   secretID,
+			Env:  ev.Name,
+		})
+	}
+
+	l.Logger.Infof("Set up %d prefetch env var(s) as buildah secret env mounts", len(envVars))
+	return nil
 }
 
 // Modifies RUN instructions in the Containerfile to source the env file at the beginning,
@@ -2356,6 +2426,7 @@ func (c *Build) buildImage() (err error) {
 		ContextDir:       c.effectiveContextDir(),
 		OutputRef:        c.Params.OutputRef,
 		Secrets:          c.buildahSecrets,
+		Mounts:           c.buildahMounts,
 		Volumes:          c.buildahVolumes,
 		BuildArgs:        c.Params.BuildArgs,
 		BuildArgsFile:    c.Params.BuildArgsFile,
