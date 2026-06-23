@@ -126,6 +126,37 @@ func TestBuildahCli_Build(t *testing.T) {
 		g.Expect(capturedArgs).To(ContainElement("--secret=src=/other/file,id=mysecret_2"))
 	})
 
+	t.Run("should turn Mounts into --mount params", func(t *testing.T) {
+		buildahCli, executor := setupBuildahCli()
+		var capturedArgs []string
+		executor.executeFunc = func(cmd cliwrappers.Cmd) (string, string, int, error) {
+			g.Expect(cmd.Name).To(Equal("buildah"))
+			capturedArgs = cmd.Args
+			return "", "", 0, nil
+		}
+
+		buildArgs := &cliwrappers.BuildahBuildArgs{
+			Containerfile: containerfile,
+			ContextDir:    contextDir,
+			OutputRef:     outputRef,
+			Secrets: []cliwrappers.BuildahSecret{
+				{Src: "/some/file", Id: "GOMODCACHE"},
+				{Src: "/other/file", Id: "regular_secret"},
+			},
+			Mounts: []cliwrappers.BuildahMount{
+				{Type: "secret", Id: "GOMODCACHE", Env: "GOMODCACHE"},
+			},
+		}
+
+		err := buildahCli.Build(buildArgs)
+		g.Expect(err).ToNot(HaveOccurred())
+
+		g.Expect(capturedArgs).To(ContainElement("--secret=src=/some/file,id=GOMODCACHE"))
+		g.Expect(capturedArgs).To(ContainElement("--mount=type=secret,id=GOMODCACHE,env=GOMODCACHE"))
+		g.Expect(capturedArgs).To(ContainElement("--secret=src=/other/file,id=regular_secret"))
+		g.Expect(capturedArgs).ToNot(ContainElement(ContainSubstring("--mount=type=secret,id=regular_secret")))
+	})
+
 	t.Run("should turn Volumes into --volume params", func(t *testing.T) {
 		buildahCli, executor := setupBuildahCli()
 		var capturedArgs []string

@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -3579,4 +3580,232 @@ func Test_Build_injectPrefetchEnvToContainerfile(t *testing.T) {
 			g.Expect(string(copyContent)).To(Equal(tt.expected))
 		})
 	}
+}
+
+func Test_findPrefetchResources_envJsonFile(t *testing.T) {
+	t.Run("should find prefetch-env.json", func(t *testing.T) {
+		g := NewWithT(t)
+
+		prefetchDir := t.TempDir()
+		testutil.WriteFileTree(t, prefetchDir, map[string]string{
+			"prefetch.env":      "export GOMODCACHE=/tmp/deps/gomod/pkg/mod",
+			"prefetch-env.json": `[{"name":"GOMODCACHE","value":"/tmp/deps/gomod/pkg/mod"}]`,
+		})
+
+		resources, err := findPrefetchResources(prefetchDir)
+		g.Expect(err).ToNot(HaveOccurred())
+		g.Expect(resources.envFile).To(Equal(filepath.Join(prefetchDir, "prefetch.env")))
+		g.Expect(resources.envJsonFile).To(Equal(filepath.Join(prefetchDir, "prefetch-env.json")))
+	})
+
+	t.Run("should handle missing prefetch-env.json", func(t *testing.T) {
+		g := NewWithT(t)
+
+		prefetchDir := t.TempDir()
+		testutil.WriteFileTree(t, prefetchDir, map[string]string{
+			"prefetch.env": "export GOMODCACHE=/tmp/deps/gomod/pkg/mod",
+		})
+
+		resources, err := findPrefetchResources(prefetchDir)
+		g.Expect(err).ToNot(HaveOccurred())
+		g.Expect(resources.envFile).To(Equal(filepath.Join(prefetchDir, "prefetch.env")))
+		g.Expect(resources.envJsonFile).To(BeEmpty())
+	})
+}
+
+func Test_Build_setPrefetchEnvSecrets(t *testing.T) {
+	t.Run("should create secrets from prefetch-env.json", func(t *testing.T) {
+		g := NewWithT(t)
+
+		envVars := []struct {
+			Name  string `json:"name"`
+			Value string `json:"value"`
+		}{
+			{Name: "GOMODCACHE", Value: "/tmp/deps/gomod/pkg/mod"},
+			{Name: "GOPROXY", Value: "file:///tmp/deps/gomod/pkg/mod/cache/download"},
+		}
+		envJson, err := json.Marshal(envVars)
+		g.Expect(err).ToNot(HaveOccurred())
+
+		envJsonFile := filepath.Join(t.TempDir(), "prefetch-env.json")
+		g.Expect(os.WriteFile(envJsonFile, envJson, 0644)).To(Succeed())
+
+		c := &Build{Params: &BuildParams{}}
+
+		g.Expect(c.setPrefetchEnvSecrets(envJsonFile)).To(Succeed())
+
+		g.Expect(c.buildahSecrets).To(HaveLen(2))
+
+		g.Expect(c.buildahSecrets[0].Id).To(Equal("prefetch-env-0"))
+		secretContent, err := os.ReadFile(c.buildahSecrets[0].Src)
+		g.Expect(err).ToNot(HaveOccurred())
+		g.Expect(string(secretContent)).To(Equal("/tmp/deps/gomod/pkg/mod"))
+
+		g.Expect(c.buildahSecrets[1].Id).To(Equal("prefetch-env-1"))
+		secretContent, err = os.ReadFile(c.buildahSecrets[1].Src)
+		g.Expect(err).ToNot(HaveOccurred())
+		g.Expect(string(secretContent)).To(Equal("file:///tmp/deps/gomod/pkg/mod/cache/download"))
+
+		g.Expect(c.buildahMounts).To(HaveLen(2))
+		g.Expect(c.buildahMounts[0].Type).To(Equal("secret"))
+		g.Expect(c.buildahMounts[0].Id).To(Equal("prefetch-env-0"))
+		g.Expect(c.buildahMounts[0].Env).To(Equal("GOMODCACHE"))
+		g.Expect(c.buildahMounts[1].Type).To(Equal("secret"))
+		g.Expect(c.buildahMounts[1].Id).To(Equal("prefetch-env-1"))
+		g.Expect(c.buildahMounts[1].Env).To(Equal("GOPROXY"))
+	})
+
+	t.Run("should handle empty array", func(t *testing.T) {
+		g := NewWithT(t)
+
+		envJsonFile := filepath.Join(t.TempDir(), "prefetch-env.json")
+		g.Expect(os.WriteFile(envJsonFile, []byte("[]"), 0644)).To(Succeed())
+
+		c := &Build{Params: &BuildParams{}}
+
+		g.Expect(c.setPrefetchEnvSecrets(envJsonFile)).To(Succeed())
+		g.Expect(c.buildahSecrets).To(BeEmpty())
+		g.Expect(c.buildahMounts).To(BeEmpty())
+	})
+
+	t.Run("should fail on invalid JSON", func(t *testing.T) {
+		g := NewWithT(t)
+
+		envJsonFile := filepath.Join(t.TempDir(), "prefetch-env.json")
+		g.Expect(os.WriteFile(envJsonFile, []byte("not json"), 0644)).To(Succeed())
+
+		c := &Build{Params: &BuildParams{}}
+
+		err := c.setPrefetchEnvSecrets(envJsonFile)
+		g.Expect(err).To(HaveOccurred())
+		g.Expect(err.Error()).To(ContainSubstring("parsing prefetch env JSON"))
+	})
+}
+
+func Test_Build_integrateWithPrefetch_secretEnvMounts(t *testing.T) {
+	t.Run("should use secret env mounts when buildah >= 1.44.0 and prefetch-env.json exists", func(t *testing.T) {
+		g := NewWithT(t)
+
+		prefetchDir := t.TempDir()
+		testutil.WriteFileTree(t, prefetchDir, map[string]string{
+			"prefetch.env":      "export GOMODCACHE=/tmp/deps/gomod/pkg/mod",
+			"prefetch-env.json": `[{"name":"GOMODCACHE","value":"/tmp/deps/gomod/pkg/mod"}]`,
+		})
+
+		containerfile := filepath.Join(t.TempDir(), "Containerfile")
+		g.Expect(os.WriteFile(containerfile, []byte("FROM scratch\nRUN echo hello\n"), 0644)).To(Succeed())
+
+		c := &Build{
+			Params: &BuildParams{
+				PrefetchDir:     prefetchDir,
+				PrefetchDirCopy: filepath.Join(t.TempDir(), "copy"),
+			},
+			parsedBuildahVersion: []int{1, 44, 0},
+			containerfilePath:    containerfile,
+		}
+
+		resources, err := c.integrateWithPrefetch()
+		g.Expect(err).ToNot(HaveOccurred())
+		g.Expect(resources).ToNot(BeNil())
+
+		// Should use secrets and secret mounts, not volume mounts for env
+		g.Expect(c.buildahSecrets).To(HaveLen(1))
+		g.Expect(c.buildahSecrets[0].Id).To(Equal("prefetch-env-0"))
+		g.Expect(c.buildahMounts).To(HaveLen(1))
+		g.Expect(c.buildahMounts[0].Type).To(Equal("secret"))
+		g.Expect(c.buildahMounts[0].Id).To(Equal("prefetch-env-0"))
+		g.Expect(c.buildahMounts[0].Env).To(Equal("GOMODCACHE"))
+
+		// Should NOT have a volume mount for the env file
+		for _, vol := range c.buildahVolumes {
+			g.Expect(vol.ContainerDir).ToNot(Equal(defaultPrefetchEnvMount))
+		}
+
+		// Containerfile should NOT be modified
+		g.Expect(c.containerfileCopyPath).To(BeEmpty())
+	})
+
+	t.Run("should fall back to containerfile editing when buildah < 1.44.0", func(t *testing.T) {
+		g := NewWithT(t)
+
+		prefetchDir := t.TempDir()
+		testutil.WriteFileTree(t, prefetchDir, map[string]string{
+			"prefetch.env":      "export GOMODCACHE=/tmp/deps/gomod/pkg/mod",
+			"prefetch-env.json": `[{"name":"GOMODCACHE","value":"/tmp/deps/gomod/pkg/mod"}]`,
+		})
+
+		containerfile := filepath.Join(t.TempDir(), "Containerfile")
+		g.Expect(os.WriteFile(containerfile, []byte("FROM scratch\nRUN echo hello\n"), 0644)).To(Succeed())
+
+		c := &Build{
+			Params: &BuildParams{
+				PrefetchDir:     prefetchDir,
+				PrefetchDirCopy: filepath.Join(t.TempDir(), "copy"),
+			},
+			parsedBuildahVersion: []int{1, 43, 0},
+			containerfilePath:    containerfile,
+		}
+
+		resources, err := c.integrateWithPrefetch()
+		g.Expect(err).ToNot(HaveOccurred())
+		g.Expect(resources).ToNot(BeNil())
+
+		// Should NOT use secrets for env
+		g.Expect(c.buildahSecrets).To(BeEmpty())
+
+		// Should have a volume mount for the env file
+		envVolFound := false
+		for _, vol := range c.buildahVolumes {
+			if vol.ContainerDir == defaultPrefetchEnvMount {
+				envVolFound = true
+			}
+		}
+		g.Expect(envVolFound).To(BeTrue(), "expected volume mount for prefetch env file")
+
+		// Containerfile should be modified (copy created)
+		g.Expect(c.containerfileCopyPath).ToNot(BeEmpty())
+		copyContent, err := os.ReadFile(c.containerfileCopyPath)
+		g.Expect(err).ToNot(HaveOccurred())
+		g.Expect(string(copyContent)).To(ContainSubstring(". " + defaultPrefetchEnvMount))
+	})
+
+	t.Run("should fall back to containerfile editing when only prefetch.env exists", func(t *testing.T) {
+		g := NewWithT(t)
+
+		prefetchDir := t.TempDir()
+		testutil.WriteFileTree(t, prefetchDir, map[string]string{
+			"prefetch.env": "export GOMODCACHE=/tmp/deps/gomod/pkg/mod",
+		})
+
+		containerfile := filepath.Join(t.TempDir(), "Containerfile")
+		g.Expect(os.WriteFile(containerfile, []byte("FROM scratch\nRUN echo hello\n"), 0644)).To(Succeed())
+
+		c := &Build{
+			Params: &BuildParams{
+				PrefetchDir:     prefetchDir,
+				PrefetchDirCopy: filepath.Join(t.TempDir(), "copy"),
+			},
+			parsedBuildahVersion: []int{1, 44, 0},
+			containerfilePath:    containerfile,
+		}
+
+		resources, err := c.integrateWithPrefetch()
+		g.Expect(err).ToNot(HaveOccurred())
+		g.Expect(resources).ToNot(BeNil())
+
+		// Should NOT use secrets for env
+		g.Expect(c.buildahSecrets).To(BeEmpty())
+
+		// Should have a volume mount for the env file
+		envVolFound := false
+		for _, vol := range c.buildahVolumes {
+			if vol.ContainerDir == defaultPrefetchEnvMount {
+				envVolFound = true
+			}
+		}
+		g.Expect(envVolFound).To(BeTrue(), "expected volume mount for prefetch env file")
+
+		// Containerfile should be modified
+		g.Expect(c.containerfileCopyPath).ToNot(BeEmpty())
+	})
 }

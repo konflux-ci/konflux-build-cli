@@ -58,6 +58,7 @@ type BuildahBuildArgs struct {
 	ContextDir       string
 	OutputRef        string
 	Secrets          []BuildahSecret
+	Mounts           []BuildahMount
 	Volumes          []BuildahVolume
 	BuildContexts    []BuildahBuildContext
 	BuildArgs        []string
@@ -89,6 +90,14 @@ type BuildahSecret struct {
 	Id  string
 }
 
+// Represents a buildah --mount argument. Currently only supports type=secret
+// (e.g. --mount=type=secret,id=X,env=Y). Other mount types need additional fields.
+type BuildahMount struct {
+	Type string
+	Id   string
+	Env  string
+}
+
 // Represents a buildah --volume argument: HOST-DIR:CONTAINER-DIR[:OPTIONS]
 type BuildahVolume struct {
 	HostDir      string
@@ -114,6 +123,17 @@ func (args *BuildahBuildArgs) Validate() error {
 	}
 	if args.OutputRef == "" {
 		return errors.New("output-ref is empty")
+	}
+	for _, mount := range args.Mounts {
+		if mount.Type == "" {
+			return errors.New("mount type is empty")
+		}
+		if mount.Id == "" {
+			return errors.New("mount id is empty")
+		}
+		if mount.Env == "" {
+			return errors.New("mount env is empty")
+		}
 	}
 	for _, volume := range args.Volumes {
 		if strings.ContainsRune(volume.HostDir, ':') {
@@ -191,6 +211,10 @@ func (b *BuildahCli) Build(args *BuildahBuildArgs) error {
 	for _, secret := range args.Secrets {
 		secretArg := "src=" + secret.Src + ",id=" + secret.Id
 		buildahArgs = append(buildahArgs, "--secret="+secretArg)
+	}
+
+	for _, mount := range args.Mounts {
+		buildahArgs = append(buildahArgs, "--mount=type="+mount.Type+",id="+mount.Id+",env="+mount.Env)
 	}
 
 	for _, volume := range args.Volumes {
