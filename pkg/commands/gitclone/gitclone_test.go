@@ -726,6 +726,77 @@ func Test_normalizeGitURL(t *testing.T) {
 	}
 }
 
+func Test_ensureGitRemoteURL(t *testing.T) {
+	g := NewWithT(t)
+
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{
+			name:     "should append .git to https repo URL",
+			input:    "https://gitlab.example.com/group/project",
+			expected: "https://gitlab.example.com/group/project.git",
+		},
+		{
+			name:     "should not modify URL that already has .git",
+			input:    "https://gitlab.example.com/group/project.git",
+			expected: "https://gitlab.example.com/group/project.git",
+		},
+		{
+			name:     "should not modify ssh URL",
+			input:    "git@gitlab.example.com:group/project.git",
+			expected: "git@gitlab.example.com:group/project.git",
+		},
+		{
+			name:     "should not modify host-only https URL",
+			input:    "https://gitlab.example.com",
+			expected: "https://gitlab.example.com",
+		},
+		{
+			name:     "should append .git after stripping trailing slash",
+			input:    "https://gitlab.example.com/group/project/",
+			expected: "https://gitlab.example.com/group/project.git",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			result := ensureGitRemoteURL(tc.input)
+			g.Expect(result).To(Equal(tc.expected))
+		})
+	}
+}
+
+func Test_GitClone_performClone_appendsGitSuffixToRemoteURL(t *testing.T) {
+	g := NewWithT(t)
+
+	mockGitCli := &mockGitCli{}
+	c := &GitClone{
+		Params: &Params{
+			URL:          "https://gitlab.example.com/group/project",
+			Depth:        1,
+			Submodules:   false,
+			OutputDir:    t.TempDir(),
+			Subdirectory: "source",
+		},
+		CliWrappers: CliWrappers{GitCli: mockGitCli},
+	}
+
+	mockGitCli.InitFunc = func() error { return nil }
+	mockGitCli.RemoteAddFunc = func(name, url string) (string, error) {
+		g.Expect(name).To(Equal("origin"))
+		g.Expect(url).To(Equal("https://gitlab.example.com/group/project.git"))
+		return "", nil
+	}
+	mockGitCli.FetchWithRefspecFunc = func(opts cliwrappers.GitFetchOptions) error { return nil }
+	mockGitCli.CheckoutFunc = func(ref string) error { return nil }
+
+	err := c.performClone()
+	g.Expect(err).ToNot(HaveOccurred())
+}
+
 func Test_GitClone_mergeTargetBranch(t *testing.T) {
 	g := NewWithT(t)
 
@@ -810,7 +881,7 @@ func Test_GitClone_mergeTargetBranch(t *testing.T) {
 		addedRemoteName := ""
 		_mockGitCli.RemoteAddFunc = func(name, url string) (string, error) {
 			addedRemoteName = name
-			g.Expect(url).To(Equal("https://github.com/other/repo"))
+			g.Expect(url).To(Equal("https://github.com/other/repo.git"))
 			return "", nil
 		}
 

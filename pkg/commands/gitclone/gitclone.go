@@ -165,6 +165,25 @@ func normalizeGitURL(rawURL string) string {
 	return rawURL
 }
 
+// ensureGitRemoteURL appends a ".git" suffix to HTTP(S) repository URLs when missing.
+// Konflux/Tekton often configure credentials with useHttpPath for the ".git" URL,
+// while pipeline params may omit the suffix (e.g. from Pipelines-as-Code source_url).
+func ensureGitRemoteURL(rawURL string) string {
+	parsed, err := url.Parse(rawURL)
+	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
+		return rawURL
+	}
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		return rawURL
+	}
+	path := strings.TrimSuffix(parsed.Path, "/")
+	if path == "" || strings.HasSuffix(path, ".git") {
+		return rawURL
+	}
+	parsed.Path = path + ".git"
+	return parsed.String()
+}
+
 func (c *GitClone) validateParams() error {
 	if c.Params.URL == "" {
 		return fmt.Errorf("url parameter is required")
@@ -300,8 +319,9 @@ func (c *GitClone) performClone() error {
 		}
 	}
 
-	l.Logger.Debugf("Adding remote origin: %s", sanitizeURL(c.Params.URL))
-	if _, err := c.CliWrappers.GitCli.RemoteAdd("origin", c.Params.URL); err != nil {
+	remoteURL := ensureGitRemoteURL(c.Params.URL)
+	l.Logger.Debugf("Adding remote origin: %s", sanitizeURL(remoteURL))
+	if _, err := c.CliWrappers.GitCli.RemoteAdd("origin", remoteURL); err != nil {
 		return fmt.Errorf("git remote add failed: %w", err)
 	}
 
@@ -392,7 +412,7 @@ func (c *GitClone) mergeTargetBranch() error {
 		} else {
 			l.Logger.Debugf("Merging from different repository: '%s'", c.Params.MergeSourceRepoURL)
 			mergeRemote = "merge-source"
-			if _, err := c.CliWrappers.GitCli.RemoteAdd(mergeRemote, c.Params.MergeSourceRepoURL); err != nil {
+			if _, err := c.CliWrappers.GitCli.RemoteAdd(mergeRemote, ensureGitRemoteURL(c.Params.MergeSourceRepoURL)); err != nil {
 				return err
 			}
 		}
