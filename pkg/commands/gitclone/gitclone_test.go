@@ -1042,7 +1042,7 @@ func Test_GitClone_setupBasicAuth(t *testing.T) {
 		g.Expect(err).ToNot(HaveOccurred())
 	})
 
-	t.Run("should copy .git-credentials and rewrite .gitconfig", func(t *testing.T) {
+	t.Run("should copy .git-credentials and write minimal gitconfig", func(t *testing.T) {
 		tmpDir := t.TempDir()
 		authDir := filepath.Join(tmpDir, "auth")
 		internalDir := t.TempDir()
@@ -1051,11 +1051,11 @@ func Test_GitClone_setupBasicAuth(t *testing.T) {
 		g.Expect(os.WriteFile(filepath.Join(authDir, ".gitconfig"), []byte("[credential]\n  helper = store"), 0644)).To(Succeed())
 
 		envVars := map[string]string{}
-		_mockGitCli := &mockGitCli{
+		mockGitCli := &mockGitCli{
 			SetEnvFunc: func(key, value string) { envVars[key] = value },
 		}
 		c := &GitClone{
-			CliWrappers: CliWrappers{GitCli: _mockGitCli},
+			CliWrappers: CliWrappers{GitCli: mockGitCli},
 			Params: &Params{
 				URL:                "https://git.test/user/repo",
 				BasicAuthDirectory: authDir,
@@ -1071,8 +1071,39 @@ func Test_GitClone_setupBasicAuth(t *testing.T) {
 		g.Expect(string(creds)).To(Equal("https://user:pass@github.com"))
 		config, err := os.ReadFile(filepath.Join(internalDir, ".gitconfig"))
 		g.Expect(err).ToNot(HaveOccurred())
-		g.Expect(string(config)).To(ContainSubstring("helper = store --file=" + filepath.Join(internalDir, ".git-credentials")))
+		g.Expect(string(config)).To(Equal("[credential]\n\thelper = store --file " + filepath.Join(internalDir, ".git-credentials") + "\n"))
 		g.Expect(envVars[envGitConfigGlobal]).To(Equal(filepath.Join(internalDir, ".gitconfig")))
+	})
+
+	t.Run("should ignore Tekton useHttpPath gitconfig and write minimal gitconfig", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		authDir := filepath.Join(tmpDir, "auth")
+		internalDir := t.TempDir()
+		g.Expect(os.MkdirAll(authDir, 0755)).To(Succeed())
+		g.Expect(os.WriteFile(filepath.Join(authDir, ".git-credentials"), []byte("https://token:secret@gitlab.example.com/group/project.git\n"), 0644)).To(Succeed())
+		tektonGitconfig := `[credential]
+	helper = store
+[credential "https://gitlab.example.com/group/project.git"]
+	username = gitlab-ci-token
+	useHttpPath = true
+`
+		g.Expect(os.WriteFile(filepath.Join(authDir, ".gitconfig"), []byte(tektonGitconfig), 0644)).To(Succeed())
+
+		c := &GitClone{
+			CliWrappers: CliWrappers{GitCli: &mockGitCli{}},
+			Params: &Params{
+				URL:                "https://gitlab.example.com/group/project.git",
+				BasicAuthDirectory: authDir,
+			},
+			internalDir: internalDir,
+		}
+
+		err := c.setupBasicAuth()
+
+		g.Expect(err).ToNot(HaveOccurred())
+		config, err := os.ReadFile(filepath.Join(internalDir, ".gitconfig"))
+		g.Expect(err).ToNot(HaveOccurred())
+		g.Expect(string(config)).To(Equal("[credential]\n\thelper = store --file " + filepath.Join(internalDir, ".git-credentials") + "\n"))
 	})
 
 	t.Run("should generate credentials from username/password", func(t *testing.T) {
@@ -1104,7 +1135,7 @@ func Test_GitClone_setupBasicAuth(t *testing.T) {
 		g.Expect(string(creds)).To(Equal("https://myuser:mypass@git.test\n"))
 		config, err := os.ReadFile(filepath.Join(internalDir, ".gitconfig"))
 		g.Expect(err).ToNot(HaveOccurred())
-		g.Expect(string(config)).To(ContainSubstring("helper = store --file=" + filepath.Join(internalDir, ".git-credentials")))
+		g.Expect(string(config)).To(Equal("[credential]\n\thelper = store --file " + filepath.Join(internalDir, ".git-credentials") + "\n"))
 		g.Expect(envVars[envGitConfigGlobal]).To(Equal(filepath.Join(internalDir, ".gitconfig")))
 	})
 

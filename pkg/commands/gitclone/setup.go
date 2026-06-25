@@ -92,7 +92,11 @@ func (c *GitClone) setupBasicAuth() error {
 	destCredentials := filepath.Join(c.internalDir, ".git-credentials")
 	destConfig := filepath.Join(c.internalDir, ".gitconfig")
 
-	// Format 1: .git-credentials and .gitconfig files
+	// Format 1: .git-credentials and .gitconfig files.
+	// Both files must be present (Konflux/Tekton convention), but only .git-credentials
+	// is used. Write a minimal gitconfig instead of copying the workspace .gitconfig:
+	// Tekton's repo-scoped useHttpPath/username sections break credential lookup when
+	// combined with GIT_CONFIG_GLOBAL.
 	if fileExists(gitCredentialsPath) && fileExists(gitConfigPath) {
 		l.Logger.Debug("Setting up basic auth from .git-credentials and .gitconfig")
 
@@ -100,13 +104,8 @@ func (c *GitClone) setupBasicAuth() error {
 			return fmt.Errorf("failed to copy .git-credentials: %w", err)
 		}
 
-		configContent, err := readFileWithLimit(gitConfigPath, maxAuthFileSize)
-		if err != nil {
-			return fmt.Errorf("failed to read .gitconfig: %w", err)
-		}
-		rewritten := rewriteGitConfigCredentialHelper(string(configContent), destCredentials)
-		if err := os.WriteFile(destConfig, []byte(rewritten), 0400); err != nil {
-			return fmt.Errorf("failed to write .gitconfig: %w", err)
+		if err := writeCredentialStoreGitconfig(destConfig, destCredentials); err != nil {
+			return err
 		}
 
 		c.CliWrappers.GitCli.SetEnv(envGitConfigGlobal, destConfig)
@@ -148,9 +147,8 @@ func (c *GitClone) setupBasicAuth() error {
 			return fmt.Errorf("failed to write .git-credentials: %w", err)
 		}
 
-		gitConfigContent := fmt.Sprintf("[credential \"%s://%s\"]\n  helper = store --file=%s\n", parsedURL.Scheme, hostname, destCredentials)
-		if err := os.WriteFile(destConfig, []byte(gitConfigContent), 0400); err != nil {
-			return fmt.Errorf("failed to write .gitconfig: %w", err)
+		if err := writeCredentialStoreGitconfig(destConfig, destCredentials); err != nil {
+			return err
 		}
 
 		c.CliWrappers.GitCli.SetEnv(envGitConfigGlobal, destConfig)
@@ -162,18 +160,14 @@ func (c *GitClone) setupBasicAuth() error {
 	return fmt.Errorf("unknown basic-auth workspace format: expected .git-credentials/.gitconfig or username/password files")
 }
 
-// rewriteGitConfigCredentialHelper rewrites "helper = store" lines in a git config
-// to include an explicit --file flag pointing to the given credentials path.
-func rewriteGitConfigCredentialHelper(configContent, credentialsPath string) string {
-	lines := strings.Split(configContent, "\n")
-	for i, line := range lines {
-		trimmed := strings.TrimSpace(line)
-		if trimmed == "helper = store" {
-			indent := line[:len(line)-len(strings.TrimLeft(line, " \t"))]
-			lines[i] = fmt.Sprintf("%shelper = store --file=%s", indent, credentialsPath)
-		}
+// writeCredentialStoreGitconfig writes a minimal gitconfig that points the store
+// helper at the given credentials file.
+func writeCredentialStoreGitconfig(destConfig, credentialsPath string) error {
+	gitConfigContent := fmt.Sprintf("[credential]\n\thelper = store --file %s\n", credentialsPath)
+	if err := os.WriteFile(destConfig, []byte(gitConfigContent), 0400); err != nil {
+		return fmt.Errorf("failed to write .gitconfig: %w", err)
 	}
-	return strings.Join(lines, "\n")
+	return nil
 }
 
 // setupSSH sets up SSH keys from an ssh-directory workspace.
