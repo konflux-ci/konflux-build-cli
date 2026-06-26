@@ -246,7 +246,7 @@ func (g *GitCli) FetchWithRefspec(opts GitFetchOptions) error {
 	gitArgs = append(gitArgs, opts.Remote, "--update-head-ok", "--force")
 
 	if opts.Refspec != "" {
-		gitArgs = append(gitArgs, opts.Refspec)
+		gitArgs = append(gitArgs, strings.Fields(opts.Refspec)...)
 	}
 
 	retryer := NewRetryer(func() (string, string, int, error) {
