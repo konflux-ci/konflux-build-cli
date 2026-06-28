@@ -234,16 +234,13 @@ func (g *GitCli) FetchTags() ([]string, error) {
 
 // FetchWithRefspec fetches one or more refspecs from a remote with optional depth and retry.
 // When opts.Refspec contains space-separated values, each is passed as a separate argument.
-// Runs: git fetch [--recurse-submodules=yes] [--depth=N] <remote> --update-head-ok --force [<refspec>...]
+// Submodule fetching is not performed here; it is deferred to the dedicated SubmoduleUpdate() step.
+// Runs: git fetch [--depth=N] <remote> --update-head-ok --force [<refspec>...]
 func (g *GitCli) FetchWithRefspec(opts GitFetchOptions) error {
 	if opts.Remote == "" {
 		return errors.New("remote must not be empty")
 	}
 	gitArgs := []string{"fetch"}
-
-	if opts.Submodules {
-		gitArgs = append(gitArgs, "--recurse-submodules=yes")
-	}
 
 	if opts.Depth > 0 {
 		gitArgs = append(gitArgs, fmt.Sprintf("--depth=%d", opts.Depth))
@@ -262,7 +259,6 @@ func (g *GitCli) FetchWithRefspec(opts GitFetchOptions) error {
 		retryer = retryer.WithMaxAttempts(opts.MaxAttempts)
 	}
 	retryer = retryer.
-		StopOnExitCode(128).
 		StopIfOutputContains("Authentication failed").
 		StopIfOutputContains("could not read Username").
 		StopIfOutputContains("fatal: repository").

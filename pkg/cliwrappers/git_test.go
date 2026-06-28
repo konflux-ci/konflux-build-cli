@@ -545,7 +545,6 @@ func Test_FetchWithRefspec(t *testing.T) {
 		cli := newTestGitCli(func(workdir, command string, args ...string) (string, string, int, error) {
 			joined := strings.Join(args, " ")
 			g.Expect(joined).To(ContainSubstring("fetch"))
-			g.Expect(joined).To(ContainSubstring("--recurse-submodules=yes"))
 			g.Expect(joined).To(ContainSubstring("--depth=5"))
 			g.Expect(joined).To(ContainSubstring("origin"))
 			g.Expect(joined).To(ContainSubstring("--update-head-ok"))
@@ -558,6 +557,23 @@ func Test_FetchWithRefspec(t *testing.T) {
 			Remote:      "origin",
 			Refspec:     "refs/heads/main",
 			Depth:       5,
+			Submodules:  true,
+			MaxAttempts: 1,
+		})
+
+		g.Expect(err).ToNot(HaveOccurred())
+	})
+
+	t.Run("should not include recurse-submodules even when Submodules is true", func(t *testing.T) {
+		cli := newTestGitCli(func(workdir, command string, args ...string) (string, string, int, error) {
+			joined := strings.Join(args, " ")
+			g.Expect(joined).ToNot(ContainSubstring("--recurse-submodules"))
+			return "", "", 0, nil
+		})
+
+		err := cli.FetchWithRefspec(cliwrappers.GitFetchOptions{
+			Remote:      "origin",
+			Refspec:     "refs/heads/main",
 			Submodules:  true,
 			MaxAttempts: 1,
 		})
