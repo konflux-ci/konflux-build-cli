@@ -52,10 +52,10 @@ type GitFetchOptions struct {
 	// (e.g. "sha1:refs/remotes/origin/branch refs/tags/*:refs/tags/*").
 	// When multiple refspecs are provided, they are split on whitespace and
 	// passed as separate arguments to git fetch.
-	Refspec     string
-	Depth       int
+	Refspec string
+	Depth   int
 	// Deprecated: unused by FetchWithRefspec; submodule fetching is deferred to SubmoduleUpdate().
-	Submodules bool
+	Submodules  bool
 	MaxAttempts int
 }
 
