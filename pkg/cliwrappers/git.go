@@ -54,7 +54,10 @@ type GitFetchOptions struct {
 	// passed as separate arguments to git fetch.
 	Refspec     string
 	Depth       int
-	Submodules  bool
+	// Deprecated: Submodules is no longer used by FetchWithRefspec.
+	// Submodule fetching is deferred to the dedicated SubmoduleUpdate() step.
+	// This field is retained for API compatibility and will be removed in a future release.
+	Submodules bool
 	MaxAttempts int
 }
 
@@ -263,7 +266,9 @@ func (g *GitCli) FetchWithRefspec(opts GitFetchOptions) error {
 		StopIfOutputContains("could not read Username").
 		StopIfOutputContains("fatal: repository").
 		StopIfOutputContains("Permission denied").
-		StopIfOutputContains("Could not resolve hostname")
+		StopIfOutputContains("Could not resolve hostname").
+		StopIfOutputContains("couldn't find remote ref").
+		StopIfOutputContains("invalid refspec")
 
 	_, stderr, exitCode, err := retryer.Run()
 	if err != nil || exitCode != 0 {
