@@ -54,9 +54,7 @@ type GitFetchOptions struct {
 	// passed as separate arguments to git fetch.
 	Refspec     string
 	Depth       int
-	// Deprecated: Submodules is no longer used by FetchWithRefspec.
-	// Submodule fetching is deferred to the dedicated SubmoduleUpdate() step.
-	// This field is retained for API compatibility and will be removed in a future release.
+	// Deprecated: unused by FetchWithRefspec; submodule fetching is deferred to SubmoduleUpdate().
 	Submodules bool
 	MaxAttempts int
 }
@@ -237,13 +235,16 @@ func (g *GitCli) FetchTags() ([]string, error) {
 
 // FetchWithRefspec fetches one or more refspecs from a remote with optional depth and retry.
 // When opts.Refspec contains space-separated values, each is passed as a separate argument.
-// Submodule fetching is not performed here; it is deferred to the dedicated SubmoduleUpdate() step.
 // Runs: git fetch [--depth=N] <remote> --update-head-ok --force [<refspec>...]
 func (g *GitCli) FetchWithRefspec(opts GitFetchOptions) error {
 	if opts.Remote == "" {
 		return errors.New("remote must not be empty")
 	}
 	gitArgs := []string{"fetch"}
+
+	if opts.Submodules {
+		gitLog.Debugf("GitFetchOptions.Submodules is set but ignored; submodule fetching is deferred to SubmoduleUpdate()")
+	}
 
 	if opts.Depth > 0 {
 		gitArgs = append(gitArgs, fmt.Sprintf("--depth=%d", opts.Depth))
@@ -262,6 +263,7 @@ func (g *GitCli) FetchWithRefspec(opts GitFetchOptions) error {
 		retryer = retryer.WithMaxAttempts(opts.MaxAttempts)
 	}
 	retryer = retryer.
+		StopOnExitCode(128).
 		StopIfOutputContains("Authentication failed").
 		StopIfOutputContains("could not read Username").
 		StopIfOutputContains("fatal: repository").
