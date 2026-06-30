@@ -20,6 +20,8 @@ import (
 	"github.com/containers/image/v5/docker/reference"
 	capo "github.com/konflux-ci/capo/pkg"
 	capoContainerfile "github.com/konflux-ci/capo/pkg/containerfile"
+	"github.com/konflux-ci/capo/pkg/probe"
+	"github.com/konflux-ci/capo/pkg/storageclient"
 	cliWrappers "github.com/konflux-ci/konflux-build-cli/pkg/cliwrappers"
 	"github.com/konflux-ci/konflux-build-cli/pkg/common"
 	dfeditor "github.com/konflux-ci/konflux-build-cli/pkg/common/containerfile_editor"
@@ -27,6 +29,8 @@ import (
 	"github.com/package-url/packageurl-go"
 	sloglogrus "github.com/samber/slog-logrus/v2"
 	"github.com/spf13/cobra"
+	"go.podman.io/storage"
+	"go.yaml.in/yaml/v3"
 
 	"github.com/containerd/platforms"
 	"github.com/keilerkonzept/dockerfile-json/pkg/buildargs"
@@ -199,6 +203,13 @@ var BuildParamsConfig = map[string]common.Parameter{
 		TypeKind:     reflect.Bool,
 		DefaultValue: "false",
 		Usage:        "In addition to OCI annotations and labels, also set projectatomic labels (https://github.com/projectatomic/ContainerApplicationGenericLabels).",
+	},
+	"buildprobe-yaml-output": {
+		Name:       "buildprobe-yaml-output",
+		ShortName:  "",
+		EnvVarName: "KBC_BUILD_BUILDPROBE_YAML_OUTPUT",
+		TypeKind:   reflect.String,
+		Usage:      "Write the parsed Buildprobe YAML representation to this path.",
 	},
 	"containerfile-json-output": {
 		Name:       "containerfile-json-output",
@@ -486,6 +497,7 @@ type BuildParams struct {
 	RewriteTimestamp           bool     `paramName:"rewrite-timestamp"`
 	QuayImageExpiresAfter      string   `paramName:"quay-image-expires-after"`
 	AddLegacyLabels            bool     `paramName:"add-legacy-labels"`
+	BuildprobeYamlOutput       string   `paramName:"buildprobe-yaml-output"`
 	ContainerfileJsonOutput    string   `paramName:"containerfile-json-output"`
 	SkipInjections             bool     `paramName:"skip-injections"`
 	InheritLabels              bool     `paramName:"inherit-labels"`
@@ -572,6 +584,8 @@ type Build struct {
 	hostEntitlements  string
 	hostConsumerCerts string
 	hostRHSMcaCerts   string
+
+	storageClient storageclient.Client
 }
 
 func NewBuild(cmd *cobra.Command, extraArgs []string) (*Build, error) {
@@ -825,6 +839,22 @@ func (c *Build) run() error {
 		}
 	}
 
+	if c.Params.BuildprobeYamlOutput != "" {
+		if c.storageClient == nil {
+			storageOpts, err := storage.DefaultStoreOptions()
+			if err != nil {
+				return err
+			}
+			store, err := storage.GetStore(storageOpts)
+			if err != nil {
+				return err
+			}
+			c.storageClient = storageclient.NewBuildahClient(store)
+		}
+		if err := c.writeBuildprobeYaml(c.Params.BuildprobeYamlOutput); err != nil {
+			return err
+		}
+	}
 	if c.Params.ContainerfileJsonOutput != "" {
 		if err := c.writeContainerfileJson(containerfile, c.Params.ContainerfileJsonOutput); err != nil {
 			return err
@@ -2760,6 +2790,41 @@ func (c *Build) pushImage() (string, error) {
 	}
 
 	return digest, nil
+}
+
+func (c *Build) writeBuildprobeYaml(outputPath string) error {
+	var tag string
+	if ref, err := reference.Parse(c.Params.OutputRef); err == nil {
+		if refWithTag, ok := ref.(reference.Tagged); ok {
+			tag = refWithTag.Tag()
+		}
+	}
+	buildArgs := processKeyValueEnvs(c.Params.BuildArgs)
+	// open the containerfile to read
+	containerfile, err := os.OpenFile(c.containerfilePath, os.O_RDONLY, 0)
+	if err != nil {
+		return err
+	}
+	defer containerfile.Close()
+	// run probe & save to file
+	opts := probe.ProbeOpts{
+		Tag: tag,
+		Containerfile: containerfile,
+		Target: c.Params.Target,
+		Args: buildArgs,
+	}
+	metadata, err := probe.Probe(opts, c.storageClient)
+	if err != nil {
+		return err
+	}
+	yamlData, err := yaml.Marshal(metadata)
+	if err != nil {
+		return err
+	}
+	if err := os.WriteFile(outputPath, yamlData, 0644); err != nil {
+		return err
+	}
+	return nil
 }
 
 func (c *Build) writeContainerfileJson(containerfile *dockerfile.Dockerfile, outputPath string) error {
