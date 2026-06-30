@@ -2412,7 +2412,7 @@ LABEL final.stage.label=label-from-final-stage
 		writeContainerfile(contextDir, fmt.Sprintf(`
 FROM %s
 LABEL stage=stage0
-RUN printf '%%s\n' 'stage 0 was built'
+RUN printf 'stage %%d was built\n' 0
 
 FROM scratch AS target
 LABEL stage=target
@@ -2631,7 +2631,7 @@ RUN echo > /dev/udp/127.0.0.1/9
 # However, buildah will build *both* of the base1 stages, so we have to pre-pull both of the images.
 FROM {unusedBaseImage} AS base1
 LABEL base1.real_index=0
-RUN printf '%s\n' 'the unused stage WAS built'
+RUN printf 'the unused stage %s built\n' WAS
 
 FROM {baseImage1} AS base1
 LABEL base1.real_index=1
@@ -2950,7 +2950,7 @@ LABEL testlabel=prefetch-integration
 
 # Test that injection doesn't break --mount flags
 RUN --mount=from=base,src=/etc/os-release,dst=/tmp/os-release \
-    if [ -e /tmp/os-release ]; then printf '%%s\n' 'mount worked'; fi && \
+    if [ -e /tmp/os-release ]; then printf 'mount %%s\n' worked; fi && \
     echo "final stage: PREFETCH_ENV_VAR=$PREFETCH_ENV_VAR"
 `, baseImage))
 
@@ -3509,14 +3509,14 @@ if [[ -d /run/secrets/etc-pki-entitlement ]]; then
     echo "FAIL: entitlements from host mounted!"
     exit 1
 else
-    printf '%%s\n' 'OK: entitlements from host NOT mounted'
+    printf 'OK: entitlements from host %%s mounted\n' NOT
 fi
 
 if [[ -d /run/secrets/rhsm ]]; then
     echo "FAIL: rhsm from host mounted!"
     exit 1
 else
-    printf '%%s\n' 'OK: rhsm from host NOT mounted'
+    printf 'OK: rhsm from host %%s mounted\n' NOT
 fi
 EOF
 `, baseImage))
