@@ -52,8 +52,9 @@ type GitFetchOptions struct {
 	// (e.g. "sha1:refs/remotes/origin/branch refs/tags/*:refs/tags/*").
 	// When multiple refspecs are provided, they are split on whitespace and
 	// passed as separate arguments to git fetch.
-	Refspec     string
-	Depth       int
+	Refspec string
+	Depth   int
+	// Deprecated: unused by FetchWithRefspec; submodule fetching is deferred to SubmoduleUpdate().
 	Submodules  bool
 	MaxAttempts int
 }
@@ -234,7 +235,7 @@ func (g *GitCli) FetchTags() ([]string, error) {
 
 // FetchWithRefspec fetches one or more refspecs from a remote with optional depth and retry.
 // When opts.Refspec contains space-separated values, each is passed as a separate argument.
-// Runs: git fetch [--recurse-submodules=yes] [--depth=N] <remote> --update-head-ok --force [<refspec>...]
+// Runs: git fetch [--depth=N] <remote> --update-head-ok --force [<refspec>...]
 func (g *GitCli) FetchWithRefspec(opts GitFetchOptions) error {
 	if opts.Remote == "" {
 		return errors.New("remote must not be empty")
@@ -242,7 +243,7 @@ func (g *GitCli) FetchWithRefspec(opts GitFetchOptions) error {
 	gitArgs := []string{"fetch"}
 
 	if opts.Submodules {
-		gitArgs = append(gitArgs, "--recurse-submodules=yes")
+		gitLog.Debugf("GitFetchOptions.Submodules is set but ignored; submodule fetching is deferred to SubmoduleUpdate()")
 	}
 
 	if opts.Depth > 0 {
@@ -267,7 +268,9 @@ func (g *GitCli) FetchWithRefspec(opts GitFetchOptions) error {
 		StopIfOutputContains("could not read Username").
 		StopIfOutputContains("fatal: repository").
 		StopIfOutputContains("Permission denied").
-		StopIfOutputContains("Could not resolve hostname")
+		StopIfOutputContains("Could not resolve hostname").
+		StopIfOutputContains("couldn't find remote ref").
+		StopIfOutputContains("invalid refspec")
 
 	_, stderr, exitCode, err := retryer.Run()
 	if err != nil || exitCode != 0 {
