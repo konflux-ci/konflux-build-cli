@@ -12,6 +12,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"slices"
 	"strings"
@@ -418,7 +419,20 @@ func runBuildWithOutput(container *TestRunnerContainer, buildParams BuildParams)
 		args = append(args, buildParams.ExtraArgs...)
 	}
 
-	return container.ExecuteCommandWithOutput(KonfluxBuildCli, args...)
+	stdout, stderr, err := container.ExecuteCommandWithOutput(KonfluxBuildCli, args...)
+	return stdout, filterBuildahSteps(stderr), err
+}
+
+// buildahStepLine matches buildah's instruction echo lines, e.g.
+// "STEP 1/3: RUN echo hello" or "STEP 2: FROM ubuntu".
+// These appear in stderr because the CLI re-logs buildah's stdout.
+var buildahStepLine = regexp.MustCompile(`(?m)^.*STEP \d+[^:]*:.*\n?`)
+
+// filterBuildahSteps removes buildah STEP instruction echo lines from output,
+// leaving only actual command output. This prevents false-positive substring
+// assertions that would otherwise match the echoed RUN instruction text.
+func filterBuildahSteps(output string) string {
+	return buildahStepLine.ReplaceAllString(output, "")
 }
 
 // Creates a temporary directory for the test and registers cleanup.
@@ -2412,7 +2426,7 @@ LABEL final.stage.label=label-from-final-stage
 		writeContainerfile(contextDir, fmt.Sprintf(`
 FROM %s
 LABEL stage=stage0
-RUN echo "stage 0 was built"
+RUN echo stage 0 was built
 
 FROM scratch AS target
 LABEL stage=target
@@ -2436,7 +2450,7 @@ FROM image.does.not/exist:1 AS stage-after-target
 		Expect(err).ToNot(HaveOccurred())
 
 		// Stage 0 should be built despite not being needed
-		Expect(stderr).To(ContainCommandOutput("stage 0 was built"))
+		Expect(stderr).To(ContainSubstring("stage 0 was built"))
 
 		// But the target stage should still be "target"
 		imageMeta := getImageMeta(container, outputRef)
@@ -2676,7 +2690,7 @@ RUN cp /random-data.bin /data/realBaseImage.bin
 			Expect(err).ToNot(HaveOccurred())
 
 			// Verify that buildah really did build the unused stage (otherwise we wasted a pull)
-			Expect(stderr).To(ContainCommandOutput("the unused stage WAS built"))
+			Expect(stderr).To(ContainSubstring("the unused stage WAS built"))
 
 			// Verify that the correct base was pulled for each FROM/from
 			// by checking the sizes of the random-data files
@@ -2729,7 +2743,7 @@ RUN cp /random-data.bin /data/realBaseImage.bin
 				))
 
 				// Verify that buildah really did build the unused stage (otherwise we wasted a pull)
-				Expect(stderr).To(ContainCommandOutput("the unused stage WAS built"))
+				Expect(stderr).To(ContainSubstring("the unused stage WAS built"))
 			})
 		})
 	})
@@ -2969,7 +2983,7 @@ RUN --mount=from=base,src=/etc/os-release,dst=/tmp/os-release \
 			_, stderr, err := runBuildWithOutput(container, buildParams)
 			Expect(err).ToNot(HaveOccurred())
 
-			Expect(stderr).To(ContainCommandOutput("mount worked"))
+			Expect(stderr).To(ContainSubstring("mount worked"))
 			Expect(stderr).To(ContainSubstring("base: PREFETCH_ENV_VAR=foo"))
 			Expect(stderr).To(ContainSubstring("heredoc: PREFETCH_ENV_VAR=foo"))
 			Expect(stderr).To(ContainSubstring("final stage: PREFETCH_ENV_VAR=foo"))
@@ -3551,8 +3565,8 @@ EOF
 			_, stderr, err := runBuildWithOutput(container, buildParams)
 			Expect(err).ToNot(HaveOccurred())
 
-			Expect(stderr).To(ContainCommandOutput("OK: entitlements from host NOT mounted"))
-			Expect(stderr).To(ContainCommandOutput("OK: rhsm from host NOT mounted"))
+			Expect(stderr).To(ContainSubstring("OK: entitlements from host NOT mounted"))
+			Expect(stderr).To(ContainSubstring("OK: rhsm from host NOT mounted"))
 
 			// Verify that disabling RHSM host integration didn't modify the container FS
 			stdout, _, err := container.ExecuteCommandWithOutput("ls", "/usr/share/rhel/secrets")
