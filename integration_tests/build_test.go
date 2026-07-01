@@ -12,6 +12,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"slices"
 	"strings"
@@ -422,7 +423,20 @@ func runBuildWithOutput(container *TestRunnerContainer, buildParams BuildParams)
 		args = append(args, buildParams.ExtraArgs...)
 	}
 
-	return container.ExecuteCommandWithOutput(KonfluxBuildCli, args...)
+	stdout, stderr, err := container.ExecuteCommandWithOutput(KonfluxBuildCli, args...)
+	return stdout, filterBuildahSteps(stderr), err
+}
+
+// buildahStepLine matches buildah's instruction echo lines, e.g.
+// "STEP 1/3: RUN echo hello" or "STEP 2: FROM ubuntu".
+// These appear in stderr because the CLI re-logs buildah's stdout.
+var buildahStepLine = regexp.MustCompile(`(?m)^.*STEP \d+[^:]*:.*\n?`)
+
+// filterBuildahSteps removes buildah STEP instruction echo lines from output,
+// leaving only actual command output. This prevents false-positive substring
+// assertions that would otherwise match the echoed RUN instruction text.
+func filterBuildahSteps(output string) string {
+	return buildahStepLine.ReplaceAllString(output, "")
 }
 
 // Creates a temporary directory for the test and registers cleanup.
