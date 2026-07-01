@@ -1245,6 +1245,60 @@ func Test_GitClone_setupSSH(t *testing.T) {
 		_, err = os.Stat(filepath.Join(internalDir, ".ssh", "subdir"))
 		g.Expect(os.IsNotExist(err)).To(BeTrue())
 	})
+
+	t.Run("should skip symlinks pointing to directories", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		sshDir := filepath.Join(tmpDir, "ssh-keys")
+		internalDir := t.TempDir()
+		g.Expect(os.MkdirAll(sshDir, 0755)).To(Succeed())
+
+		dataDir := filepath.Join(sshDir, "data")
+		g.Expect(os.MkdirAll(dataDir, 0755)).To(Succeed())
+		g.Expect(os.Symlink("data", filepath.Join(sshDir, "..data"))).To(Succeed())
+
+		g.Expect(os.WriteFile(filepath.Join(sshDir, "id_rsa"), []byte("key"), 0644)).To(Succeed())
+
+		c := &GitClone{
+			CliWrappers: CliWrappers{GitCli: &mockGitCli{}},
+			Params: &Params{
+				SSHDirectory: sshDir,
+			},
+			internalDir: internalDir,
+		}
+
+		err := c.setupSSH()
+
+		g.Expect(err).ToNot(HaveOccurred())
+		_, err = os.Stat(filepath.Join(internalDir, ".ssh", "..data"))
+		g.Expect(os.IsNotExist(err)).To(BeTrue())
+		_, err = os.Stat(filepath.Join(internalDir, ".ssh", "id_rsa"))
+		g.Expect(err).ToNot(HaveOccurred())
+	})
+
+	t.Run("should copy symlinks pointing to files", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		sshDir := filepath.Join(tmpDir, "ssh-keys")
+		internalDir := t.TempDir()
+		g.Expect(os.MkdirAll(sshDir, 0755)).To(Succeed())
+
+		g.Expect(os.WriteFile(filepath.Join(sshDir, "id_rsa"), []byte("key"), 0644)).To(Succeed())
+		g.Expect(os.Symlink("id_rsa", filepath.Join(sshDir, "..data"))).To(Succeed())
+
+		c := &GitClone{
+			CliWrappers: CliWrappers{GitCli: &mockGitCli{}},
+			Params: &Params{
+				SSHDirectory: sshDir,
+			},
+			internalDir: internalDir,
+		}
+
+		err := c.setupSSH()
+
+		g.Expect(err).ToNot(HaveOccurred())
+		content, err := os.ReadFile(filepath.Join(internalDir, ".ssh", "..data"))
+		g.Expect(err).ToNot(HaveOccurred())
+		g.Expect(string(content)).To(Equal("key"))
+	})
 }
 
 func Test_GitClone_validateParams_subdirectory(t *testing.T) {
