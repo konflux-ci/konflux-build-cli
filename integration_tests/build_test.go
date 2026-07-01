@@ -2412,7 +2412,7 @@ LABEL final.stage.label=label-from-final-stage
 		writeContainerfile(contextDir, fmt.Sprintf(`
 FROM %s
 LABEL stage=stage0
-RUN printf 'stage %%d was built\n' 0
+RUN echo "stage 0 was built"
 
 FROM scratch AS target
 LABEL stage=target
@@ -2436,7 +2436,7 @@ FROM image.does.not/exist:1 AS stage-after-target
 		Expect(err).ToNot(HaveOccurred())
 
 		// Stage 0 should be built despite not being needed
-		Expect(stderr).To(ContainSubstring("stage 0 was built"))
+		Expect(stderr).To(ContainCommandOutput("stage 0 was built"))
 
 		// But the target stage should still be "target"
 		imageMeta := getImageMeta(container, outputRef)
@@ -2631,7 +2631,7 @@ RUN echo > /dev/udp/127.0.0.1/9
 # However, buildah will build *both* of the base1 stages, so we have to pre-pull both of the images.
 FROM {unusedBaseImage} AS base1
 LABEL base1.real_index=0
-RUN printf 'the unused stage %s built\n' WAS
+RUN echo "the unused stage WAS built"
 
 FROM {baseImage1} AS base1
 LABEL base1.real_index=1
@@ -2676,7 +2676,7 @@ RUN cp /random-data.bin /data/realBaseImage.bin
 			Expect(err).ToNot(HaveOccurred())
 
 			// Verify that buildah really did build the unused stage (otherwise we wasted a pull)
-			Expect(stderr).To(ContainSubstring("the unused stage WAS built"))
+			Expect(stderr).To(ContainCommandOutput("the unused stage WAS built"))
 
 			// Verify that the correct base was pulled for each FROM/from
 			// by checking the sizes of the random-data files
@@ -2729,7 +2729,7 @@ RUN cp /random-data.bin /data/realBaseImage.bin
 				))
 
 				// Verify that buildah really did build the unused stage (otherwise we wasted a pull)
-				Expect(stderr).To(ContainSubstring("the unused stage WAS built"))
+				Expect(stderr).To(ContainCommandOutput("the unused stage WAS built"))
 			})
 		})
 	})
@@ -2950,7 +2950,7 @@ LABEL testlabel=prefetch-integration
 
 # Test that injection doesn't break --mount flags
 RUN --mount=from=base,src=/etc/os-release,dst=/tmp/os-release \
-    if [ -e /tmp/os-release ]; then printf 'mount %%s\n' worked; fi && \
+    if [ -e /tmp/os-release ]; then echo "mount worked"; fi && \
     echo "final stage: PREFETCH_ENV_VAR=$PREFETCH_ENV_VAR"
 `, baseImage))
 
@@ -2969,7 +2969,7 @@ RUN --mount=from=base,src=/etc/os-release,dst=/tmp/os-release \
 			_, stderr, err := runBuildWithOutput(container, buildParams)
 			Expect(err).ToNot(HaveOccurred())
 
-			Expect(stderr).To(ContainSubstring("mount worked"))
+			Expect(stderr).To(ContainCommandOutput("mount worked"))
 			Expect(stderr).To(ContainSubstring("base: PREFETCH_ENV_VAR=foo"))
 			Expect(stderr).To(ContainSubstring("heredoc: PREFETCH_ENV_VAR=foo"))
 			Expect(stderr).To(ContainSubstring("final stage: PREFETCH_ENV_VAR=foo"))
@@ -3509,14 +3509,14 @@ if [[ -d /run/secrets/etc-pki-entitlement ]]; then
     echo "FAIL: entitlements from host mounted!"
     exit 1
 else
-    printf 'OK: entitlements from host %%s mounted\n' NOT
+    echo "OK: entitlements from host NOT mounted"
 fi
 
 if [[ -d /run/secrets/rhsm ]]; then
     echo "FAIL: rhsm from host mounted!"
     exit 1
 else
-    printf 'OK: rhsm from host %%s mounted\n' NOT
+    echo "OK: rhsm from host NOT mounted"
 fi
 EOF
 `, baseImage))
@@ -3551,8 +3551,8 @@ EOF
 			_, stderr, err := runBuildWithOutput(container, buildParams)
 			Expect(err).ToNot(HaveOccurred())
 
-			Expect(stderr).To(ContainSubstring("OK: entitlements from host NOT mounted"))
-			Expect(stderr).To(ContainSubstring("OK: rhsm from host NOT mounted"))
+			Expect(stderr).To(ContainCommandOutput("OK: entitlements from host NOT mounted"))
+			Expect(stderr).To(ContainCommandOutput("OK: rhsm from host NOT mounted"))
 
 			// Verify that disabling RHSM host integration didn't modify the container FS
 			stdout, _, err := container.ExecuteCommandWithOutput("ls", "/usr/share/rhel/secrets")
