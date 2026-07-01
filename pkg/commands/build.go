@@ -860,6 +860,7 @@ func (c *Build) run() error {
 			return err
 		}
 	}
+
 	if c.Params.ContainerfileJsonOutput != "" {
 		if err := c.writeContainerfileJson(containerfile, c.Params.ContainerfileJsonOutput); err != nil {
 			return err
