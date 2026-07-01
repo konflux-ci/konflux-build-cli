@@ -24,7 +24,7 @@ const (
 	// Name of the CLI binary
 	KonfluxBuildCli = "konflux-build-cli"
 	// Keep task-runner image reference in one place, so it's consistent across tests.
-	TaskRunnerImageRef = "quay.io/konflux-ci/task-runner:1.8.1@sha256:b9ef0479b57a494368a12a02886c650314c9ac7391c6228f21065865aab71c9e"
+	TaskRunnerImageRef = "quay.io/konflux-ci/task-runner:2.0.0@sha256:4b01fbf98fa7155f5c21443c285f88853864ae7cc66981cf6b543fc6ba16b81b"
 )
 
 var (
