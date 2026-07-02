@@ -2782,7 +2782,12 @@ func (c *Build) scanBuilderContent() (err error) {
 
 	l.Logger.Info("Scanning builder content with capo...")
 
-	f, err := os.Open(c.containerfilePath)
+	containerfilePath := c.containerfilePath
+	if c.containerfileCopyPath != "" {
+		containerfilePath = c.containerfileCopyPath
+	}
+
+	f, err := os.Open(containerfilePath) //nolint:gosec // containerfilePath is from build context
 	if err != nil {
 		return fmt.Errorf("opening containerfile for capo: %w", err)
 	}
