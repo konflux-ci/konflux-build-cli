@@ -812,8 +812,6 @@ func (c *Build) run() error {
 	if c.Params.BuilderMetadataOutput != "" {
 		if err := c.scanBuilderContent(); err != nil {
 			l.Logger.Warnf("Builder content scanning failed: %v", err)
-			// Write empty sentinel so mobster can open the file without error
-			_ = os.WriteFile(c.Params.BuilderMetadataOutput, []byte(`{"packages":[]}`), 0644) //nolint:gosec // path from CLI param
 		}
 	}
 

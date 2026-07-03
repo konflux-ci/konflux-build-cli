@@ -18,7 +18,7 @@ build:
 # Build statically
 .PHONY: build-static
 build-static:
-	CGO_ENABLED=0 go build -o konflux-build-cli main.go
+	CGO_ENABLED=0 go build $(BUILD_TAGS) -o konflux-build-cli main.go
 
 # Build in debug mode
 .PHONY: build-debug
