@@ -2584,7 +2584,10 @@ func (c *Build) buildImage() (err error) {
 		Devices:          c.Params.Devices,
 		Ulimits:          c.Params.Ulimits,
 		SaveStages:       c.enableBuilderContentScanning(),
-		StageLabels:      c.enableBuilderContentScanning(),
+		// Note: --stage-labels adds io.buildah.stage.{name,base} labels to all
+		// stages including the final image. These labels will be missing from
+		// labels.json (generated before build by determineFinalLabels).
+		StageLabels: c.enableBuilderContentScanning(),
 	}
 	if c.Params.Hermetic {
 		wrapper := cliWrappers.JoinWrappers(
