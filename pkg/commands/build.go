@@ -849,6 +849,11 @@ func (c *Build) run() error {
 			if err != nil {
 				return err
 			}
+			defer func() {
+				if _, e := store.Shutdown(false); e != nil && err == nil {
+					err = e
+				}
+			}()
 			c.storageClient = storageclient.NewBuildahClient(store)
 		}
 		if err := c.writeBuildprobeYaml(c.Params.BuildprobeYamlOutput); err != nil {
@@ -2803,26 +2808,30 @@ func (c *Build) writeBuildprobeYaml(outputPath string) error {
 	// open the containerfile to read
 	containerfile, err := os.OpenFile(c.containerfilePath, os.O_RDONLY, 0)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to open containerfile: %w", err)
 	}
-	defer containerfile.Close()
+	defer func() {
+		if e := containerfile.Close(); e != nil && err == nil {
+			err = e
+		}
+	}()
 	// run probe & save to file
 	opts := probe.ProbeOpts{
-		Tag: tag,
+		Tag:           tag,
 		Containerfile: containerfile,
-		Target: c.Params.Target,
-		Args: buildArgs,
+		Target:        c.Params.Target,
+		Args:          buildArgs,
 	}
 	metadata, err := probe.Probe(opts, c.storageClient)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to probe containerfile: %w", err)
 	}
 	yamlData, err := yaml.Marshal(metadata)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to generate buildprobe yaml: %w", err)
 	}
 	if err := os.WriteFile(outputPath, yamlData, 0644); err != nil {
-		return err
+		return fmt.Errorf("failed to write buildprobe yaml: %w", err)
 	}
 	return nil
 }
