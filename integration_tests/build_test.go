@@ -245,17 +245,13 @@ func setupBuildContainer(buildParams BuildParams, imageRegistry ImageRegistry, o
 
 // Executes the build command in the provided container.
 func runBuild(container *TestRunnerContainer, buildParams BuildParams) error {
-	return container.ExecuteCommand(KonfluxBuildCli, buildCmdArgs(buildParams)...)
+	_, _, err := runBuildWithOutput(container, buildParams)
+	return err
 }
 
-// runBuildWithOutput executes the build command and returns stderr and error.
-func runBuildWithOutput(container *TestRunnerContainer, buildParams BuildParams) (string, error) {
-	_, stderr, err := container.ExecuteCommandWithOutput(KonfluxBuildCli, buildCmdArgs(buildParams)...)
-	return stderr, err
-}
-
-// buildCmdArgs constructs the build command arguments from the given parameters.
-func buildCmdArgs(buildParams BuildParams) []string {
+// Executes the build command and returns stdout, stderr, and error.
+func runBuildWithOutput(container *TestRunnerContainer, buildParams BuildParams) (string, string, error) {
+	// Construct the build arguments
 	args := []string{"image", "build"}
 	args = append(args, "-t", buildParams.OutputRef)
 	if buildParams.Source != "" {
@@ -426,7 +422,8 @@ func buildCmdArgs(buildParams BuildParams) []string {
 		args = append(args, "--")
 		args = append(args, buildParams.ExtraArgs...)
 	}
-	return args
+
+	return container.ExecuteCommandWithOutput(KonfluxBuildCli, args...)
 }
 
 // buildahStepLine matches buildah's instruction echo lines.
@@ -1031,7 +1028,7 @@ LABEL test.label="secret-dirs-test"
 			t, buildParams, nil, WithVolumeWithOptions(secretsBaseDir, "/secrets", "z"),
 		)
 
-		stderr, err := runBuildWithOutput(container, buildParams)
+		_, stderr, err := runBuildWithOutput(container, buildParams)
 		Expect(err).ToNot(HaveOccurred())
 		stderr = filterBuildahSteps(t, stderr)
 
@@ -2462,7 +2459,7 @@ FROM image.does.not/exist:1 AS stage-after-target
 
 		container := setupBuildContainerWithCleanup(t, buildParams, nil)
 
-		stderr, err := runBuildWithOutput(container, buildParams)
+		_, stderr, err := runBuildWithOutput(container, buildParams)
 		Expect(err).ToNot(HaveOccurred())
 		stderr = filterBuildahSteps(t, stderr)
 
@@ -2510,7 +2507,7 @@ ADD https://1.1.1.1 /cloudflare-1111.html
 
 				container := setupBuildContainerWithCleanup(t, buildParams, nil, opts...)
 
-				stderr, err := runBuildWithOutput(container, buildParams)
+				_, stderr, err := runBuildWithOutput(container, buildParams)
 				Expect(err).To(HaveOccurred())
 
 				// kbc prints the error to stderr
@@ -2558,7 +2555,7 @@ RUN if echo > /dev/tcp/8.8.8.8/53; then echo "Has network access!"; exit 1; fi
 
 				container := setupBuildContainerWithCleanup(t, buildParams, nil, opts...)
 
-				stderr, err := runBuildWithOutput(container, buildParams)
+				_, stderr, err := runBuildWithOutput(container, buildParams)
 				Expect(err).ToNot(HaveOccurred())
 				stderr = filterBuildahSteps(t, stderr)
 
@@ -2604,7 +2601,7 @@ RUN echo > /dev/udp/127.0.0.1/9
 
 				container := setupBuildContainerWithCleanup(t, buildParams, nil, opts...)
 
-				_, err := runBuildWithOutput(container, buildParams)
+				_, _, err := runBuildWithOutput(container, buildParams)
 				Expect(err).ToNot(HaveOccurred())
 			}
 
@@ -2703,7 +2700,7 @@ RUN cp /random-data.bin /data/realBaseImage.bin
 
 			container := setupBuildContainerWithCleanup(t, buildParams, imageRegistry)
 
-			stderr, err := runBuildWithOutput(container, buildParams)
+			_, stderr, err := runBuildWithOutput(container, buildParams)
 			// Main check: no error (would fail without pre-pulling)
 			Expect(err).ToNot(HaveOccurred())
 			stderr = filterBuildahSteps(t, stderr)
@@ -2737,7 +2734,7 @@ RUN cp /random-data.bin /data/realBaseImage.bin
 				container := setupBuildContainerWithCleanup(t, buildParams, imageRegistry,
 					maybeMountContainerStorage(newStorage, "taskuser"))
 
-				stderr, err = runBuildWithOutput(container, buildParams)
+				_, stderr, err = runBuildWithOutput(container, buildParams)
 				Expect(err).ToNot(HaveOccurred())
 
 				labels := getImageMeta(container, outputRef).labels
@@ -2999,7 +2996,7 @@ RUN --mount=from=base,src=/etc/os-release,dst=/tmp/os-release \
 			container := setupBuildContainerWithCleanup(t, buildParams, nil,
 				WithVolumeWithOptions(prefetchDir, "/prefetch", "z"))
 
-			stderr, err := runBuildWithOutput(container, buildParams)
+			_, stderr, err := runBuildWithOutput(container, buildParams)
 			Expect(err).ToNot(HaveOccurred())
 			stderr = filterBuildahSteps(t, stderr)
 
@@ -3052,7 +3049,7 @@ RUN echo "RUN 6: PREFETCH_ENV_VAR=${PREFETCH_ENV_VAR-unset}" # And this works as
 				Push:      false,
 			}
 			container := setupBuildContainerWithCleanup(t, buildParams, nil)
-			stderr, err := runBuildWithOutput(container, buildParams)
+			_, stderr, err := runBuildWithOutput(container, buildParams)
 			Expect(err).ToNot(HaveOccurred())
 			stderr = filterBuildahSteps(t, stderr)
 			Expect(stderr).To(ContainSubstring("RUN 1: PREFETCH_ENV_VAR=unset"))
@@ -3069,7 +3066,7 @@ RUN echo "RUN 6: PREFETCH_ENV_VAR=${PREFETCH_ENV_VAR-unset}" # And this works as
 			buildParams.PrefetchDir = "/prefetch"
 			container = setupBuildContainerWithCleanup(t, buildParams, nil,
 				WithVolumeWithOptions(prefetchDir, "/prefetch", "z"))
-			stderr, err = runBuildWithOutput(container, buildParams)
+			_, stderr, err = runBuildWithOutput(container, buildParams)
 			Expect(err).ToNot(HaveOccurred())
 			stderr = filterBuildahSteps(t, stderr)
 			Expect(stderr).To(ContainSubstring("RUN 1: PREFETCH_ENV_VAR=foo"))
@@ -3114,7 +3111,7 @@ RUN ["/bin/sh", "-c", "echo \"exec: PREFETCH_ENV_VAR=${PREFETCH_ENV_VAR-unset}\"
 			container := setupBuildContainerWithCleanup(t, buildParams, nil,
 				WithVolumeWithOptions(prefetchDir, "/prefetch", "z"))
 
-			stderr, err := runBuildWithOutput(container, buildParams)
+			_, stderr, err := runBuildWithOutput(container, buildParams)
 			Expect(err).ToNot(HaveOccurred())
 			stderr = filterBuildahSteps(t, stderr)
 
@@ -3170,7 +3167,7 @@ RUN if [ ! -e /tmp/.prefetch.env ]; then \
 			container := setupBuildContainerWithCleanup(t, buildParams, nil,
 				WithVolumeWithOptions(prefetchDir, "/prefetch", "z"))
 
-			stderr, err := runBuildWithOutput(container, buildParams)
+			_, stderr, err := runBuildWithOutput(container, buildParams)
 			Expect(err).ToNot(HaveOccurred())
 			stderr = filterBuildahSteps(t, stderr)
 
@@ -3234,7 +3231,7 @@ EOF
 			container := setupBuildContainerWithCleanup(t, buildParams, nil,
 				WithVolumeWithOptions(prefetchDir, "/prefetch", "z"))
 
-			stderr, err := runBuildWithOutput(container, buildParams)
+			_, stderr, err := runBuildWithOutput(container, buildParams)
 			Expect(err).ToNot(HaveOccurred())
 			stderr = filterBuildahSteps(t, stderr)
 
@@ -3409,7 +3406,7 @@ RUN echo "hermeto.repo=$(cat /etc/yum.repos.d/hermeto.repo)"
 			WithVolumeWithOptions(prefetchDir, "/prefetch", "z"),
 			WithVolumeWithOptions(reposDir, "/repos", "z"))
 
-		stderr, err := runBuildWithOutput(container, buildParams)
+		_, stderr, err := runBuildWithOutput(container, buildParams)
 		Expect(err).ToNot(HaveOccurred())
 		stderr = filterBuildahSteps(t, stderr)
 
@@ -3594,7 +3591,7 @@ EOF
 				Expect(container.CreateFileInContainer(path, content)).To(Succeed())
 			}
 
-			stderr, err := runBuildWithOutput(container, buildParams)
+			_, stderr, err := runBuildWithOutput(container, buildParams)
 			Expect(err).ToNot(HaveOccurred())
 			stderr = filterBuildahSteps(t, stderr)
 
@@ -3647,7 +3644,7 @@ RUN echo modified > /etc/pki/entitlement/cert.pem && \
 				Expect(container.CreateFileInContainer(path, content)).To(Succeed())
 			}
 
-			stderr, err := runBuildWithOutput(container, buildParams)
+			_, stderr, err := runBuildWithOutput(container, buildParams)
 			Expect(err).ToNot(HaveOccurred())
 			stderr = filterBuildahSteps(t, stderr)
 
@@ -3712,7 +3709,7 @@ RUN echo modified > /activation-key/activationkey && \
 				Expect(container.CreateFileInContainer(path, content)).To(Succeed())
 			}
 
-			stderr, err := runBuildWithOutput(container, buildParams)
+			_, stderr, err := runBuildWithOutput(container, buildParams)
 			Expect(err).ToNot(HaveOccurred())
 			stderr = filterBuildahSteps(t, stderr)
 
@@ -3818,7 +3815,7 @@ EOF
 
 		container := setupBuildContainerWithCleanup(t, buildParams, nil)
 
-		stderr, err := runBuildWithOutput(container, buildParams)
+		_, stderr, err := runBuildWithOutput(container, buildParams)
 		Expect(err).ToNot(HaveOccurred())
 		stderr = filterBuildahSteps(t, stderr)
 		// Should have dropped everything but the first 3 caps (0...00111 binary)
@@ -3862,7 +3859,7 @@ EOF
 			}
 
 			container := setupBuildContainerWithCleanup(t, buildParams, imageRegistry)
-			stderr, err := runBuildWithOutput(container, buildParams)
+			_, stderr, err := runBuildWithOutput(container, buildParams)
 			Expect(err).To(HaveOccurred())
 			Expect(stderr).To(ContainSubstring("has architecture"))
 			Expect(stderr).To(ContainSubstring("Use a multi-arch image reference instead of a single-architecture reference"))
@@ -3882,7 +3879,7 @@ EOF
 			}
 
 			container := setupBuildContainerWithCleanup(t, buildParams, imageRegistry)
-			stderr, err := runBuildWithOutput(container, buildParams)
+			_, stderr, err := runBuildWithOutput(container, buildParams)
 			Expect(err).To(HaveOccurred())
 			Expect(stderr).To(ContainSubstring("has architecture"))
 			Expect(stderr).To(ContainSubstring("Use a multi-arch image reference instead of a single-architecture reference"))
@@ -3903,7 +3900,7 @@ EOF
 			}
 
 			container := setupBuildContainerWithCleanup(t, buildParams, imageRegistry)
-			stderr, err := runBuildWithOutput(container, buildParams)
+			_, stderr, err := runBuildWithOutput(container, buildParams)
 			Expect(err).ToNot(HaveOccurred())
 			stderr = filterBuildahSteps(t, stderr)
 			Expect(stderr).To(ContainSubstring("Cross-platform copy is a risky operation"))
@@ -3922,7 +3919,7 @@ EOF
 			}
 
 			container := setupBuildContainerWithCleanup(t, buildParams, imageRegistry)
-			stderr, err := runBuildWithOutput(container, buildParams)
+			_, stderr, err := runBuildWithOutput(container, buildParams)
 			Expect(err).ToNot(HaveOccurred())
 			stderr = filterBuildahSteps(t, stderr)
 			Expect(stderr).ToNot(ContainSubstring("Cross-platform copy is a risky operation"))
@@ -3943,7 +3940,7 @@ EOF
 			}
 
 			container := setupBuildContainerWithCleanup(t, buildParams, imageRegistry)
-			stderr, err := runBuildWithOutput(container, buildParams)
+			_, stderr, err := runBuildWithOutput(container, buildParams)
 			Expect(err).ToNot(HaveOccurred())
 			stderr = filterBuildahSteps(t, stderr)
 			Expect(stderr).To(ContainSubstring("Cross-platform copy is a risky operation"))
@@ -3970,7 +3967,7 @@ EOF
 
 			container := setupBuildContainerWithCleanup(t, buildParams, imageRegistry,
 				maybeMountContainerStorage(newStorage, "taskuser"))
-			stderr, err := runBuildWithOutput(container, buildParams)
+			_, stderr, err := runBuildWithOutput(container, buildParams)
 			Expect(err).ToNot(HaveOccurred())
 			stderr = filterBuildahSteps(t, stderr)
 			Expect(stderr).To(ContainSubstring("Cross-platform copy is a risky operation"))
@@ -3994,7 +3991,7 @@ EOF
 			}
 
 			container := setupBuildContainerWithCleanup(t, buildParams, imageRegistry)
-			stderr, err := runBuildWithOutput(container, buildParams)
+			_, stderr, err := runBuildWithOutput(container, buildParams)
 			Expect(err).To(HaveOccurred())
 			Expect(stderr).To(ContainSubstring("no image found in image index for architecture"))
 		})
