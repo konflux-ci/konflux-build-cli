@@ -39,7 +39,7 @@ spec:
         - name: ownerUid
           value: $(context.pipelineRun.uid)
         - name: spot
-          value: 'false'
+          value: 'true'
         - name: debug
           value: 'false'
     - name: run-integration-tests
