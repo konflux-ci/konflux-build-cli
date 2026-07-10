@@ -12,7 +12,12 @@ import (
 // runGit runs a git command in dir and returns trimmed stdout.
 func runGit(t *testing.T, dir string, args ...string) string {
 	t.Helper()
-	fullArgs := append([]string{"-c", "safe.directory=" + dir}, args...)
+	fullArgs := append([]string{
+		"-c", "safe.directory=" + dir,
+		"-c", "commit.gpgsign=false",
+		"-c", "tag.gpgsign=false",
+	}, args...)
+
 	stdout, stderr, code, err := cliwrappers.NewCliExecutor().Execute(cliwrappers.Cmd{
 		Name: "git", Args: fullArgs, Dir: dir,
 	})
