@@ -26,6 +26,8 @@ type ImageRegistry interface {
 	// Returns path to the root CA certificate the registry is using (in case of self-signed certificate),
 	// empty string otherwise.
 	GetCaCertPath() string
+	// Returns true if given image exists and has manifest reference by given digest in the test namespace of the registry.
+	CheckManifestExistence(imageName, digest string) (bool, error)
 	// Returns true if given image exists in the test namespace of the registry.
 	CheckTagExistence(imageName, tag string) (bool, error)
 	// Return image index information, primarily the list of included manifests.

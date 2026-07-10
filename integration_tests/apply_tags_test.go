@@ -54,13 +54,7 @@ func TestApplyTags(t *testing.T) {
 	SetupGomega(t)
 	var err error
 
-	// Setup registry
-	imageRegistry := NewImageRegistry()
-	err = imageRegistry.Prepare()
-	Expect(err).ToNot(HaveOccurred())
-	err = imageRegistry.Start()
-	Expect(err).ToNot(HaveOccurred())
-	defer imageRegistry.Stop()
+	imageRegistry := SetupImageRegistry(t)
 
 	// Create input data
 	imageRepoUrl := imageRegistry.GetTestNamespace() + "test-image"
@@ -103,13 +97,7 @@ func TestApplyTagsWithImageIndex(t *testing.T) {
 	SetupGomega(t)
 	var err error
 
-	// Setup registry
-	imageRegistry := NewImageRegistry()
-	err = imageRegistry.Prepare()
-	Expect(err).ToNot(HaveOccurred())
-	err = imageRegistry.Start()
-	Expect(err).ToNot(HaveOccurred())
-	defer imageRegistry.Stop()
+	imageRegistry := SetupImageRegistry(t)
 
 	// Create input data
 	imageRepoUrl := imageRegistry.GetTestNamespace() + "test-image-index"

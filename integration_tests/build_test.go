@@ -22,6 +22,8 @@ import (
 	. "github.com/onsi/gomega"
 
 	. "github.com/konflux-ci/konflux-build-cli/integration_tests/framework"
+
+	"github.com/konflux-ci/konflux-build-cli/pkg/commands"
 	"github.com/konflux-ci/konflux-build-cli/testutil"
 )
 
@@ -88,11 +90,11 @@ func boolptr(v bool) *bool {
 }
 
 // Public interface for parity with ApplyTags. Not used in these tests directly.
-func RunBuild(buildParams BuildParams, imageRegistry ImageRegistry) error {
+func RunBuild(buildParams BuildParams, imageRegistry ImageRegistry) (*commands.BuildResults, error) {
 	storagePath, err := createContainerStorageDir()
 	defer removeContainerStorageDir(storagePath)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	container, err := setupBuildContainer(buildParams, imageRegistry,
@@ -101,10 +103,17 @@ func RunBuild(buildParams BuildParams, imageRegistry ImageRegistry) error {
 	)
 	defer container.DeleteIfExists()
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	return runBuild(container, buildParams)
+	stdout, _, err := runBuildWithOutput(container, buildParams)
+
+	buildResults := &commands.BuildResults{}
+	if err := json.Unmarshal([]byte(stdout), &buildResults); err != nil {
+		return nil, err
+	}
+
+	return buildResults, nil
 }
 
 // Creates a temporary directory for container storage in the repository root,
@@ -218,6 +227,9 @@ func cleanupContainerStorageDir(containerStoragePath string) error {
 // DeleteIfExists() on the container for cleanup.
 func setupBuildContainer(buildParams BuildParams, imageRegistry ImageRegistry, opts ...ContainerOption) (*TestRunnerContainer, error) {
 	container := NewBuildCliRunnerContainer("kbc-build", BuildImage, opts...)
+	if buildParams.Context == "" {
+		return nil, errors.New("Context directory must be set")
+	}
 	// As of buildah v1.44.0, the user running 'buildah build' must own the context directory.
 	// Add :U to make podman change the owner to the container user.
 	container.AddVolumeWithOptions(buildParams.Context, "/workspace", "z,U")
@@ -403,19 +415,6 @@ func setupTestContext(t *testing.T) string {
 		os.RemoveAll(contextDir)
 	})
 	return contextDir
-}
-
-// Sets up the image registry and registers cleanup.
-func setupImageRegistry(t *testing.T) ImageRegistry {
-	imageRegistry := NewImageRegistry()
-	err := imageRegistry.Prepare()
-	Expect(err).ToNot(HaveOccurred())
-	err = imageRegistry.Start()
-	Expect(err).ToNot(HaveOccurred())
-	t.Cleanup(func() {
-		imageRegistry.Stop()
-	})
-	return imageRegistry
 }
 
 // Writes a Containerfile with the given content to the context directory.
@@ -758,7 +757,7 @@ LABEL test.label="build-test"
 	t.Run("BuildAndPush", func(t *testing.T) {
 		SetupGomega(t)
 
-		imageRegistry := setupImageRegistry(t)
+		imageRegistry := SetupImageRegistry(t)
 
 		contextDir := setupTestContext(t)
 		writeContainerfile(contextDir, fmt.Sprintf(`
@@ -2512,7 +2511,7 @@ RUN echo > /dev/udp/127.0.0.1/9
 		t.Run("PrePullImages", func(t *testing.T) {
 			SetupGomega(t)
 
-			imageRegistry := setupImageRegistry(t)
+			imageRegistry := SetupImageRegistry(t)
 
 			createBaseImage := func(name string, randomDataSize int64, base string) string {
 				imageRef := imageRegistry.GetTestNamespace() + name + ":" + "test"
@@ -3707,7 +3706,7 @@ EOF
 			foreignArch = "linux/amd64"
 		}
 
-		imageRegistry := setupImageRegistry(t)
+		imageRegistry := SetupImageRegistry(t)
 		baseImageRepo := imageRegistry.GetTestNamespace() + "wrong-arch-base"
 		tag := GenerateUniqueTag(t)
 		foreignArchImageRef := baseImageRepo + ":" + tag
@@ -3771,7 +3770,7 @@ EOF
 	t.Run("PullImageWithOpaqueWhiteout", func(t *testing.T) {
 		SetupGomega(t)
 
-		imageRegistry := setupImageRegistry(t)
+		imageRegistry := SetupImageRegistry(t)
 
 		// Build a base image with an opaque whiteout and push it to the registry
 		setupBaseImage := func() string {

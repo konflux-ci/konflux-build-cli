@@ -198,6 +198,50 @@ func (z *ZotRegistry) GetCredentials() (string, string) {
 	return zotRegistryUser, zotRegistryPassword
 }
 
+// CheckManifestExistence quaries Zot API to check the image existence by digest.
+// Args example: localhost:5000/image, sha256:abcdef1234
+func (z *ZotRegistry) CheckManifestExistence(imageName, digest string) (bool, error) {
+	// Remove registry domain, e.g. localhost:5000/image -> image
+	repoParts := strings.Split(imageName, "/")
+	if len(repoParts) > 1 {
+		repoParts = repoParts[1:]
+	}
+	imageName = strings.Join(repoParts, "/")
+
+	url := fmt.Sprintf("https://%s/v2/%s/manifests/%s", z.GetRegistryDomain(), imageName, digest)
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return false, err
+	}
+	username, password := z.GetCredentials()
+	req.SetBasicAuth(username, password)
+	req.Header.Add("Accept", "application/vnd.oci.image.manifest.v1+json")
+
+	client, err := z.createHttpClient()
+	if err != nil {
+		return false, err
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return false, err
+	}
+	defer resp.Body.Close()
+
+	switch resp.StatusCode {
+	case http.StatusOK:
+		return true, nil
+	case http.StatusNotFound:
+		return false, nil
+	default:
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return false, fmt.Errorf("error reading response body: %v", err)
+		}
+		return false, fmt.Errorf("received unexpected response status: %s, reposnse: %s", resp.StatusCode, string(body))
+	}
+}
+
 // CheckTagExistence quaries Zot API to check the tag existence.
 // Args example: localhost:5000/image, tag
 func (z *ZotRegistry) CheckTagExistence(imageName, tag string) (bool, error) {

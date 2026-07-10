@@ -13,9 +13,58 @@ import (
 	v1 "github.com/opencontainers/image-spec/specs-go/v1"
 
 	. "github.com/konflux-ci/konflux-build-cli/integration_tests/framework"
+	"github.com/konflux-ci/konflux-build-cli/pkg/commands"
 )
 
 const TaskRunnerImage = TaskRunnerImageRef
+
+func RunPushContainerfile(pushContainerfileParams PushContainerfileParams, imageRegistry ImageRegistry) (*commands.PushContainerfileResults, error) {
+	container, err := setupPushContainerfileContainer(imageRegistry)
+	if err != nil {
+		return nil, err
+	}
+
+	args := []string{"image", "push-containerfile"}
+	if pushContainerfileParams.imageUrl != "" {
+		args = append(args, "--image-url", pushContainerfileParams.imageUrl)
+	}
+	if pushContainerfileParams.digest != "" {
+		args = append(args, "--image-digest", pushContainerfileParams.digest)
+	}
+	if pushContainerfileParams.source != "" {
+		args = append(args, "--source", pushContainerfileParams.source)
+	}
+	if pushContainerfileParams.containerfile != "" {
+		args = append(args, "--containerfile", pushContainerfileParams.containerfile)
+	}
+	if pushContainerfileParams.resultPathImageRef != "" {
+		args = append(args, "--result-path-image-ref", pushContainerfileParams.resultPathImageRef)
+	}
+	if pushContainerfileParams.tagSuffix != "" {
+		args = append(args, "--tag-suffix", pushContainerfileParams.tagSuffix)
+	}
+	if pushContainerfileParams.artifactType != "" {
+		args = append(args, "--artifact-type", pushContainerfileParams.artifactType)
+	}
+	if pushContainerfileParams.context != "" {
+		args = append(args, "--context", pushContainerfileParams.context)
+	}
+	if pushContainerfileParams.alternativeFilename != "" {
+		args = append(args, "--alternative-filename", pushContainerfileParams.alternativeFilename)
+	}
+
+	stdout, _, err := container.ExecuteBuildCliWithOutput(args...)
+	if err != nil {
+		return nil, err
+	}
+
+	pushContainerfileResults := &commands.PushContainerfileResults{}
+	if err := json.Unmarshal([]byte(stdout), &pushContainerfileResults); err != nil {
+		return nil, err
+	}
+
+	return pushContainerfileResults, nil
+}
 
 func sha256Checksum(input string) string {
 	hash := sha256.New()
@@ -46,10 +95,11 @@ func setupPushContainerfileContainerWithCleanup(t *testing.T, imageRegistry Imag
 }
 
 type PushContainerfileParams struct {
+	imageUrl            string
+	digest              string
 	source              string
 	context             string
 	containerfile       string
-	digest              string
 	tagSuffix           string
 	artifactType        string
 	resultPathImageRef  string
@@ -61,7 +111,7 @@ func TestPushContainerfile(t *testing.T) {
 	g := NewWithT(t)
 
 	commonOpts := []ContainerOption{}
-	imageRegistry := setupImageRegistry(t)
+	imageRegistry := SetupImageRegistry(t)
 	container := setupPushContainerfileContainerWithCleanup(t, imageRegistry, commonOpts...)
 
 	dirs := []string{

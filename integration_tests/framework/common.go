@@ -379,3 +379,16 @@ func SetupGomega(t *testing.T) {
 		t.FailNow()
 	})
 }
+
+// Sets up the image registry and registers cleanup.
+func SetupImageRegistry(t *testing.T) ImageRegistry {
+	imageRegistry := NewImageRegistry()
+	err := imageRegistry.Prepare()
+	gomega.Expect(err).ToNot(gomega.HaveOccurred(), "image registry is not configured")
+	err = imageRegistry.Start()
+	gomega.Expect(err).ToNot(gomega.HaveOccurred(), "failed to start local image registry")
+	t.Cleanup(func() {
+		imageRegistry.Stop()
+	})
+	return imageRegistry
+}

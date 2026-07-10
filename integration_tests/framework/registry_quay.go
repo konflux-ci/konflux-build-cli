@@ -127,6 +127,49 @@ func (q *QuayRegistry) GetCaCertPath() string {
 	return ""
 }
 
+// CheckManifestExistence quaries Quay API to check the image existence by digest.
+// Args example: quay.io/namespace/repo, sha256:abcdef1234
+func (q *QuayRegistry) CheckManifestExistence(repo string, digest string) (bool, error) {
+	repoParts := strings.Split(repo, "/")
+	if len(repoParts) != 3 {
+		return false, fmt.Errorf("invalid image format, expected quay.io/namespace/repo")
+	}
+	namespace := repoParts[1]
+	repository := repoParts[2]
+
+	// Use Docker Registry HTTP API V2 to check manifest existence
+	url := fmt.Sprintf("https://%s/v2/%s/%s/manifests/%s", q.GetRegistryDomain(), namespace, repository, digest)
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return false, err
+	}
+	username, password := q.GetCredentials()
+	req.SetBasicAuth(username, password)
+
+	req.Header.Add("Accept", "application/vnd.oci.image.manifest.v1+json")
+	req.Header.Add("Accept", "application/vnd.docker.distribution.manifest.v2+json")
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return false, err
+	}
+	defer resp.Body.Close()
+
+	switch resp.StatusCode {
+	case http.StatusOK:
+		return true, nil
+	case http.StatusNotFound:
+		return false, nil
+	default:
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return false, fmt.Errorf("error reading response body: %v", err)
+		}
+		return false, fmt.Errorf("received unexpected response status: %d, response: %s", resp.StatusCode, string(body))
+	}
+}
+
 // CheckTagExistence quaries Quay API to check the tag existence.
 // Args example: quay.io/namespace/repo, tag
 func (q *QuayRegistry) CheckTagExistence(repo string, tag string) (bool, error) {
