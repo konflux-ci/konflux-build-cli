@@ -123,6 +123,29 @@ func TestGitClone(t *testing.T) {
 			},
 		},
 		{
+			name: "shallow clone with tags",
+			setup: func(t *testing.T, workspaceDir string) map[string]string {
+				repo := createLocalTestRepo(t)
+				bareCloneToPath(t, repo.Path, filepath.Join(workspaceDir, "repo.git"))
+				return map[string]string{"tagCommit": repo.TagCommit}
+			},
+			url:  "file:///workspace/repo.git",
+			args: []string{"--depth", "1", "--revision", "main", "--fetch-tags=true"},
+			check: func(t *testing.T, workspaceDir, stdout, stderr string, setupData map[string]string) {
+				outDir := filepath.Join(workspaceDir, "out")
+				Expect(filepath.Join(outDir, "second.txt")).To(BeAnExistingFile())
+
+				isShallow := runGit(t, outDir, "rev-parse", "--is-shallow-repository")
+				Expect(isShallow).To(Equal("true"))
+
+				tags := runGit(t, outDir, "tag", "-l")
+				Expect(tags).To(Equal("v1.0.0"))
+
+				tagCommit := runGit(t, outDir, "rev-parse", "v1.0.0^{commit}")
+				Expect(tagCommit).To(Equal(setupData["tagCommit"]))
+			},
+		},
+		{
 			name: "sparse checkout single directory",
 			setup: func(t *testing.T, workspaceDir string) map[string]string {
 				repo := createLocalTestRepo(t)
