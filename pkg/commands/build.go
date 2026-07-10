@@ -2802,11 +2802,19 @@ func (c *Build) scanBuilderContent() (err error) {
 	}
 	defer func() { _ = f.Close() }()
 
+	// Currently only .konflux-buildinfo is used as a build context (see
+	// buildImage — "we don't expose any way to add build contexts"). If more
+	// build contexts are added in the future, they must be included here too.
+	buildContexts := map[string]string{}
+	if c.buildinfoBuildContext != nil {
+		buildContexts[c.buildinfoBuildContext.Name] = c.buildinfoBuildContext.Location
+	}
 	cf, err := capoContainerfile.Parse(f, capoContainerfile.BuildOptions{
 		Args:             processKeyValueEnvs(c.Params.BuildArgs),
 		BuildArgFilePath: c.Params.BuildArgsFile,
 		EnvVars:          processKeyValueEnvs(c.Params.Envs),
 		Target:           c.Params.Target,
+		BuildContexts:    buildContexts,
 	})
 	if err != nil {
 		return fmt.Errorf("parsing containerfile with capo: %w", err)

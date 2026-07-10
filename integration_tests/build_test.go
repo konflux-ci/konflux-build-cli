@@ -86,6 +86,7 @@ type BuildParams struct {
 	SyftImageOutput            string
 	SyftSelectCatalogers       string
 	SBOMFormat                 string
+	BuilderMetadataOutput      string
 	ExtraArgs                  []string
 }
 
@@ -416,6 +417,9 @@ func runBuildWithOutput(container *TestRunnerContainer, buildParams BuildParams)
 	}
 	if buildParams.SBOMFormat != "" {
 		args = append(args, "--sbom-format", buildParams.SBOMFormat)
+	}
+	if buildParams.BuilderMetadataOutput != "" {
+		args = append(args, "--builder-metadata-output", buildParams.BuilderMetadataOutput)
 	}
 	if len(buildParams.ExtraArgs) > 0 {
 		args = append(args, "--")
@@ -4206,5 +4210,80 @@ RUN rm -r /etc/yum.repos.d && mkdir /etc/yum.repos.d
 			ContainElement("gpg-pubkey"),
 			ContainElement("redhat-release")),
 			"--syft-select-catalogers should have disabled the RPM DB cataloger")
+	})
+
+	t.Run("BuilderMetadataOutput_MultiStage", func(t *testing.T) {
+		SetupGomega(t)
+
+		contextDir := setupTestContext(t)
+		testutil.WriteFileTree(t, contextDir, map[string]string{
+			"go.mod": "module test\n\ngo 1.21\n\nrequire github.com/google/uuid v1.6.0\n",
+		})
+		writeContainerfile(contextDir, `FROM `+baseImage+` AS builder
+COPY go.mod /opt/go.mod
+FROM `+baseImage+`
+COPY --from=builder /opt/go.mod /opt/go.mod
+`)
+
+		outputRef := "localhost/test-builder-metadata:" + GenerateUniqueTag(t)
+
+		buildParams := BuildParams{
+			Context:               contextDir,
+			OutputRef:             outputRef,
+			BuilderMetadataOutput: "/workspace/builder-metadata.json",
+		}
+
+		container := setupBuildContainerWithCleanup(t, buildParams, nil)
+
+		Expect(runBuild(container, buildParams)).To(Succeed())
+
+		metadataBytes, readErr := os.ReadFile(filepath.Join(contextDir, "builder-metadata.json"))
+		Expect(readErr).ToNot(HaveOccurred(), "builder metadata file should exist")
+
+		var metadata struct {
+			Packages []struct {
+				PackageURL string `json:"purl"`
+				OriginType string `json:"origin_type"`
+				Pullspec   string `json:"pullspec"`
+				StageAlias string `json:"stage_alias"`
+			} `json:"packages"`
+		}
+		Expect(json.Unmarshal(metadataBytes, &metadata)).To(Succeed())
+
+		Expect(metadata.Packages).To(HaveLen(1))
+		Expect(metadata.Packages[0].PackageURL).To(Equal("pkg:golang/github.com/google/uuid@v1.6.0"))
+		Expect(metadata.Packages[0].OriginType).To(Equal("intermediate"))
+		Expect(metadata.Packages[0].Pullspec).To(Equal("registry.access.redhat.com/ubi10/ubi-micro@sha256:2946fa1b951addbcd548ef59193dc0af9b3e9fedb0287b4ddb6e697b06581622"))
+		Expect(metadata.Packages[0].StageAlias).To(Equal("builder"))
+	})
+
+	t.Run("BuilderMetadataOutput_SingleStage", func(t *testing.T) {
+		SetupGomega(t)
+
+		contextDir := setupTestContext(t)
+		writeContainerfile(contextDir, `FROM `+baseImage+`
+RUN echo hello
+`)
+		outputRef := "localhost/test-builder-metadata-single:" + GenerateUniqueTag(t)
+
+		buildParams := BuildParams{
+			Context:               contextDir,
+			OutputRef:             outputRef,
+			BuilderMetadataOutput: "/workspace/builder-metadata.json",
+		}
+
+		container := setupBuildContainerWithCleanup(t, buildParams, nil)
+
+		Expect(runBuild(container, buildParams)).To(Succeed())
+
+		metadataBytes, err := os.ReadFile(filepath.Join(contextDir, "builder-metadata.json"))
+		Expect(err).ToNot(HaveOccurred(), "builder metadata file should exist even for single-stage")
+
+		var metadata struct {
+			Packages []json.RawMessage `json:"packages"`
+		}
+		err = json.Unmarshal(metadataBytes, &metadata)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(metadata.Packages).To(BeEmpty(), "single-stage build should result in empty packages in builder metadata")
 	})
 }
