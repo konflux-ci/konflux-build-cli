@@ -16,6 +16,8 @@ import (
 	"strings"
 	"time"
 
+	"log/slog"
+
 	"github.com/containers/image/v5/docker/reference"
 	capo "github.com/konflux-ci/capo/pkg"
 	capoContainerfile "github.com/konflux-ci/capo/pkg/containerfile"
@@ -24,6 +26,7 @@ import (
 	dfeditor "github.com/konflux-ci/konflux-build-cli/pkg/common/containerfile_editor"
 	"github.com/opencontainers/go-digest"
 	"github.com/package-url/packageurl-go"
+	sloglogrus "github.com/samber/slog-logrus/v2"
 	"github.com/spf13/cobra"
 
 	"github.com/containerd/platforms"
@@ -2820,7 +2823,9 @@ func (c *Build) scanBuilderContent() (err error) {
 		return fmt.Errorf("parsing containerfile with capo: %w", err)
 	}
 
-	scanner, err := capo.NewScanner()
+	scanner, err := capo.NewScanner(
+		capo.WithLogger(slog.New(sloglogrus.Option{Logger: l.Logger}.NewLogrusHandler())),
+	)
 	if err != nil {
 		return fmt.Errorf("creating capo scanner: %w", err)
 	}
