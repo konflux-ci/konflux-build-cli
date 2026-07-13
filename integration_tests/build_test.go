@@ -4212,6 +4212,19 @@ RUN rm -r /etc/yum.repos.d && mkdir /etc/yum.repos.d
 			"--syft-select-catalogers should have disabled the RPM DB cataloger")
 	})
 
+	// Builder metadata tests use --save-stages which saves intermediate images
+	// in buildah storage. Capo finds intermediate images by matching stage alias
+	// and base pullspec labels (io.buildah.stage.name, io.buildah.stage.base).
+	// With shared storage, leftover intermediate images from previous builds can
+	// match instead of the current one. Each subtest needs its own storage.
+	setupBuildContainerWithIsolatedStorage := func(t *testing.T, buildParams BuildParams) *TestRunnerContainer {
+		ownStorage, err := createContainerStorageDir()
+		t.Cleanup(func() { removeContainerStorageDir(ownStorage) })
+		Expect(err).ToNot(HaveOccurred())
+		return setupBuildContainerWithCleanup(t, buildParams, nil,
+			maybeMountContainerStorage(ownStorage, "taskuser"))
+	}
+
 	t.Run("BuilderMetadataOutput_MultiStage", func(t *testing.T) {
 		SetupGomega(t)
 
@@ -4234,7 +4247,7 @@ COPY --from=builder /opt/go.mod /opt/go.mod
 			BuilderMetadataOutput: "/workspace/builder-metadata.json",
 		}
 
-		container := setupBuildContainerWithCleanup(t, buildParams, nil)
+		container := setupBuildContainerWithIsolatedStorage(t, buildParams)
 
 		Expect(runBuild(container, buildParams)).To(Succeed())
 
@@ -4274,7 +4287,7 @@ RUN echo hello
 			BuilderMetadataOutput: "/workspace/builder-metadata.json",
 		}
 
-		container := setupBuildContainerWithCleanup(t, buildParams, nil)
+		container := setupBuildContainerWithIsolatedStorage(t, buildParams)
 
 		Expect(runBuild(container, buildParams)).To(Succeed())
 
@@ -4314,7 +4327,7 @@ RUN echo "this stage should be ignored"
 			BuilderMetadataOutput: "/workspace/builder-metadata.json",
 		}
 
-		container := setupBuildContainerWithCleanup(t, buildParams, nil)
+		container := setupBuildContainerWithIsolatedStorage(t, buildParams)
 
 		Expect(runBuild(container, buildParams)).To(Succeed())
 
@@ -4360,7 +4373,7 @@ COPY --from=builder /custom/go.mod /custom/go.mod
 			BuilderMetadataOutput: "/workspace/builder-metadata.json",
 		}
 
-		container := setupBuildContainerWithCleanup(t, buildParams, nil)
+		container := setupBuildContainerWithIsolatedStorage(t, buildParams)
 
 		Expect(runBuild(container, buildParams)).To(Succeed())
 
@@ -4409,7 +4422,7 @@ COPY --from=builder /custom/path/go.mod /opt/go.mod
 			BuilderMetadataOutput: "/workspace/builder-metadata.json",
 		}
 
-		container := setupBuildContainerWithCleanup(t, buildParams, nil)
+		container := setupBuildContainerWithIsolatedStorage(t, buildParams)
 
 		Expect(runBuild(container, buildParams)).To(Succeed())
 
@@ -4455,7 +4468,7 @@ COPY --from=builder /envpath/go.mod /opt/go.mod
 			BuilderMetadataOutput: "/workspace/builder-metadata.json",
 		}
 
-		container := setupBuildContainerWithCleanup(t, buildParams, nil)
+		container := setupBuildContainerWithIsolatedStorage(t, buildParams)
 
 		Expect(runBuild(container, buildParams)).To(Succeed())
 
