@@ -4359,10 +4359,10 @@ RUN echo "this stage should be ignored"
 			})
 			writeContainerfile(contextDir, `
 FROM `+baseImage+` AS builder
-ARG DEST
-COPY go.mod $DEST/go.mod
+COPY go.mod /opt/go.mod
 FROM `+baseImage+`
-COPY --from=builder /custom/go.mod /custom/go.mod
+ARG SRC
+COPY --from=builder $SRC/go.mod /opt/go.mod
 `)
 
 			outputRef := "localhost/test-builder-metadata-args:" + GenerateUniqueTag(t)
@@ -4370,7 +4370,7 @@ COPY --from=builder /custom/go.mod /custom/go.mod
 			buildParams := BuildParams{
 				Context:               contextDir,
 				OutputRef:             outputRef,
-				BuildArgs:             []string{"DEST=/custom"},
+				BuildArgs:             []string{"SRC=/opt"},
 				BuilderMetadataOutput: "/workspace/builder-metadata.json",
 			}
 
@@ -4403,15 +4403,15 @@ COPY --from=builder /custom/go.mod /custom/go.mod
 			contextDir := setupTestContext(t)
 			testutil.WriteFileTree(t, contextDir, map[string]string{
 				"go.mod":          "module test\n\ngo 1.21\n\nrequire github.com/google/uuid v1.6.0\n",
-				"build-args-file": "DEST_PART_1=/custom\nDEST_PART_2=/path",
+				"build-args-file": "SRC_PART_1=/o\nSRC_PART_2=pt",
 			})
 			writeContainerfile(contextDir, `
 FROM `+baseImage+` AS builder
-ARG DEST_PART_1
-ARG DEST_PART_2
-COPY go.mod $DEST_PART_1$DEST_PART_2/go.mod
+COPY go.mod /opt/go.mod
 FROM `+baseImage+`
-COPY --from=builder /custom/path/go.mod /opt/go.mod
+ARG SRC_PART_1
+ARG SRC_PART_2
+COPY --from=builder $SRC_PART_1$SRC_PART_2/go.mod /opt/go.mod
 `)
 
 			outputRef := "localhost/test-builder-metadata-argsfile:" + GenerateUniqueTag(t)
@@ -4455,9 +4455,9 @@ COPY --from=builder /custom/path/go.mod /opt/go.mod
 			})
 			writeContainerfile(contextDir, `
 FROM `+baseImage+` AS builder
-COPY go.mod $DEST/go.mod
+COPY go.mod /opt/go.mod
 FROM `+baseImage+`
-COPY --from=builder /envpath/go.mod /opt/go.mod
+COPY --from=builder $SRC/go.mod /opt/go.mod
 `)
 
 			outputRef := "localhost/test-builder-metadata-envs:" + GenerateUniqueTag(t)
@@ -4465,7 +4465,7 @@ COPY --from=builder /envpath/go.mod /opt/go.mod
 			buildParams := BuildParams{
 				Context:               contextDir,
 				OutputRef:             outputRef,
-				Envs:                  []string{"DEST=/envpath"},
+				Envs:                  []string{"SRC=/opt"},
 				BuilderMetadataOutput: "/workspace/builder-metadata.json",
 			}
 

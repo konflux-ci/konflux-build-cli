@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"log/slog"
 	"maps"
 	"os"
 	"path/filepath"
@@ -15,8 +16,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
-	"log/slog"
 
 	"github.com/containers/image/v5/docker/reference"
 	capo "github.com/konflux-ci/capo/pkg"
