@@ -599,6 +599,18 @@ func TestBuildahCli_Push(t *testing.T) {
 		g.Expect(err).ToNot(HaveOccurred())
 		g.Expect(capturedArgs).To(ContainElement("--tls-verify=true"))
 	})
+
+	t.Run("should pass --format when provided", func(t *testing.T) {
+		buildahCli, executor := setupBuildahCli()
+		var capturedArgs []string
+		executor.executeFunc = mockSuccessfulPush(&capturedArgs)
+
+		_, err := buildahCli.Push(&cliwrappers.BuildahPushArgs{
+			Image: image, Format: "v2s2",
+		})
+		g.Expect(err).ToNot(HaveOccurred())
+		g.Expect(capturedArgs).To(ContainElement("--format=v2s2"))
+	})
 }
 
 func TestBuildahCli_Pull(t *testing.T) {
