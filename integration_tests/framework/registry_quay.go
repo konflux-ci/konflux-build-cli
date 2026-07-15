@@ -142,11 +142,8 @@ func (q *QuayRegistry) CheckTagExistence(repo string, tag string) (bool, error) 
 	if err != nil {
 		return false, err
 	}
-	username, password := q.GetCredentials()
-	req.SetBasicAuth(username, password)
 
-	client := &http.Client{}
-	resp, err := client.Do(req)
+	resp, err := q.doRequest(req)
 	if err != nil {
 		return false, err
 	}
@@ -193,7 +190,7 @@ func (q *QuayRegistry) CheckTagExistence(repo string, tag string) (bool, error) 
 	return false, nil
 }
 
-func (z *QuayRegistry) GetImageIndexInfo(repo, tag string) (*ImageIndexManifest, error) {
+func (q *QuayRegistry) GetImageIndexInfo(repo, tag string) (*ImageIndexManifest, error) {
 	repoParts := strings.Split(repo, "/")
 	if len(repoParts) != 3 {
 		return nil, fmt.Errorf("invalid image format, expected quay.io/namespace/repo")
@@ -201,7 +198,7 @@ func (z *QuayRegistry) GetImageIndexInfo(repo, tag string) (*ImageIndexManifest,
 	namespace := repoParts[1]
 	repository := repoParts[2]
 
-	url := fmt.Sprintf("https://%s/v2/%s/%s/manifests/%s", z.GetRegistryDomain(), namespace, repository, tag)
+	url := fmt.Sprintf("https://%s/v2/%s/%s/manifests/%s", q.GetRegistryDomain(), namespace, repository, tag)
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return nil, err
@@ -210,8 +207,7 @@ func (z *QuayRegistry) GetImageIndexInfo(repo, tag string) (*ImageIndexManifest,
 	req.Header.Add("Accept", "application/vnd.oci.image.index.v1+json")
 	req.Header.Add("Accept", "application/vnd.docker.distribution.manifest.list.v2+json")
 
-	client := &http.Client{}
-	resp, err := client.Do(req)
+	resp, err := q.doRequest(req)
 	if err != nil {
 		return nil, err
 	}
@@ -232,4 +228,9 @@ func (z *QuayRegistry) GetImageIndexInfo(repo, tag string) (*ImageIndexManifest,
 	imageIndexInfo.RawManifest = body
 
 	return imageIndexInfo, nil
+}
+
+func (q *QuayRegistry) doRequest(req *http.Request) (*http.Response, error) {
+	client := &http.Client{}
+	return client.Do(req)
 }
