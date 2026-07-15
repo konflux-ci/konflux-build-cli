@@ -5,6 +5,16 @@ import (
 	"encoding/json"
 )
 
+// https://github.com/podman-container-tools/container-libs/blob/b17b0a4c55bb953de8d783ea26534df22fdc9f2b/image/manifest/manifest.go#L56
+var allContainerMediaTypes = []string{
+	"application/vnd.oci.image.manifest.v1+json",
+	"application/vnd.docker.distribution.manifest.v2+json",
+	"application/vnd.docker.distribution.manifest.v1+prettyjws",
+	"application/vnd.docker.distribution.manifest.v1+json",
+	"application/vnd.docker.distribution.manifest.list.v2+json",
+	"application/vnd.oci.image.index.v1+json",
+}
+
 type ImageRegistry interface {
 	// Returns true for locally hosted registries.
 	IsLocal() bool

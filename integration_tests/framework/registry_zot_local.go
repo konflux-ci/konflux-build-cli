@@ -202,11 +202,13 @@ func (z *ZotRegistry) CheckTagExistence(imageName, tag string) (bool, error) {
 	}
 	imageName = strings.Join(repoParts, "/")
 
-	url := fmt.Sprintf("https://%s/v2/%s/tags/list", z.GetRegistryDomain(), imageName)
-	req, err := http.NewRequest("GET", url, nil)
+	url := fmt.Sprintf("https://%s/v2/%s/manifests/%s", z.GetRegistryDomain(), imageName, tag)
+	req, err := http.NewRequest("HEAD", url, nil)
 	if err != nil {
 		return false, err
 	}
+
+	req.Header["Accept"] = allContainerMediaTypes
 
 	resp, err := z.doRequest(req)
 	if err != nil {
@@ -214,30 +216,14 @@ func (z *ZotRegistry) CheckTagExistence(imageName, tag string) (bool, error) {
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		return false, fmt.Errorf("received non-200 response status: %s", resp.Status)
+	switch resp.StatusCode {
+	case http.StatusOK:
+		return true, nil
+	case http.StatusNotFound:
+		return false, nil
+	default:
+		return false, fmt.Errorf("unexpected response code (expected 200 or 404): %d", resp.StatusCode)
 	}
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return false, fmt.Errorf("error reading response body: %v", err)
-	}
-
-	type TagListResponse struct {
-		Name string   `json:"name"`
-		Tags []string `json:"tags"`
-	}
-	var tagListResponse TagListResponse
-	if err := json.Unmarshal(body, &tagListResponse); err != nil {
-		return false, fmt.Errorf("error unmarshaling response JSON: %v", err)
-	}
-
-	for _, t := range tagListResponse.Tags {
-		if strings.EqualFold(t, tag) {
-			return true, nil
-		}
-	}
-
-	return false, nil
 }
 
 func (z *ZotRegistry) GetImageIndexInfo(imageName, tag string) (*ImageIndexManifest, error) {

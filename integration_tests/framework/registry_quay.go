@@ -131,17 +131,18 @@ func (q *QuayRegistry) GetCaCertPath() string {
 // Args example: quay.io/namespace/repo, tag
 func (q *QuayRegistry) CheckTagExistence(repo string, tag string) (bool, error) {
 	repoParts := strings.Split(repo, "/")
-	if len(repoParts) != 3 {
-		return false, fmt.Errorf("invalid image format, expected quay.io/namespace/repo")
+	if len(repoParts) > 1 {
+		repoParts = repoParts[1:]
 	}
-	namespace := repoParts[1]
-	repository := repoParts[2]
+	imageName := strings.Join(repoParts, "/")
 
-	url := fmt.Sprintf("https://quay.io/api/v1/repository/%s/%s/tag/?specificTag=%s", namespace, repository, tag)
-	req, err := http.NewRequest("GET", url, nil)
+	url := fmt.Sprintf("https://%s/v2/%s/manifests/%s", q.GetRegistryDomain(), imageName, tag)
+	req, err := http.NewRequest("HEAD", url, nil)
 	if err != nil {
 		return false, err
 	}
+
+	req.Header["Accept"] = allContainerMediaTypes
 
 	resp, err := q.doRequest(req)
 	if err != nil {
@@ -149,45 +150,14 @@ func (q *QuayRegistry) CheckTagExistence(repo string, tag string) (bool, error) 
 	}
 	defer resp.Body.Close()
 
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return false, err
+	switch resp.StatusCode {
+	case http.StatusOK:
+		return true, nil
+	case http.StatusNotFound:
+		return false, nil
+	default:
+		return false, fmt.Errorf("unexpected response code (expected 200 or 404): %d", resp.StatusCode)
 	}
-	if resp.StatusCode != http.StatusOK {
-		return false, fmt.Errorf("API request failed with status code %d", resp.StatusCode)
-	}
-
-	// {
-	//   "tags": [
-	//     {
-	//       "name": "tag-name",
-	//       "reversion": false,
-	//       "start_ts": 1756740181,
-	//       "manifest_digest": "sha256:33735bd63cf84d7e388d9f6d297d348c523c044410f553bd878c6d7829612735",
-	//       "is_manifest_list": false,
-	//       "size": 3623807,
-	//       "last_modified": "Mon, 01 Sep 2025 15:23:01 -0000"
-	//     }
-	//   ]
-	// }
-	type Tag struct {
-		Name string `json:"name"`
-	}
-	type Response struct {
-		Tags []Tag `json:"tags"`
-	}
-	var result Response
-	err = json.Unmarshal(body, &result)
-	if err != nil {
-		return false, err
-	}
-
-	for _, t := range result.Tags {
-		if t.Name == tag {
-			return true, nil
-		}
-	}
-	return false, nil
 }
 
 func (q *QuayRegistry) GetImageIndexInfo(repo, tag string) (*ImageIndexManifest, error) {
