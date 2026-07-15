@@ -18,43 +18,12 @@ The commands should be able to run:
 - `integration_tests` all integration tests.
 - `integration_tests/framework` framework to run integration tests.
 
-## Development
-
-After making any code changes, always make sure that:
-- unit tests pass
-- all linters pass
-
 ## Verification
 
 Run these commands before submitting changes:
 - `make unit-test` or `go test ./pkg/...` — run all unit tests
 - `make lint` — run golangci-lint (installs automatically)
 - `make fmt` or `go fmt ./...` — format code
-
-## Testing Conventions
-
-- Use gomega with dot-import: `. "github.com/onsi/gomega"`
-- Create gomega instance per test: `g := NewWithT(t)`
-- Use `g.Expect(...)` for all assertions with matchers like `BeNil()`,
-  `HaveOccurred()`, `Equal()`, `ContainSubstring()`
-- Write mock structs by hand implementing the interface
-  (no code-generation frameworks)
-- Place mocks in dedicated `*_mock_test.go` or `*_mocks_test.go` files
-- Include a compile-time interface check:
-  `var _ Interface = &mockStruct{}`
-- See `pkg/cliwrappers/cli_executor_mock_test.go` and
-  `pkg/commands/cli_mocks_test.go` for examples
-- Use `testutil.WriteFileTree(t, baseDir, files)` to set up file
-  fixtures in tests
-- Use `testutil.CaptureLogOutput(fn)` to capture and assert log output
-
-## Platform-Specific Code
-
-Some files use `//go:build linux` and `//go:build !linux` build
-constraints. When modifying platform-specific logic, check for and
-update both variants:
-- `build_linux.go` / `build_other.go`
-- `in_user_namespace_linux.go` / `in_user_namespace_other.go`
 
 ## References
 
