@@ -2800,10 +2800,21 @@ func (c *Build) pushImage() (string, error) {
 	return digest, nil
 }
 
-func (c *Build) writeBuildprobeYaml(outputPath string) error {
+func (c *Build) writeBuildprobeYaml(outputPath string) (err error) {
+	// ensure this does not panic; buildprobe is not process-critical
+	defer func() {
+		if r := recover(); r != nil {
+			err = fmt.Errorf("buildprobe generation panicked: %v", r)
+		}
+	}()
+
 	buildArgs := processKeyValueEnvs(c.Params.BuildArgs)
 	// open the containerfile to read
-	containerfile, err := os.OpenFile(c.containerfilePath, os.O_RDONLY, 0)
+	containerfilePath := c.containerfilePath
+	if c.containerfileCopyPath != "" {
+		containerfilePath = c.containerfileCopyPath
+	}
+	containerfile, err := os.OpenFile(filepath.Clean(containerfilePath), os.O_RDONLY, 0)
 	if err != nil {
 		return fmt.Errorf("failed to open containerfile: %w", err)
 	}
