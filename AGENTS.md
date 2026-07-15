@@ -26,33 +26,8 @@ After making any code changes, always make sure that:
 
 ## Integration Test Conventions
 
-### Checking buildah build output (stderr)
-
-Buildah prints each `RUN` instruction verbatim to stdout as a `STEP` line
-before executing it. The CLI re-logs these lines to stderr. If a test uses
-`Expect(stderr).To(ContainSubstring("some marker"))` directly, the assertion
-will match the echoed instruction text even when the `RUN` command did not
-actually produce that output — making the test vacuous.
-
-**Always call `filterBuildahSteps(t, stderr)` on the stderr returned by
-`runBuildWithOutput` before asserting on it.** `runBuildWithOutput` returns
-raw output including STEP echo lines; `filterBuildahSteps` strips them,
-leaving only actual command output. It also fails the test if no STEP lines
-were found, which detects future buildah output format changes. Only use
-`filterBuildahSteps` on success-path call sites where the build is expected
-to produce STEP lines.
-
-```go
-// CORRECT — filters STEP lines before asserting
-_, stderr, err := runBuildWithOutput(container, buildParams)
-Expect(err).ToNot(HaveOccurred())
-stderr = filterBuildahSteps(t, stderr)
-Expect(stderr).To(ContainSubstring("expected marker"))
-
-// WRONG — would match the echoed RUN instruction
-_, stderr, err := container.ExecuteCommandWithOutput(KonfluxBuildCli, args...)
-Expect(stderr).To(ContainSubstring("expected marker"))
-```
+When asserting on build stderr in `image build` integration tests, call
+`filterBuildahSteps` first to strip buildah's echoed RUN instructions.
 
 ## References
 
