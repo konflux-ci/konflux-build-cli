@@ -437,6 +437,10 @@ var buildahStepLine = regexp.MustCompile(`(?m)^.*STEP \d+[^:]*:.*\n?`)
 // assertions that would otherwise match the echoed RUN instruction text.
 // It fails the test if the output is non-empty but no STEP lines were found,
 // which would indicate that buildah's output format has changed.
+//
+// Because of the fatal guard, only use this function on success-path call sites
+// where the build is expected to succeed and produce STEP lines. Do not use it
+// on error-path call sites where stderr may not contain any STEP lines.
 func filterBuildahSteps(t testing.TB, output string) string {
 	t.Helper()
 	filtered := buildahStepLine.ReplaceAllString(output, "")
@@ -2736,6 +2740,7 @@ RUN cp /random-data.bin /data/realBaseImage.bin
 
 				_, stderr, err = runBuildWithOutput(container, buildParams)
 				Expect(err).ToNot(HaveOccurred())
+				stderr = filterBuildahSteps(t, stderr)
 
 				labels := getImageMeta(container, outputRef).labels
 				Expect(labels).To(HaveKeyWithValue("base1.real_index", "1"),

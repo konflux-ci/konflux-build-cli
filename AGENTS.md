@@ -34,16 +34,19 @@ before executing it. The CLI re-logs these lines to stderr. If a test uses
 will match the echoed instruction text even when the `RUN` command did not
 actually produce that output — making the test vacuous.
 
-**Always use `runBuildWithOutput(t, container, buildParams)` instead of
-calling `container.ExecuteCommandWithOutput(...)` directly.** This helper
-strips buildah `STEP` echo lines from stderr before returning the output.
-It also fails the test if no `STEP` lines were found, which detects future
-buildah output format changes.
+**Always call `filterBuildahSteps(t, stderr)` on the stderr returned by
+`runBuildWithOutput` before asserting on it.** `runBuildWithOutput` returns
+raw output including STEP echo lines; `filterBuildahSteps` strips them,
+leaving only actual command output. It also fails the test if no STEP lines
+were found, which detects future buildah output format changes. Only use
+`filterBuildahSteps` on success-path call sites where the build is expected
+to produce STEP lines.
 
 ```go
-// CORRECT — uses the filtering helper
-stderr, err := runBuildWithOutput(t, container, buildParams)
+// CORRECT — filters STEP lines before asserting
+_, stderr, err := runBuildWithOutput(container, buildParams)
 Expect(err).ToNot(HaveOccurred())
+stderr = filterBuildahSteps(t, stderr)
 Expect(stderr).To(ContainSubstring("expected marker"))
 
 // WRONG — would match the echoed RUN instruction
