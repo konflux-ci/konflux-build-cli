@@ -2801,12 +2801,6 @@ func (c *Build) pushImage() (string, error) {
 }
 
 func (c *Build) writeBuildprobeYaml(outputPath string) error {
-	var tag string
-	if ref, err := reference.Parse(c.Params.OutputRef); err == nil {
-		if refWithTag, ok := ref.(reference.Tagged); ok {
-			tag = refWithTag.Tag()
-		}
-	}
 	buildArgs := processKeyValueEnvs(c.Params.BuildArgs)
 	// open the containerfile to read
 	containerfile, err := os.OpenFile(c.containerfilePath, os.O_RDONLY, 0)

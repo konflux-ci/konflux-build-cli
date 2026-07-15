@@ -54,6 +54,7 @@ type BuildParams struct {
 	RewriteTimestamp        bool
 	QuayImageExpiresAfter   string
 	AddLegacyLabels         bool
+	BuildprobeYamlOutput    string
 	ContainerfileJsonOutput string
 	SkipInjections          bool
 	// Defaults to true in the CLI, need a way to distinguish between explicitly false and unset
@@ -320,6 +321,9 @@ func runBuildWithOutput(container *TestRunnerContainer, buildParams BuildParams)
 	}
 	if buildParams.AddLegacyLabels {
 		args = append(args, "--add-legacy-labels")
+	}
+	if buildParams.BuildprobeYamlOutput != "" {
+		args = append(args, "--buildprobe-yaml-output", buildParams.BuildprobeYamlOutput)
 	}
 	if buildParams.ContainerfileJsonOutput != "" {
 		args = append(args, "--containerfile-json-output", buildParams.ContainerfileJsonOutput)
@@ -4301,6 +4305,58 @@ RUN rm -r /etc/yum.repos.d && mkdir /etc/yum.repos.d
 			ContainElement("gpg-pubkey"),
 			ContainElement("redhat-release")),
 			"--syft-select-catalogers should have disabled the RPM DB cataloger")
+	})
+
+	t.Run("BuildprobeYamlOutput", func(t *testing.T) {
+		SetupGomega(t)
+
+		imageRegistry := setupImageRegistry(t)
+
+		secondBase := imageRegistry.GetTestNamespace() + "second-base:test"
+		err := CreateTestImage(TestImageConfig{
+			ImageRef:       secondBase,
+			BaseImage:      "scratch",
+			RandomDataSize: 512,
+		})
+		Expect(err).ToNot(HaveOccurred())
+		_, err = PushImage(secondBase)
+		Expect(err).ToNot(HaveOccurred())
+		DeleteLocalImage(secondBase)
+
+		extraImage := imageRegistry.GetTestNamespace() + "extra:test"
+		err = CreateTestImage(TestImageConfig{
+			ImageRef:       extraImage,
+			BaseImage:      "scratch",
+			RandomDataSize: 256,
+		})
+		Expect(err).ToNot(HaveOccurred())
+		_, err = PushImage(extraImage)
+		Expect(err).ToNot(HaveOccurred())
+		DeleteLocalImage(extraImage)
+
+		contextDir := setupTestContext(t)
+		outputRef := "localhost/test-buildprobe-yaml:" + GenerateUniqueTag(t)
+		writeContainerfile(contextDir, `
+FROM `+baseImage+` AS builder
+COPY go.mod /opt/go.mod
+FROM `+secondBase+`
+COPY --from=`+extraImage+` /random-data.bin /opt/extra.bin
+`)
+		buildprobeYamlPath := "/workspace/buildprobe.yaml"
+		buildParams := BuildParams{
+			Context:              contextDir,
+			OutputRef:            outputRef,
+			BuildprobeYamlOutput: buildprobeYamlPath,
+		}
+		container := setupBuildContainerWithCleanup(t, buildParams, imageRegistry)
+		Expect(runBuild(container, buildParams)).To(Succeed())
+
+		buildprobeYaml, readErr := container.GetFileContent(buildprobeYamlPath)
+		Expect(readErr).ToNot(HaveOccurred(), "buildprobe yaml should exist")
+		Expect(buildprobeYaml).To(SatisfyAll(
+			ContainSubstring(secondBase),
+			ContainSubstring(extraImage),
+		))
 	})
 
 	t.Run("BuilderMetadataOutput", func(t *testing.T) {
