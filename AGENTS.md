@@ -39,11 +39,14 @@ Run these commands before submitting changes:
   `HaveOccurred()`, `Equal()`, `ContainSubstring()`
 - Write mock structs by hand implementing the interface
   (no code-generation frameworks)
-- Place mocks in dedicated `*_mock_test.go` or `mocks_test.go` files
+- Place mocks in dedicated `*_mock_test.go` or `*_mocks_test.go` files
 - Include a compile-time interface check:
   `var _ Interface = &mockStruct{}`
 - See `pkg/cliwrappers/cli_executor_mock_test.go` and
   `pkg/commands/cli_mocks_test.go` for examples
+- Use `testutil.WriteFileTree(t, baseDir, files)` to set up file
+  fixtures in tests
+- Use `testutil.CaptureLogOutput(fn)` to capture and assert log output
 
 ## Platform-Specific Code
 
