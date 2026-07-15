@@ -182,17 +182,17 @@ func TestBuildImageIndex_MultipleImages(t *testing.T) {
 	))
 
 	// Verify the index was pushed to registry
-	tagExists, err := imageRegistry.CheckTagExistence(baseImageRepo, tag)
+	tagExists, err := CheckTagExistence(imageRegistry, baseImageRepo, tag)
 	Expect(err).ToNot(HaveOccurred())
 	Expect(tagExists).To(BeTrue(), fmt.Sprintf("Expected %s to exist", indexImage))
 
 	// Verify additional tag was created
-	tagExists, err = imageRegistry.CheckTagExistence(baseImageRepo, "test-tag-1")
+	tagExists, err = CheckTagExistence(imageRegistry, baseImageRepo, "test-tag-1")
 	Expect(err).ToNot(HaveOccurred())
 	Expect(tagExists).To(BeTrue(), fmt.Sprintf("Expected %s:test-tag-1 to exist", baseImageRepo))
 
 	// Verify the manifest is actually an index (multi-arch)
-	imageIndexInfo, err := imageRegistry.GetImageIndexInfo(baseImageRepo, tag)
+	imageIndexInfo, err := GetImageIndexInfo(imageRegistry, baseImageRepo, tag)
 	Expect(err).ToNot(HaveOccurred(), fmt.Sprintf("failed to get image index %s:%s", baseImageRepo, tag))
 	Expect(imageIndexInfo.MediaType).To(Equal("application/vnd.oci.image.index.v1+json"),
 		"Created reference is not an OCI image index")
@@ -292,12 +292,12 @@ func TestBuildImageIndex_DockerFormat(t *testing.T) {
 	))
 
 	// Verify the index was pushed to registry
-	tagExists, err := imageRegistry.CheckTagExistence(baseImageRepo, tag)
+	tagExists, err := CheckTagExistence(imageRegistry, baseImageRepo, tag)
 	Expect(err).ToNot(HaveOccurred())
 	Expect(tagExists).To(BeTrue(), fmt.Sprintf("Expected %s to exist", indexImage))
 
 	// Verify the manifest is actually a docker manifest list (not OCI)
-	imageIndexInfo, err := imageRegistry.GetImageIndexInfo(baseImageRepo, tag)
+	imageIndexInfo, err := GetImageIndexInfo(imageRegistry, baseImageRepo, tag)
 	Expect(err).ToNot(HaveOccurred(), fmt.Sprintf("failed to get image index %s:%s", baseImageRepo, tag))
 	Expect(imageIndexInfo.MediaType).To(Equal("application/vnd.docker.distribution.manifest.list.v2+json"),
 		"Created reference is not a docker manifest list")
@@ -411,12 +411,12 @@ func TestBuildImageIndex_SingleImageAlwaysBuildIndex(t *testing.T) {
 	Expect(results.Images).To(Equal(baseImageRepo + "@" + digest))
 
 	// Verify the index was pushed to registry
-	tagExists, err := imageRegistry.CheckTagExistence(baseImageRepo, tag)
+	tagExists, err := CheckTagExistence(imageRegistry, baseImageRepo, tag)
 	Expect(err).ToNot(HaveOccurred())
 	Expect(tagExists).To(BeTrue(), fmt.Sprintf("Expected %s to exist", indexImage))
 
 	// Verify the manifest is actually an index (even with single image)
-	imageIndexInfo, err := imageRegistry.GetImageIndexInfo(baseImageRepo, tag)
+	imageIndexInfo, err := GetImageIndexInfo(imageRegistry, baseImageRepo, tag)
 	Expect(err).ToNot(HaveOccurred(), fmt.Sprintf("failed to get image index %s:%s", baseImageRepo, tag))
 	Expect(imageIndexInfo.MediaType).To(Equal("application/vnd.oci.image.index.v1+json"),
 		"Created reference is not an OCI image index")
@@ -680,12 +680,12 @@ func TestBuildImageIndex_ImagesWithTagAndDigest(t *testing.T) {
 	))
 
 	// Verify the index was pushed to registry
-	tagExists, err := imageRegistry.CheckTagExistence(baseImageRepo, tag)
+	tagExists, err := CheckTagExistence(imageRegistry, baseImageRepo, tag)
 	Expect(err).ToNot(HaveOccurred())
 	Expect(tagExists).To(BeTrue(), fmt.Sprintf("Expected %s to exist", indexImage))
 
 	// Verify the manifest is actually an index (multi-arch)
-	imageIndexInfo, err := imageRegistry.GetImageIndexInfo(baseImageRepo, tag)
+	imageIndexInfo, err := GetImageIndexInfo(imageRegistry, baseImageRepo, tag)
 	Expect(err).ToNot(HaveOccurred(), fmt.Sprintf("failed to get image index %s:%s", baseImageRepo, tag))
 	Expect(imageIndexInfo.MediaType).To(Equal("application/vnd.oci.image.index.v1+json"),
 		"Created reference is not an OCI image index")

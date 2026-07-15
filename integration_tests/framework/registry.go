@@ -3,6 +3,10 @@ package integration_tests_framework
 import (
 	"encoding/base64"
 	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+	"strings"
 )
 
 // https://github.com/podman-container-tools/container-libs/blob/b17b0a4c55bb953de8d783ea26534df22fdc9f2b/image/manifest/manifest.go#L56
@@ -36,10 +40,9 @@ type ImageRegistry interface {
 	// Returns path to the root CA certificate the registry is using (in case of self-signed certificate),
 	// empty string otherwise.
 	GetCaCertPath() string
-	// Returns true if given image exists in the test namespace of the registry.
-	CheckTagExistence(imageName, tag string) (bool, error)
-	// Return image index information, primarily the list of included manifests.
-	GetImageIndexInfo(imageName, tag string) (*ImageIndexManifest, error)
+	// Do the http request, return the results of [http.Client.Do].
+	// May also handle authentication automatically.
+	DoRequest(req *http.Request) (*http.Response, error)
 }
 
 type ImageIndexManifest struct {
@@ -71,4 +74,78 @@ func GenerateDockerAuthContentWithAliases(registries []string, login, password s
 	}
 	dockerconfig := dockerConfigJson{Auths: auths}
 	return json.Marshal(dockerconfig)
+}
+
+func stripRegistryDomain(imageName string) string {
+	parts := strings.Split(imageName, "/")
+	if len(parts) > 1 {
+		parts = parts[1:]
+	}
+	return strings.Join(parts, "/")
+}
+
+// Check if the given tag exists in the registry by sending
+// a HEAD request to the registry's manifest endpoint.
+func CheckTagExistence(registry ImageRegistry, imageName, tag string) (bool, error) {
+	imageName = stripRegistryDomain(imageName)
+
+	url := fmt.Sprintf("https://%s/v2/%s/manifests/%s", registry.GetRegistryDomain(), imageName, tag)
+	req, err := http.NewRequest("HEAD", url, nil)
+	if err != nil {
+		return false, err
+	}
+
+	req.Header["Accept"] = allContainerMediaTypes
+
+	resp, err := registry.DoRequest(req)
+	if err != nil {
+		return false, err
+	}
+	defer resp.Body.Close()
+
+	switch resp.StatusCode {
+	case http.StatusOK:
+		return true, nil
+	case http.StatusNotFound:
+		return false, nil
+	default:
+		return false, fmt.Errorf("unexpected response code (expected 200 or 404): %d", resp.StatusCode)
+	}
+}
+
+// Retrieve image index information by sending a GET request
+// to the registry's manifest endpoint.
+func GetImageIndexInfo(registry ImageRegistry, imageName, tag string) (*ImageIndexManifest, error) {
+	imageName = stripRegistryDomain(imageName)
+
+	url := fmt.Sprintf("https://%s/v2/%s/manifests/%s", registry.GetRegistryDomain(), imageName, tag)
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Accept", "application/vnd.oci.image.index.v1+json")
+	req.Header.Add("Accept", "application/vnd.docker.distribution.manifest.list.v2+json")
+
+	resp, err := registry.DoRequest(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("received non-200 response status: %s", resp.Status)
+	}
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("error reading response body: %v", err)
+	}
+
+	imageIndexInfo := &ImageIndexManifest{}
+	if err := json.Unmarshal(body, imageIndexInfo); err != nil {
+		return nil, fmt.Errorf("error unmarshaling response JSON: %v", err)
+	}
+	imageIndexInfo.RawManifest = body
+
+	return imageIndexInfo, nil
 }

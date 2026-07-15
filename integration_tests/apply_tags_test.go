@@ -93,7 +93,7 @@ func TestApplyTags(t *testing.T) {
 
 	// Check the result
 	for _, tag := range append(newTagsFromArg, newTagsFromLabel...) {
-		tagExists, err := imageRegistry.CheckTagExistence(imageRepoUrl, tag)
+		tagExists, err := CheckTagExistence(imageRegistry, imageRepoUrl, tag)
 		Expect(err).ToNot(HaveOccurred(), fmt.Sprintf("failed to check for %s tag existence", tag))
 		Expect(tagExists).To(BeTrue(), fmt.Sprintf("Expected %s:%s to exist", imageRepoUrl, tag))
 	}
@@ -156,13 +156,13 @@ func TestApplyTagsWithImageIndex(t *testing.T) {
 
 	// Check the result
 	for _, tag := range append(newTagsFromArg, newTagsFromLabel...) {
-		tagExists, err := imageRegistry.CheckTagExistence(imageRepoUrl, tag)
+		tagExists, err := CheckTagExistence(imageRegistry, imageRepoUrl, tag)
 		Expect(err).ToNot(HaveOccurred(), fmt.Sprintf("failed to check for %s tag existence", tag))
 		Expect(tagExists).To(BeTrue(), fmt.Sprintf("Expected %s:%s to exist", imageRepoUrl, tag))
 
 		// We need to be sure that the tag is applied to the image index, not a specific image.
 		// Because podman doesn't allow getting image index digest, check if the tag refers to the image index.
-		imageIndexInfo, err := imageRegistry.GetImageIndexInfo(imageRepoUrl, tag)
+		imageIndexInfo, err := GetImageIndexInfo(imageRegistry, imageRepoUrl, tag)
 		Expect(err).ToNot(HaveOccurred(), fmt.Sprintf("failed to get image index %s:%s", imageRepoUrl, tag))
 		Expect(imageIndexInfo.MediaType).To(BeElementOf([]string{
 			"application/vnd.oci.image.index.v1+json", "application/vnd.docker.distribution.manifest.list.v2+json"}),

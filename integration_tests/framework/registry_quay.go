@@ -1,13 +1,10 @@
 package integration_tests_framework
 
 import (
-	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"os"
 	"path"
-	"strings"
 
 	l "github.com/konflux-ci/konflux-build-cli/pkg/logger"
 	"github.com/sirupsen/logrus"
@@ -127,80 +124,7 @@ func (q *QuayRegistry) GetCaCertPath() string {
 	return ""
 }
 
-// CheckTagExistence quaries Quay API to check the tag existence.
-// Args example: quay.io/namespace/repo, tag
-func (q *QuayRegistry) CheckTagExistence(repo string, tag string) (bool, error) {
-	repoParts := strings.Split(repo, "/")
-	if len(repoParts) > 1 {
-		repoParts = repoParts[1:]
-	}
-	imageName := strings.Join(repoParts, "/")
-
-	url := fmt.Sprintf("https://%s/v2/%s/manifests/%s", q.GetRegistryDomain(), imageName, tag)
-	req, err := http.NewRequest("HEAD", url, nil)
-	if err != nil {
-		return false, err
-	}
-
-	req.Header["Accept"] = allContainerMediaTypes
-
-	resp, err := q.doRequest(req)
-	if err != nil {
-		return false, err
-	}
-	defer resp.Body.Close()
-
-	switch resp.StatusCode {
-	case http.StatusOK:
-		return true, nil
-	case http.StatusNotFound:
-		return false, nil
-	default:
-		return false, fmt.Errorf("unexpected response code (expected 200 or 404): %d", resp.StatusCode)
-	}
-}
-
-func (q *QuayRegistry) GetImageIndexInfo(repo, tag string) (*ImageIndexManifest, error) {
-	repoParts := strings.Split(repo, "/")
-	if len(repoParts) != 3 {
-		return nil, fmt.Errorf("invalid image format, expected quay.io/namespace/repo")
-	}
-	namespace := repoParts[1]
-	repository := repoParts[2]
-
-	url := fmt.Sprintf("https://%s/v2/%s/%s/manifests/%s", q.GetRegistryDomain(), namespace, repository, tag)
-	req, err := http.NewRequest("GET", url, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	req.Header.Add("Accept", "application/vnd.oci.image.index.v1+json")
-	req.Header.Add("Accept", "application/vnd.docker.distribution.manifest.list.v2+json")
-
-	resp, err := q.doRequest(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("received non-200 response status: %s", resp.Status)
-	}
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("error reading response body: %v", err)
-	}
-
-	imageIndexInfo := &ImageIndexManifest{}
-	if err := json.Unmarshal(body, imageIndexInfo); err != nil {
-		return nil, fmt.Errorf("error unmarshaling response JSON: %v", err)
-	}
-	imageIndexInfo.RawManifest = body
-
-	return imageIndexInfo, nil
-}
-
-func (q *QuayRegistry) doRequest(req *http.Request) (*http.Response, error) {
+func (q *QuayRegistry) DoRequest(req *http.Request) (*http.Response, error) {
 	client := &http.Client{}
 	return client.Do(req)
 }

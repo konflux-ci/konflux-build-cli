@@ -4,9 +4,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/base64"
-	"encoding/json"
 	"fmt"
-	"io"
 	"log"
 	"net/http"
 	"os"
@@ -148,7 +146,7 @@ func (z *ZotRegistry) WaitReady() error {
 
 	const maxTries = 15
 	for i := range maxTries {
-		resp, err := z.doRequest(req)
+		resp, err := z.DoRequest(req)
 		if err == nil {
 			resp.Body.Close()
 
@@ -192,81 +190,7 @@ func (z *ZotRegistry) GetCredentials() (string, string) {
 	return zotRegistryUser, zotRegistryPassword
 }
 
-// CheckTagExistence quaries Zot API to check the tag existence.
-// Args example: localhost:5000/image, tag
-func (z *ZotRegistry) CheckTagExistence(imageName, tag string) (bool, error) {
-	// Remove registry domain, e.g. localhost:5000/image -> image
-	repoParts := strings.Split(imageName, "/")
-	if len(repoParts) > 1 {
-		repoParts = repoParts[1:]
-	}
-	imageName = strings.Join(repoParts, "/")
-
-	url := fmt.Sprintf("https://%s/v2/%s/manifests/%s", z.GetRegistryDomain(), imageName, tag)
-	req, err := http.NewRequest("HEAD", url, nil)
-	if err != nil {
-		return false, err
-	}
-
-	req.Header["Accept"] = allContainerMediaTypes
-
-	resp, err := z.doRequest(req)
-	if err != nil {
-		return false, err
-	}
-	defer resp.Body.Close()
-
-	switch resp.StatusCode {
-	case http.StatusOK:
-		return true, nil
-	case http.StatusNotFound:
-		return false, nil
-	default:
-		return false, fmt.Errorf("unexpected response code (expected 200 or 404): %d", resp.StatusCode)
-	}
-}
-
-func (z *ZotRegistry) GetImageIndexInfo(imageName, tag string) (*ImageIndexManifest, error) {
-	// Remove registry domain, e.g. localhost:5000/image -> image
-	repoParts := strings.Split(imageName, "/")
-	if len(repoParts) > 1 {
-		repoParts = repoParts[1:]
-	}
-	imageName = strings.Join(repoParts, "/")
-
-	url := fmt.Sprintf("https://%s/v2/%s/manifests/%s", z.GetRegistryDomain(), imageName, tag)
-	req, err := http.NewRequest("GET", url, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	req.Header.Add("Accept", "application/vnd.oci.image.index.v1+json")
-	req.Header.Add("Accept", "application/vnd.docker.distribution.manifest.list.v2+json")
-
-	resp, err := z.doRequest(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("received non-200 response status: %s", resp.Status)
-	}
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("error reading response body: %v", err)
-	}
-
-	imageIndexInfo := &ImageIndexManifest{}
-	if err := json.Unmarshal(body, imageIndexInfo); err != nil {
-		return nil, fmt.Errorf("error unmarshaling response JSON: %v", err)
-	}
-	imageIndexInfo.RawManifest = body
-
-	return imageIndexInfo, nil
-}
-
-func (z *ZotRegistry) doRequest(req *http.Request) (*http.Response, error) {
+func (z *ZotRegistry) DoRequest(req *http.Request) (*http.Response, error) {
 	if _, _, ok := req.BasicAuth(); !ok {
 		username, password := z.GetCredentials()
 		req.SetBasicAuth(username, password)
