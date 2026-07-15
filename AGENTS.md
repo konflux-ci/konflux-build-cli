@@ -21,9 +21,9 @@ The commands should be able to run:
 ## Verification
 
 Run these commands before submitting changes:
-- `make unit-test` or `go test ./pkg/...` — run all unit tests
+- `make unit-test` — run all unit tests
 - `make lint` — run golangci-lint (installs automatically)
-- `make fmt` or `go fmt ./...` — format code
+- `make fmt` — format code
 
 ## References
 
