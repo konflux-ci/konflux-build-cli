@@ -238,6 +238,18 @@ func TestGitClone(t *testing.T) {
 				Expect(stderr).To(ContainSubstring("symlink"))
 			},
 		},
+		{
+			name: "clone fails with two conflicting submodules",
+			setup: func(t *testing.T, workspaceDir string) map[string]string {
+				return map[string]string{"revision": prepareBareRepoWithTwoSubmodules(t, workspaceDir)}
+			},
+			url:     "file:///workspace/repo.git",
+			args:    []string{"--fetch-tags=true"},
+			wantErr: true,
+			check: func(t *testing.T, workspaceDir, stdout, stderr string, _ map[string]string) {
+				Expect(stderr).To(ContainSubstring("not our ref"))
+			},
+		},
 	}
 
 	for _, tc := range tests {
@@ -254,6 +266,10 @@ func TestGitClone(t *testing.T) {
 			container := startGitCloneContainer(t, workspaceDir)
 
 			args := append([]string{"git-clone", "--url", tc.url, "--output-dir", "/workspace/out", "--ssl-verify=false"}, tc.args...)
+			if revision, ok := setupData["revision"]; ok {
+				args = append(args, "--revision", revision)
+			}
+
 			stdout, stderr, err := container.ExecuteBuildCliWithOutput(args...)
 
 			if tc.wantErr {
