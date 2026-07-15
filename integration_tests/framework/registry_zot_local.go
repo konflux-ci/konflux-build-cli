@@ -46,6 +46,7 @@ var _ ImageRegistry = &ZotRegistry{}
 type ZotRegistry struct {
 	container *TestRunnerContainer
 	logger    *logrus.Entry
+	client    *http.Client // cache the client to avoid re-parsing CA certs on every request
 
 	zotRegistryPort       string
 	dataDirPath           string
@@ -144,17 +145,10 @@ func (z *ZotRegistry) WaitReady() error {
 	if err != nil {
 		return err
 	}
-	username, password := z.GetCredentials()
-	req.SetBasicAuth(username, password)
-
-	client, err := z.createHttpClient()
-	if err != nil {
-		return err
-	}
 
 	const maxTries = 15
 	for i := range maxTries {
-		resp, err := client.Do(req)
+		resp, err := z.doRequest(req)
 		if err == nil {
 			resp.Body.Close()
 
@@ -213,15 +207,8 @@ func (z *ZotRegistry) CheckTagExistence(imageName, tag string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	username, password := z.GetCredentials()
-	req.SetBasicAuth(username, password)
 
-	client, err := z.createHttpClient()
-	if err != nil {
-		return false, err
-	}
-
-	resp, err := client.Do(req)
+	resp, err := z.doRequest(req)
 	if err != nil {
 		return false, err
 	}
@@ -266,18 +253,11 @@ func (z *ZotRegistry) GetImageIndexInfo(imageName, tag string) (*ImageIndexManif
 	if err != nil {
 		return nil, err
 	}
-	username, password := z.GetCredentials()
-	req.SetBasicAuth(username, password)
 
 	req.Header.Add("Accept", "application/vnd.oci.image.index.v1+json")
 	req.Header.Add("Accept", "application/vnd.docker.distribution.manifest.list.v2+json")
 
-	client, err := z.createHttpClient()
-	if err != nil {
-		return nil, err
-	}
-
-	resp, err := client.Do(req)
+	resp, err := z.doRequest(req)
 	if err != nil {
 		return nil, err
 	}
@@ -300,7 +280,25 @@ func (z *ZotRegistry) GetImageIndexInfo(imageName, tag string) (*ImageIndexManif
 	return imageIndexInfo, nil
 }
 
-func (z *ZotRegistry) createHttpClient() (*http.Client, error) {
+func (z *ZotRegistry) doRequest(req *http.Request) (*http.Response, error) {
+	if _, _, ok := req.BasicAuth(); !ok {
+		username, password := z.GetCredentials()
+		req.SetBasicAuth(username, password)
+	}
+
+	client, err := z.getHttpClient()
+	if err != nil {
+		return nil, err
+	}
+
+	return client.Do(req)
+}
+
+func (z *ZotRegistry) getHttpClient() (*http.Client, error) {
+	if z.client != nil {
+		return z.client, nil
+	}
+
 	caCert, err := os.ReadFile(z.rootCertPath)
 	if err != nil {
 		return nil, err
@@ -312,12 +310,12 @@ func (z *ZotRegistry) createHttpClient() (*http.Client, error) {
 	tlsConfig := &tls.Config{
 		RootCAs: caCertPool,
 	}
-	client := &http.Client{
+	z.client = &http.Client{
 		Transport: &http.Transport{
 			TLSClientConfig: tlsConfig,
 		},
 	}
-	return client, nil
+	return z.client, nil
 }
 
 // Prepare ensures all needed files for Zot registry are in place.
