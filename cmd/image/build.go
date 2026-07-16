@@ -105,9 +105,8 @@ Red Hat Subscription Management (RHSM) Handling:
       'auto' is the behavior described above (the default)
       'always' always mounts the certs, failing if they don't exist on the host
       'never' never mounts the certs
-
-Examples:
-  # Build using auto-detected Containerfile/Dockerfile in current directory
+`,
+	Example: `  # Build using auto-detected Containerfile/Dockerfile in current directory
   konflux-build-cli image build -t quay.io/myorg/myimage:latest
 
   # Build and push to registry
@@ -125,8 +124,7 @@ Examples:
     --secret-dirs /path/to/secrets1 src=/path/to/secrets2,name=certs
 
   # Build with additional buildah arguments
-  konflux-build-cli image build -t quay.io/myorg/myimage:latest -- --compat-volumes --force-rm
-`,
+  konflux-build-cli image build -t quay.io/myorg/myimage:latest -- --compat-volumes --force-rm`,
 	Run: func(cmd *cobra.Command, args []string) {
 		l.Logger.Debug("Starting build")
 		build, err := commands.NewBuild(cmd, args)
