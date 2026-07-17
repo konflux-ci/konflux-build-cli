@@ -1110,7 +1110,7 @@ RUN echo "test"
 			containerfilePath: containerfilePath,
 		}
 
-		err = c.writeBuildprobeYaml(outputPath)
+		err = c.writeBuildprobeYaml(outputPath, map[string]string{})
 		g.Expect(err).ToNot(HaveOccurred())
 
 		g.Expect(outputPath).To(BeAnExistingFile())
@@ -1134,7 +1134,7 @@ RUN echo "test"
 			containerfilePath: "/nonexistent/Containerfile",
 		}
 
-		err := c.writeBuildprobeYaml(outputPath)
+		err := c.writeBuildprobeYaml(outputPath, map[string]string{})
 		g.Expect(err).To(HaveOccurred())
 	})
 
@@ -1155,7 +1155,7 @@ RUN echo "test"
 		}
 
 		unwritablePath := "/nonexistent/directory/buildprobe.yaml"
-		err = c.writeBuildprobeYaml(unwritablePath)
+		err = c.writeBuildprobeYaml(unwritablePath, map[string]string{})
 		g.Expect(err).To(HaveOccurred())
 	})
 }
