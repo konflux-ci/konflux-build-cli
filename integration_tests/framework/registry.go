@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"slices"
 	"strings"
 
 	"github.com/konflux-ci/konflux-build-cli/integration_tests/constants"
@@ -115,9 +116,9 @@ func CheckTagExistence(registry ImageRegistry, imageName, tag string) (bool, err
 	}
 }
 
-// Retrieve image index information by sending a GET request
+// Get the raw image manifest by sending a GET request
 // to the registry's manifest endpoint.
-func GetImageIndexInfo(registry ImageRegistry, imageName, tag string) (*ImageIndexManifest, error) {
+func GetImageManifest(registry ImageRegistry, imageName, tag string) ([]byte, error) {
 	imageName = stripRegistryDomain(imageName)
 
 	url := fmt.Sprintf("https://%s/v2/%s/manifests/%s", registry.GetRegistryDomain(), imageName, tag)
@@ -126,8 +127,7 @@ func GetImageIndexInfo(registry ImageRegistry, imageName, tag string) (*ImageInd
 		return nil, err
 	}
 
-	req.Header.Add("Accept", constants.OCIImageIndex)
-	req.Header.Add("Accept", constants.DockerManifestList)
+	req.Header["Accept"] = allContainerMediaTypes
 
 	resp, err := registry.DoRequest(req)
 	if err != nil {
@@ -143,11 +143,27 @@ func GetImageIndexInfo(registry ImageRegistry, imageName, tag string) (*ImageInd
 		return nil, fmt.Errorf("error reading response body: %v", err)
 	}
 
+	return body, nil
+}
+
+// Retrieve image index information by sending a GET request
+// to the registry's manifest endpoint.
+func GetImageIndexInfo(registry ImageRegistry, imageName, tag string) (*ImageIndexManifest, error) {
+	body, err := GetImageManifest(registry, imageName, tag)
+	if err != nil {
+		return nil, fmt.Errorf("getting raw manifest: %w", err)
+	}
+
 	imageIndexInfo := &ImageIndexManifest{}
 	if err := json.Unmarshal(body, imageIndexInfo); err != nil {
 		return nil, fmt.Errorf("error unmarshaling response JSON: %v", err)
 	}
 	imageIndexInfo.RawManifest = body
+
+	indexMediaTypes := []string{constants.OCIImageIndex, constants.DockerManifestList}
+	if !slices.Contains(indexMediaTypes, imageIndexInfo.MediaType) {
+		return nil, fmt.Errorf("expected an OCI index / docker manifest list, got %s", imageIndexInfo.MediaType)
+	}
 
 	return imageIndexInfo, nil
 }
