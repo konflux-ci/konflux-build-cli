@@ -20,6 +20,7 @@ import (
 	"github.com/containers/image/v5/docker/reference"
 	capo "github.com/konflux-ci/capo/pkg"
 	capoContainerfile "github.com/konflux-ci/capo/pkg/containerfile"
+	"github.com/konflux-ci/capo/pkg/buildvars"
 	"github.com/konflux-ci/capo/pkg/probe"
 	"github.com/konflux-ci/capo/pkg/storageclient"
 	cliWrappers "github.com/konflux-ci/konflux-build-cli/pkg/cliwrappers"
@@ -2817,11 +2818,15 @@ func (c *Build) writeBuildprobeYaml(outputPath string) (err error) {
 	if c.buildinfoBuildContext != nil {
 		buildContexts[c.buildinfoBuildContext.Name] = c.buildinfoBuildContext.Location
 	}
+	buildArgs, err := buildvars.ParseAndMerge([]string{c.Params.BuildArgsFile}, c.Params.BuildArgs)
+	if err != nil {
+		return fmt.Errorf("Failed to parse Buildprobe args: %w", err)
+	}
 	opts := probe.ProbeOpts{
 		Tag:           tag,
 		Containerfile: containerfile,
 		Target:        c.Params.Target,
-		Args:          processKeyValueEnvs(c.Params.BuildArgs),
+		Args:          buildArgs,
 		EnvVars:       processKeyValueEnvs(c.Params.Envs),
 		BuildContexts: buildContexts,
 	}
@@ -2926,9 +2931,12 @@ func (c *Build) scanBuilderContent() (err error) {
 	if c.buildinfoBuildContext != nil {
 		buildContexts[c.buildinfoBuildContext.Name] = c.buildinfoBuildContext.Location
 	}
+	buildArgs, err := capoBuildvars.ParseAndMerge([]string{c.Params.BuildArgsFile}, c.Params.BuildArgs)
+	if err != nil {
+		return fmt.Errorf("Failed to parse Buildprobe args: %w", err)
+	}
 	cf, err := capoContainerfile.Parse(f, capoContainerfile.BuildOptions{
-		Args:             processKeyValueEnvs(c.Params.BuildArgs),
-		BuildArgFilePath: c.Params.BuildArgsFile,
+		Args:             buildArgs,
 		EnvVars:          processKeyValueEnvs(c.Params.Envs),
 		Target:           c.Params.Target,
 		BuildContexts:    buildContexts,

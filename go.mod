@@ -6,7 +6,7 @@ require (
 	github.com/containerd/platforms v1.0.0-rc.2
 	github.com/containers/image/v5 v5.36.2
 	github.com/keilerkonzept/dockerfile-json v1.2.2
-	github.com/konflux-ci/capo v0.3.0
+	github.com/konflux-ci/capo v0.4.0
 	github.com/moby/buildkit v0.25.1
 	github.com/onsi/gomega v1.38.2
 	github.com/opencontainers/go-digest v1.0.0
@@ -16,7 +16,6 @@ require (
 	github.com/sirupsen/logrus v1.9.4
 	github.com/spf13/cobra v1.10.2
 	github.com/vishvananda/netlink v1.3.1
-	go.podman.io/storage v1.63.0
 	go.yaml.in/yaml/v3 v3.0.4
 	golang.org/x/sys v0.44.0
 	gopkg.in/ini.v1 v1.67.3
@@ -280,7 +279,7 @@ require (
 	go.opentelemetry.io/otel/sdk/metric v1.36.0 // indirect
 	go.opentelemetry.io/otel/trace v1.36.0 // indirect
 	go.podman.io/image/v5 v5.38.0 // indirect
-	go.podman.io/storage v1.61.0 // indirect
+	go.podman.io/storage v1.63.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	go.yaml.in/yaml/v2 v2.4.3 // indirect
 	go4.org v0.0.0-20230225012048-214862532bf5 // indirect
