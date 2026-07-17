@@ -280,6 +280,7 @@ require (
 	go.opentelemetry.io/otel/sdk/metric v1.36.0 // indirect
 	go.opentelemetry.io/otel/trace v1.36.0 // indirect
 	go.podman.io/image/v5 v5.38.0 // indirect
+	go.podman.io/storage v1.61.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	go.yaml.in/yaml/v2 v2.4.3 // indirect
 	go4.org v0.0.0-20230225012048-214862532bf5 // indirect

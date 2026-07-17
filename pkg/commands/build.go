@@ -29,7 +29,6 @@ import (
 	"github.com/package-url/packageurl-go"
 	sloglogrus "github.com/samber/slog-logrus/v2"
 	"github.com/spf13/cobra"
-	"go.podman.io/storage"
 	"go.yaml.in/yaml/v3"
 
 	"github.com/containerd/platforms"
@@ -842,25 +841,23 @@ func (c *Build) run() error {
 	}
 
 	if c.Params.BuildprobeYamlOutput != "" {
-		if c.storageClient == nil {
-			storageOpts, err := storage.DefaultStoreOptions()
-			if err != nil {
-				return err
-			}
-			store, err := storage.GetStore(storageOpts)
-			if err != nil {
-				return err
-			}
+		func() {
+			// ensure this does not panic; buildprobe is not process-critical
 			defer func() {
-				if _, e := store.Shutdown(false); e != nil && err == nil {
-					err = e
+				if r := recover(); r != nil {
+					err = fmt.Errorf("buildprobe generation panicked: %v", r)
 				}
 			}()
-			c.storageClient = storageclient.NewBuildahClient(store)
-		}
-		if err := c.writeBuildprobeYaml(c.Params.BuildprobeYamlOutput); err != nil {
-			return err
-		}
+			if c.storageClient == nil {
+				c.storageClient, err = storageclient.DefaultBuildahClient()
+				if err != nil {
+					l.Logger.Errorf("Failed to set up storage client for Buildprobe: %v", err)
+				}
+			}
+			if err := c.writeBuildprobeYaml(c.Params.BuildprobeYamlOutput); err != nil {
+				l.Logger.Errorf("Buildprobe failed: %v", err)
+			}
+		}()
 	}
 
 	if c.Params.ContainerfileJsonOutput != "" {
@@ -2801,14 +2798,6 @@ func (c *Build) pushImage() (string, error) {
 }
 
 func (c *Build) writeBuildprobeYaml(outputPath string) (err error) {
-	// ensure this does not panic; buildprobe is not process-critical
-	defer func() {
-		if r := recover(); r != nil {
-			err = fmt.Errorf("buildprobe generation panicked: %v", r)
-		}
-	}()
-
-	buildArgs := processKeyValueEnvs(c.Params.BuildArgs)
 	// open the containerfile to read
 	containerfilePath := c.containerfilePath
 	if c.containerfileCopyPath != "" {
@@ -2824,11 +2813,17 @@ func (c *Build) writeBuildprobeYaml(outputPath string) (err error) {
 		}
 	}()
 	// run probe & save to file
+	buildContexts := map[string]string{}
+	if c.buildinfoBuildContext != nil {
+		buildContexts[c.buildinfoBuildContext.Name] = c.buildinfoBuildContext.Location
+	}
 	opts := probe.ProbeOpts{
 		Tag:           tag,
 		Containerfile: containerfile,
 		Target:        c.Params.Target,
-		Args:          buildArgs,
+		Args:          processKeyValueEnvs(c.Params.BuildArgs),
+		EnvVars:       processKeyValueEnvs(c.Params.Envs),
+		BuildContexts: buildContexts,
 	}
 	metadata, err := probe.Probe(opts, c.storageClient)
 	if err != nil {
