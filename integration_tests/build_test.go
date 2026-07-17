@@ -3,6 +3,7 @@ package integration_tests
 import (
 	"archive/tar"
 	"compress/gzip"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -440,6 +441,17 @@ func runBuildWithOutput(container *TestRunnerContainer, buildParams BuildParams)
 	return container.ExecuteCommandWithOutput(KonfluxBuildCli, args...)
 }
 
+type imageBuildResults struct {
+	ImageUrl string `json:"image_url"`
+	Digest   string `json:"digest"`
+}
+
+func parseResults(kbcStdout string) imageBuildResults {
+	var results imageBuildResults
+	Expect(json.Unmarshal([]byte(kbcStdout), &results)).To(Succeed())
+	return results
+}
+
 // buildahStepLine matches buildah's instruction echo lines.
 // The leading .* is necessary because these lines are prefixed with logger
 // metadata and the CLI's "buildah [stdout]" prefix. For multistage builds,
@@ -844,6 +856,10 @@ func readCycloneDX(path string) cyclonedxDoc {
 	return cyclonedxDoc
 }
 
+func digest(bytes []byte) string {
+	return fmt.Sprintf("sha256:%x", sha256.Sum256(bytes))
+}
+
 func TestBuild(t *testing.T) {
 	SetupGomega(t)
 
@@ -919,7 +935,7 @@ LABEL %s="1h"
 
 		container := setupBuildContainerWithCleanup(t, buildParams, imageRegistry)
 
-		err := runBuild(container, buildParams)
+		stdout, _, err := runBuildWithOutput(container, buildParams)
 		Expect(err).ToNot(HaveOccurred())
 
 		lastColon := strings.LastIndex(outputRef, ":")
@@ -933,6 +949,11 @@ LABEL %s="1h"
 		var manifest imageManifest
 		Expect(json.Unmarshal(manifestBytes, &manifest)).To(Succeed())
 		Expect(manifest.MediaType).To(Equal(constants.OCIImageManifest))
+
+		// Verify the returned results
+		results := parseResults(stdout)
+		Expect(results.ImageUrl).To(Equal(outputRef))
+		Expect(results.Digest).To(Equal(digest(manifestBytes)))
 	})
 
 	t.Run("BuildAndPushAdditionalTags", func(t *testing.T) {
@@ -961,17 +982,28 @@ LABEL %s="1h"
 
 		container := setupBuildContainerWithCleanup(t, buildParams, imageRegistry)
 
-		err := runBuild(container, buildParams)
+		stdout, _, err := runBuildWithOutput(container, buildParams)
 		Expect(err).ToNot(HaveOccurred())
+
+		digests := make(map[string]struct{})
 
 		for _, tag := range []string{mainTag, addTag1, addTag2} {
 			image := imageRepoUrl + ":" + tag
 			err = container.ExecuteCommand("buildah", "images", image)
 			Expect(err).ToNot(HaveOccurred(), fmt.Sprintf("Expected %s to exist in local buildah storage", image))
 
-			tagExists, err := CheckTagExistence(imageRegistry, imageRepoUrl, tag)
-			Expect(err).ToNot(HaveOccurred(), fmt.Sprintf("failed to check for %s tag existence", tag))
-			Expect(tagExists).To(BeTrue(), fmt.Sprintf("Expected %s to exist in registry", image))
+			manifestBytes, err := GetImageManifest(imageRegistry, imageRepoUrl, tag)
+			Expect(err).ToNot(HaveOccurred(), fmt.Sprintf("Expected %s:%s to exist in registry", imageRepoUrl, tag))
+
+			digests[digest(manifestBytes)] = struct{}{}
+		}
+
+		Expect(digests).To(HaveLen(1), "All the pushed images should have the same digest")
+
+		results := parseResults(stdout)
+		Expect(results.ImageUrl).To(Equal(imageRepoUrl + ":" + mainTag))
+		for actualDigest := range digests {
+			Expect(results.Digest).To(Equal(actualDigest))
 		}
 	})
 
@@ -1001,8 +1033,10 @@ LABEL %s="1h"
 
 		container := setupBuildContainerWithCleanup(t, buildParams, imageRegistry)
 
-		err := runBuild(container, buildParams)
+		stdout, _, err := runBuildWithOutput(container, buildParams)
 		Expect(err).ToNot(HaveOccurred())
+
+		digests := make(map[string]struct{})
 
 		for _, tag := range []string{mainTag, addTag} {
 			// Verify pushed image uses the docker format
@@ -1015,6 +1049,15 @@ LABEL %s="1h"
 			// ...but still uses the oci format locally
 			localManifest := getBuiltImageManifest(container, imageRepoUrl+":"+tag)
 			Expect(localManifest.MediaType).To(Equal(constants.OCIImageManifest))
+
+			digests[digest(manifestBytes)] = struct{}{}
+		}
+
+		Expect(digests).To(HaveLen(1), "All the pushed images should have the same digest")
+
+		results := parseResults(stdout)
+		for actualDigest := range digests {
+			Expect(results.Digest).To(Equal(actualDigest))
 		}
 	})
 
