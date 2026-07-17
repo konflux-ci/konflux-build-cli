@@ -15,9 +15,8 @@ var BuildImageIndexCmd = &cobra.Command{
 
 This command combines multiple container images into a single image index, enabling
 multi-platform container image support.
-
-Examples:
-  # Build an image index from multiple platform images
+`,
+	Example: `  # Build an image index from multiple platform images
   konflux-build-cli image build-image-index \
     --image quay.io/myorg/myapp:latest \
     --images quay.io/myorg/myapp@sha256:amd64digest... quay.io/myorg/myapp@sha256:arm64digest...
@@ -35,8 +34,7 @@ Examples:
     --result-path-image-digest /tekton/results/IMAGE_DIGEST \
     --result-path-image-url /tekton/results/IMAGE_URL \
     --result-path-image-ref /tekton/results/IMAGE_REF \
-    --result-path-images /tekton/results/IMAGES
-`,
+    --result-path-images /tekton/results/IMAGES`,
 	Run: func(cmd *cobra.Command, args []string) {
 		l.Logger.Debug("Starting build-image-index")
 		buildImageIndex, err := commands.NewBuildImageIndex(cmd)
