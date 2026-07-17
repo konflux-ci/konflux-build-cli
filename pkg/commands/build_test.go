@@ -475,6 +475,62 @@ func Test_Build_validateParams(t *testing.T) {
 			errExpected:  true,
 			errSubstring: "sbom-format must be 'cyclonedx' or 'spdx'",
 		},
+		{
+			name: "should allow push-format oci",
+			params: BuildParams{
+				OutputRef:  "quay.io/org/image:tag",
+				Context:    tempDir,
+				Push:       true,
+				PushFormat: "oci",
+				SBOMFormat: "spdx",
+			},
+			errExpected: false,
+		},
+		{
+			name: "should allow push-format docker",
+			params: BuildParams{
+				OutputRef:  "quay.io/org/image:tag",
+				Context:    tempDir,
+				Push:       true,
+				PushFormat: "docker",
+				SBOMFormat: "spdx",
+			},
+			errExpected: false,
+		},
+		{
+			name: "should allow empty push-format",
+			params: BuildParams{
+				OutputRef:  "quay.io/org/image:tag",
+				Context:    tempDir,
+				Push:       true,
+				PushFormat: "",
+				SBOMFormat: "spdx",
+			},
+			errExpected: false,
+		},
+		{
+			name: "should fail on invalid push-format",
+			params: BuildParams{
+				OutputRef:  "quay.io/org/image:tag",
+				Context:    tempDir,
+				Push:       true,
+				PushFormat: "invalid",
+				SBOMFormat: "spdx",
+			},
+			errExpected:  true,
+			errSubstring: "push-format must be 'oci' or 'docker'",
+		},
+		{
+			name: "should not fail on invalid push-format when push=false",
+			params: BuildParams{
+				OutputRef:  "quay.io/org/image:tag",
+				Context:    tempDir,
+				Push:       false,
+				PushFormat: "invalid",
+				SBOMFormat: "spdx",
+			},
+			errExpected: false,
+		},
 	}
 
 	for _, tc := range tests {
@@ -1440,6 +1496,7 @@ func Test_Build_Run(t *testing.T) {
 	t.Run("should build and push with additional tags", func(t *testing.T) {
 		beforeEach()
 		c.Params.AdditionalTags = []string{"v1", "v1.0.0"}
+		c.Params.PushFormat = "oci"
 
 		isBuildCalled := false
 		_mockBuildahCli.BuildFunc = func(args *cliwrappers.BuildahBuildArgs) error {
@@ -1455,6 +1512,7 @@ func Test_Build_Run(t *testing.T) {
 		pushedImages := []string{}
 		_mockBuildahCli.PushFunc = func(args *cliwrappers.BuildahPushArgs) (string, error) {
 			pushedImages = append(pushedImages, args.Image)
+			g.Expect(args.Format).To(Equal("oci"), "PushFormat must propagate to all Push calls")
 			return "sha256:1234567890abcdef", nil
 		}
 

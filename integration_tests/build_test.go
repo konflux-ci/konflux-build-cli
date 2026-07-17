@@ -22,6 +22,7 @@ import (
 
 	. "github.com/onsi/gomega"
 
+	"github.com/konflux-ci/konflux-build-cli/integration_tests/constants"
 	. "github.com/konflux-ci/konflux-build-cli/integration_tests/framework"
 	"github.com/konflux-ci/konflux-build-cli/testutil"
 )
@@ -39,6 +40,7 @@ type BuildParams struct {
 	Containerfile           string
 	OutputRef               string
 	Push                    bool
+	PushFormat              string
 	SecretDirs              []string
 	WorkdirMount            string
 	BuildArgs               []string
@@ -270,6 +272,9 @@ func runBuildWithOutput(container *TestRunnerContainer, buildParams BuildParams)
 	if buildParams.Push {
 		args = append(args, "--push")
 	}
+	if buildParams.PushFormat != "" {
+		args = append(args, "--push-format", buildParams.PushFormat)
+	}
 	// Add secret directories if provided
 	if len(buildParams.SecretDirs) > 0 {
 		args = append(args, "--secret-dirs")
@@ -489,6 +494,27 @@ func setupImageRegistry(t *testing.T) ImageRegistry {
 func writeContainerfile(contextDir, content string) {
 	err := os.WriteFile(path.Join(contextDir, "Containerfile"), []byte(content), 0644)
 	Expect(err).ToNot(HaveOccurred())
+}
+
+// Represents either an OCI manifest or a docker v2 manifest
+// (just the attributes we care about in the tests)
+type imageManifest struct {
+	MediaType string `json:"mediaType"`
+}
+
+func getBuiltImageManifest(container *TestRunnerContainer, imageRef string) imageManifest {
+	stdout, _, err := container.ExecuteCommandWithOutput("buildah", "inspect", imageRef)
+	Expect(err).ToNot(HaveOccurred())
+
+	var inspect struct {
+		Manifest string `json:"Manifest"`
+	}
+	Expect(json.Unmarshal([]byte(stdout), &inspect)).To(Succeed())
+
+	var manifest imageManifest
+	Expect(json.Unmarshal([]byte(inspect.Manifest), &manifest)).To(Succeed())
+
+	return manifest
 }
 
 type ociHistory struct {
@@ -899,9 +925,14 @@ LABEL %s="1h"
 		lastColon := strings.LastIndex(outputRef, ":")
 		tag := outputRef[lastColon+1:]
 
-		tagExists, err := CheckTagExistence(imageRegistry, imageRepoUrl, tag)
-		Expect(err).ToNot(HaveOccurred(), fmt.Sprintf("failed to check for %s tag existence", tag))
-		Expect(tagExists).To(BeTrue(), fmt.Sprintf("Expected %s to exist in registry", outputRef))
+		// Verify that the image exists in the registry
+		manifestBytes, err := GetImageManifest(imageRegistry, imageRepoUrl, tag)
+		Expect(err).ToNot(HaveOccurred(), fmt.Sprintf("Expected %s:%s to exist in registry", imageRepoUrl, tag))
+
+		// Verify that the pushed image is OCI by default
+		var manifest imageManifest
+		Expect(json.Unmarshal(manifestBytes, &manifest)).To(Succeed())
+		Expect(manifest.MediaType).To(Equal(constants.OCIImageManifest))
 	})
 
 	t.Run("BuildAndPushAdditionalTags", func(t *testing.T) {
@@ -941,6 +972,49 @@ LABEL %s="1h"
 			tagExists, err := CheckTagExistence(imageRegistry, imageRepoUrl, tag)
 			Expect(err).ToNot(HaveOccurred(), fmt.Sprintf("failed to check for %s tag existence", tag))
 			Expect(tagExists).To(BeTrue(), fmt.Sprintf("Expected %s to exist in registry", image))
+		}
+	})
+
+	t.Run("BuildAndPushDockerFormat", func(t *testing.T) {
+		SetupGomega(t)
+
+		imageRegistry := setupImageRegistry(t)
+
+		contextDir := setupTestContext(t)
+		writeContainerfile(contextDir, fmt.Sprintf(`
+FROM scratch
+LABEL %s="1h"
+`, QuayExpiresAfterLabelName))
+
+		imageRepoUrl := imageRegistry.GetTestNamespace() + "test-docker-format"
+
+		mainTag := GenerateUniqueTag(t)
+		addTag := mainTag + "-additional-1"
+
+		buildParams := BuildParams{
+			Context:        contextDir,
+			OutputRef:      imageRepoUrl + ":" + mainTag,
+			Push:           true,
+			PushFormat:     "docker",
+			AdditionalTags: []string{addTag},
+		}
+
+		container := setupBuildContainerWithCleanup(t, buildParams, imageRegistry)
+
+		err := runBuild(container, buildParams)
+		Expect(err).ToNot(HaveOccurred())
+
+		for _, tag := range []string{mainTag, addTag} {
+			// Verify pushed image uses the docker format
+			var remoteManifest imageManifest
+			manifestBytes, err := GetImageManifest(imageRegistry, imageRepoUrl, tag)
+			Expect(err).ToNot(HaveOccurred(), fmt.Sprintf("Expected %s:%s to exist in registry", imageRepoUrl, tag))
+			Expect(json.Unmarshal(manifestBytes, &remoteManifest)).To(Succeed())
+			Expect(remoteManifest.MediaType).To(Equal(constants.DockerManifestV2))
+
+			// ...but still uses the oci format locally
+			localManifest := getBuiltImageManifest(container, imageRepoUrl+":"+tag)
+			Expect(localManifest.MediaType).To(Equal(constants.OCIImageManifest))
 		}
 	})
 
