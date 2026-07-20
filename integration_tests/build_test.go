@@ -4371,9 +4371,9 @@ COPY --from=builder /opt/app /opt/app
 				"app/.dist-info/METADATA": "Name: app\nVersion: 1.2.3\n",
 			})
 			writeContainerfile(contextDir, `
-FROM `+baseImage+` AS builder
+FROM scratch AS builder
 COPY app /opt/app
-FROM `+baseImage+`
+FROM scratch
 COPY --from=builder /opt/app /opt/app
 `)
 
@@ -4406,8 +4406,8 @@ COPY --from=builder /opt/app /opt/app
 
 			contextDir := setupTestContext(t)
 			writeContainerfile(contextDir, `
-FROM `+baseImage+`
-RUN echo hello
+FROM scratch
+LABEL hello=hello
 `)
 			outputRef := "localhost/test-builder-metadata-single:" + GenerateUniqueTag(t)
 
@@ -4440,9 +4440,9 @@ RUN echo hello
 				"app/.dist-info/METADATA": "Name: app\nVersion: 1.2.3\n",
 			})
 			writeContainerfile(contextDir, `
-FROM `+baseImage+` AS builder
+FROM scratch AS builder
 COPY app /opt/app
-FROM `+baseImage+` AS middle
+FROM scratch AS middle
 COPY --from=builder /opt/app /opt/app
 FROM `+baseImage+` AS final
 RUN echo "this stage should be ignored"
@@ -4468,6 +4468,7 @@ RUN echo "this stage should be ignored"
 				Packages []struct {
 					PackageURL string `json:"purl"`
 					OriginType string `json:"origin_type"`
+					Pullspec   string `json:"pullspec"`
 					StageAlias string `json:"stage_alias"`
 				} `json:"packages"`
 			}
@@ -4476,6 +4477,7 @@ RUN echo "this stage should be ignored"
 			Expect(metadata.Packages).To(HaveLen(1))
 			Expect(metadata.Packages[0].PackageURL).To(Equal("pkg:pypi/app@1.2.3"))
 			Expect(metadata.Packages[0].OriginType).To(Equal("intermediate"))
+			Expect(metadata.Packages[0].Pullspec).To(Equal("scratch"))
 			Expect(metadata.Packages[0].StageAlias).To(Equal("builder"))
 		})
 
@@ -4487,9 +4489,9 @@ RUN echo "this stage should be ignored"
 				"app/.dist-info/METADATA": "Name: app\nVersion: 1.2.3\n",
 			})
 			writeContainerfile(contextDir, `
-FROM `+baseImage+` AS builder
+FROM scratch AS builder
 COPY app /opt/app
-FROM `+baseImage+`
+FROM scratch
 ARG SRC
 COPY --from=builder $SRC/app /opt/app
 `)
@@ -4535,9 +4537,9 @@ COPY --from=builder $SRC/app /opt/app
 				"build-args-file":         "SRC_PART_1=/o\nSRC_PART_2=pt",
 			})
 			writeContainerfile(contextDir, `
-FROM `+baseImage+` AS builder
+FROM scratch AS builder
 COPY app /opt/app
-FROM `+baseImage+`
+FROM scratch
 ARG SRC_PART_1
 ARG SRC_PART_2
 COPY --from=builder $SRC_PART_1$SRC_PART_2/app /opt/app
@@ -4583,9 +4585,9 @@ COPY --from=builder $SRC_PART_1$SRC_PART_2/app /opt/app
 				"app/.dist-info/METADATA": "Name: app\nVersion: 1.2.3\n",
 			})
 			writeContainerfile(contextDir, `
-FROM `+baseImage+` AS builder
+FROM scratch AS builder
 COPY app /opt/app
-FROM `+baseImage+`
+FROM scratch
 COPY --from=builder $SRC/app /opt/app
 `)
 
