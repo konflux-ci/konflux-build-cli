@@ -8,6 +8,7 @@ import (
 
 	. "github.com/onsi/gomega"
 
+	"github.com/konflux-ci/konflux-build-cli/integration_tests/constants"
 	. "github.com/konflux-ci/konflux-build-cli/integration_tests/framework"
 	"github.com/konflux-ci/konflux-build-cli/pkg/common"
 )
@@ -194,14 +195,14 @@ func TestBuildImageIndex_MultipleImages(t *testing.T) {
 	// Verify the manifest is actually an index (multi-arch)
 	imageIndexInfo, err := GetImageIndexInfo(imageRegistry, baseImageRepo, tag)
 	Expect(err).ToNot(HaveOccurred(), fmt.Sprintf("failed to get image index %s:%s", baseImageRepo, tag))
-	Expect(imageIndexInfo.MediaType).To(Equal("application/vnd.oci.image.index.v1+json"),
+	Expect(imageIndexInfo.MediaType).To(Equal(constants.OCIImageIndex),
 		"Created reference is not an OCI image index")
 	Expect(imageIndexInfo.Manifests).To(HaveLen(2))
 
 	// Verify platform manifests are OCI format and extract digests
 	obtainedDigests := make([]string, 0, 2)
 	for _, manifestInfo := range imageIndexInfo.Manifests {
-		Expect(manifestInfo.MediaType).To(Equal("application/vnd.oci.image.manifest.v1+json"))
+		Expect(manifestInfo.MediaType).To(Equal(constants.OCIImageManifest))
 		obtainedDigests = append(obtainedDigests, manifestInfo.Digest)
 	}
 
@@ -299,14 +300,14 @@ func TestBuildImageIndex_DockerFormat(t *testing.T) {
 	// Verify the manifest is actually a docker manifest list (not OCI)
 	imageIndexInfo, err := GetImageIndexInfo(imageRegistry, baseImageRepo, tag)
 	Expect(err).ToNot(HaveOccurred(), fmt.Sprintf("failed to get image index %s:%s", baseImageRepo, tag))
-	Expect(imageIndexInfo.MediaType).To(Equal("application/vnd.docker.distribution.manifest.list.v2+json"),
+	Expect(imageIndexInfo.MediaType).To(Equal(constants.DockerManifestList),
 		"Created reference is not a docker manifest list")
 	Expect(imageIndexInfo.Manifests).To(HaveLen(2))
 
 	// Verify platform manifests are also docker format
 	obtainedDigests := make([]string, 0, 2)
 	for _, manifestInfo := range imageIndexInfo.Manifests {
-		Expect(manifestInfo.MediaType).To(Equal("application/vnd.docker.distribution.manifest.v2+json"))
+		Expect(manifestInfo.MediaType).To(Equal(constants.DockerManifestV2))
 		obtainedDigests = append(obtainedDigests, manifestInfo.Digest)
 	}
 
@@ -418,12 +419,12 @@ func TestBuildImageIndex_SingleImageAlwaysBuildIndex(t *testing.T) {
 	// Verify the manifest is actually an index (even with single image)
 	imageIndexInfo, err := GetImageIndexInfo(imageRegistry, baseImageRepo, tag)
 	Expect(err).ToNot(HaveOccurred(), fmt.Sprintf("failed to get image index %s:%s", baseImageRepo, tag))
-	Expect(imageIndexInfo.MediaType).To(Equal("application/vnd.oci.image.index.v1+json"),
+	Expect(imageIndexInfo.MediaType).To(Equal(constants.OCIImageIndex),
 		"Created reference is not an OCI image index")
 	Expect(imageIndexInfo.Manifests).To(HaveLen(1))
 
 	// Verify platform manifest is OCI format
-	Expect(imageIndexInfo.Manifests[0].MediaType).To(Equal("application/vnd.oci.image.manifest.v1+json"))
+	Expect(imageIndexInfo.Manifests[0].MediaType).To(Equal(constants.OCIImageManifest))
 	Expect(imageIndexInfo.Manifests[0].Digest).To(Equal(digest))
 
 	// Verify the digest matches the actual manifest digest
@@ -687,14 +688,14 @@ func TestBuildImageIndex_ImagesWithTagAndDigest(t *testing.T) {
 	// Verify the manifest is actually an index (multi-arch)
 	imageIndexInfo, err := GetImageIndexInfo(imageRegistry, baseImageRepo, tag)
 	Expect(err).ToNot(HaveOccurred(), fmt.Sprintf("failed to get image index %s:%s", baseImageRepo, tag))
-	Expect(imageIndexInfo.MediaType).To(Equal("application/vnd.oci.image.index.v1+json"),
+	Expect(imageIndexInfo.MediaType).To(Equal(constants.OCIImageIndex),
 		"Created reference is not an OCI image index")
 	Expect(imageIndexInfo.Manifests).To(HaveLen(2))
 
 	// Verify platform manifests are OCI format and extract digests
 	obtainedDigests := make([]string, 0, 2)
 	for _, manifestInfo := range imageIndexInfo.Manifests {
-		Expect(manifestInfo.MediaType).To(Equal("application/vnd.oci.image.manifest.v1+json"))
+		Expect(manifestInfo.MediaType).To(Equal(constants.OCIImageManifest))
 		obtainedDigests = append(obtainedDigests, manifestInfo.Digest)
 	}
 

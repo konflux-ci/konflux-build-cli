@@ -7,16 +7,18 @@ import (
 	"io"
 	"net/http"
 	"strings"
+
+	"github.com/konflux-ci/konflux-build-cli/integration_tests/constants"
 )
 
 // https://github.com/podman-container-tools/container-libs/blob/b17b0a4c55bb953de8d783ea26534df22fdc9f2b/image/manifest/manifest.go#L56
 var allContainerMediaTypes = []string{
-	"application/vnd.oci.image.manifest.v1+json",
-	"application/vnd.docker.distribution.manifest.v2+json",
-	"application/vnd.docker.distribution.manifest.v1+prettyjws",
-	"application/vnd.docker.distribution.manifest.v1+json",
-	"application/vnd.docker.distribution.manifest.list.v2+json",
-	"application/vnd.oci.image.index.v1+json",
+	constants.OCIImageManifest,
+	constants.DockerManifestV2,
+	constants.DockerManifestV1JWS,
+	constants.DockerManifestV1,
+	constants.DockerManifestList,
+	constants.OCIImageIndex,
 }
 
 type ImageRegistry interface {
@@ -124,8 +126,8 @@ func GetImageIndexInfo(registry ImageRegistry, imageName, tag string) (*ImageInd
 		return nil, err
 	}
 
-	req.Header.Add("Accept", "application/vnd.oci.image.index.v1+json")
-	req.Header.Add("Accept", "application/vnd.docker.distribution.manifest.list.v2+json")
+	req.Header.Add("Accept", constants.OCIImageIndex)
+	req.Header.Add("Accept", constants.DockerManifestList)
 
 	resp, err := registry.DoRequest(req)
 	if err != nil {
