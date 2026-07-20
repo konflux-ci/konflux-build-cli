@@ -38,7 +38,9 @@ type GitCliInterface interface {
 	SetSparseCheckout(directories []string) error
 	// SubmoduleUpdate initializes and updates submodules. Runs: git submodule update --recursive [--init] --force [--depth=N] [-- paths...]
 	SubmoduleUpdate(init bool, depth int, paths []string) error
-	// FetchTags fetches all tags from the remote. Runs: git fetch --tags
+	// SubmoduleFetchTags fetches tags from all submodules. Runs: git submodule foreach --recursive git fetch --force origin refs/tags/*:refs/tags/*
+	SubmoduleFetchTags() error
+	// FetchTags fetches tags from the remote. Runs: git fetch --force origin refs/tags/*:refs/tags/* && git tag -l
 	FetchTags() ([]string, error)
 	// Log returns formatted git log output. Runs: git log [--pretty=<format>] [-N]
 	Log(format string, count int) (string, error)
@@ -106,7 +108,7 @@ func parseGitVersion(output string) ([3]int, error) {
 		return [3]int{}, fmt.Errorf("failed to parse git version from output: %q", output)
 	}
 	var version [3]int
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		v, err := strconv.Atoi(m[i+1])
 		if err != nil {
 			return [3]int{}, fmt.Errorf("failed to parse git version component %q: %w", m[i+1], err)
@@ -211,10 +213,10 @@ func (g *GitCli) RemoteAdd(name, url string) (string, error) {
 	return g.run("remote", "add", name, url)
 }
 
-// FetchTags fetches all tags from the remote and returns the list of tags.
-// Runs: git fetch --tags && git tag -l
+// FetchTags fetches tags from the remote.
+// Runs: git fetch --force origin refs/tags/*:refs/tags/* && git tag -l
 func (g *GitCli) FetchTags() ([]string, error) {
-	if _, err := g.run("fetch", "--tags"); err != nil {
+	if _, err := g.run("fetch", "--force", "origin", "refs/tags/*:refs/tags/*"); err != nil {
 		return nil, err
 	}
 
@@ -224,7 +226,7 @@ func (g *GitCli) FetchTags() ([]string, error) {
 	}
 
 	tags := []string{}
-	for _, tag := range strings.Split(stdout, "\n") {
+	for tag := range strings.SplitSeq(stdout, "\n") {
 		if tag != "" {
 			tags = append(tags, tag)
 		}
@@ -308,6 +310,14 @@ func (g *GitCli) SubmoduleUpdate(init bool, depth int, paths []string) error {
 	}
 
 	_, err := g.run(gitArgs...)
+	return err
+}
+
+// SubmoduleFetchTags fetches tags from all submodules.
+// Runs: git submodule foreach --recursive git fetch --force origin refs/tags/*:refs/tags/*
+func (g *GitCli) SubmoduleFetchTags() error {
+	fetchTagsCmd := "git fetch --force origin refs/tags/*:refs/tags/*"
+	_, err := g.run("submodule", "foreach", "--recursive", fetchTagsCmd)
 	return err
 }
 

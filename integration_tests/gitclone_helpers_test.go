@@ -12,7 +12,12 @@ import (
 // runGit runs a git command in dir and returns trimmed stdout.
 func runGit(t *testing.T, dir string, args ...string) string {
 	t.Helper()
-	fullArgs := append([]string{"-c", "safe.directory=" + dir}, args...)
+	fullArgs := append([]string{
+		"-c", "safe.directory=" + dir,
+		"-c", "commit.gpgsign=false",
+		"-c", "tag.gpgsign=false",
+	}, args...)
+
 	stdout, stderr, code, err := cliwrappers.NewCliExecutor().Execute(cliwrappers.Cmd{
 		Name: "git", Args: fullArgs, Dir: dir,
 	})
@@ -137,6 +142,66 @@ func prepareBareRepoWithFeatureBranch(t *testing.T, root string) {
 
 	bareCloneToPath(t, dir, filepath.Join(root, "merge-bare.git"))
 	_ = os.RemoveAll(dir)
+}
+
+func prepareBareRepoWithTwoSubmodules(t *testing.T, root string) string {
+	t.Helper()
+
+	// Create a submodule.
+	submoduleA := filepath.Join(root, "submodule-a")
+	initGitRepo(t, submoduleA)
+	if err := os.WriteFile(filepath.Join(submoduleA, "a.txt"), []byte("."), 0644); err != nil {
+		t.Fatal(err)
+	}
+	runGit(t, submoduleA, "add", "-A")
+	runGit(t, submoduleA, "commit", "-m", "initial commit")
+	runGit(t, submoduleA, "tag", "tag-submodule-a")
+	bareSubmoduleA := filepath.Join(root, "bare-submodule-a.git")
+	bareCloneToPath(t, submoduleA, bareSubmoduleA)
+
+	// Create another submodule.
+	submoduleB := filepath.Join(root, "submodule-b")
+	initGitRepo(t, submoduleB)
+	if err := os.WriteFile(filepath.Join(submoduleB, "b.txt"), []byte("."), 0644); err != nil {
+		t.Fatal(err)
+	}
+	runGit(t, submoduleB, "add", "-A")
+	runGit(t, submoduleB, "commit", "-m", "initial commit")
+	bareSubmoduleB := filepath.Join(root, "bare-submodule-b.git")
+	runGit(t, submoduleB, "tag", "tag-submodule-b")
+	bareCloneToPath(t, submoduleB, bareSubmoduleB)
+
+	// Create the base repo.
+	baseRepo := filepath.Join(root, "base")
+	initGitRepo(t, baseRepo)
+	if err := os.WriteFile(filepath.Join(baseRepo, "README.md"), []byte("# KBC"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	runGit(t, baseRepo, "add", "-A")
+	runGit(t, baseRepo, "commit", "-m", "first commit")
+	runGit(t, baseRepo, "tag", "tag-base-repo")
+
+	// Add the first submodule on main.
+	runGit(t, baseRepo, "-c", "protocol.file.allow=always", "submodule", "add", "../bare-submodule-a.git", "vendor")
+	runGit(t, baseRepo, "commit", "-m", "add first submodule")
+	revision := runGit(t, baseRepo, "rev-parse", "HEAD")
+
+	// Switch to a completely different branch.
+	runGit(t, baseRepo, "switch", "-c", "completely-different-branch")
+
+	// Add the second submodule.
+	runGit(t, baseRepo, "rm", "-f", "vendor")
+	err := os.RemoveAll(filepath.Join(baseRepo, ".git", "modules", "vendor"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	runGit(t, baseRepo, "-c", "protocol.file.allow=always", "submodule", "add", "../bare-submodule-b.git", "vendor")
+	runGit(t, baseRepo, "commit", "-m", "add second submodule")
+
+	// Clone the repo.
+	bareCloneToPath(t, baseRepo, filepath.Join(root, "repo.git"))
+	return revision
 }
 
 // prepareBareRepoWithExternalSymlink creates a bare repo containing a symlink pointing outside the repo.
