@@ -551,6 +551,7 @@ type Build struct {
 	parsedBuildahVersion []int
 
 	containerfilePath string
+	ignoreFilePath    string
 
 	// pre-computed buildah arguments
 	buildahSecrets        []cliWrappers.BuildahSecret
@@ -750,6 +751,7 @@ func (c *Build) run() error {
 	if err := c.detectContainerfile(); err != nil {
 		return err
 	}
+	c.detectIgnoreFile()
 
 	containerfile, err := c.parseContainerfile()
 	if err != nil {
@@ -986,6 +988,21 @@ func (c *Build) detectContainerfile() error {
 
 	c.containerfilePath = containerfile
 	return nil
+}
+
+// detectIgnoreFile looks for a per-Dockerfile ignore file next to the containerfile.
+// Buildah natively supports <Dockerfile>.containerignore and <Dockerfile>.dockerignore
+// but this association breaks when we copy the Dockerfile to a temp path for injection.
+// We detect it here and pass it explicitly via --ignorefile.
+func (c *Build) detectIgnoreFile() {
+	for _, suffix := range []string{".containerignore", ".dockerignore"} {
+		candidate := c.containerfilePath + suffix
+		if _, err := os.Stat(candidate); err == nil {
+			c.ignoreFilePath = candidate
+			l.Logger.Infof("Using per-Dockerfile ignore file: %s", candidate)
+			return
+		}
+	}
 }
 
 func (c *Build) setSecretArgs() error {
@@ -2583,6 +2600,7 @@ func (c *Build) buildImage() (err error) {
 
 	buildArgs := &cliWrappers.BuildahBuildArgs{
 		Containerfile:    containerfilePath,
+		IgnoreFile:       c.ignoreFilePath,
 		ContextDir:       c.effectiveContextDir(),
 		Tags:             c.allTags(),
 		Secrets:          c.buildahSecrets,
