@@ -997,10 +997,14 @@ func (c *Build) detectContainerfile() error {
 func (c *Build) detectIgnoreFile() {
 	for _, suffix := range []string{".containerignore", ".dockerignore"} {
 		candidate := c.containerfilePath + suffix
-		if _, err := os.Stat(candidate); err == nil {
+		_, err := os.Stat(candidate)
+		if err == nil {
 			c.ignoreFilePath = candidate
 			l.Logger.Infof("Using per-Dockerfile ignore file: %s", candidate)
 			return
+		}
+		if !errors.Is(err, os.ErrNotExist) {
+			l.Logger.Warnf("Could not check for ignore file %s: %s", candidate, err)
 		}
 	}
 }
