@@ -33,11 +33,21 @@ When asserting on build stderr in `image build` integration tests, call
 ## Renovate / MintMaker Configuration
 
 This repo uses MintMaker for dependency management. MintMaker provides a
-platform-level Renovate config that sets `gomod.packageRules`. In Renovate's
-config hierarchy, manager-level `packageRules` take precedence over global
-`packageRules`. When adding Go-module-specific rules, place them under
-`gomod.packageRules` in `renovate.json`, not in the top-level `packageRules`
-array.
+platform-level Renovate config that sets `gomod.packageRules`. During config
+merging, Renovate concatenates inherited and local rules and evaluates them
+in order. A rule in MintMaker's `gomod.packageRules` cannot be overridden by
+a rule in the repo's top-level `packageRules` — the override must also be in
+`gomod.packageRules`.
+
+**When to use `gomod.packageRules`:** Place a rule under `gomod.packageRules`
+when it needs to override a rule set by MintMaker at the same level. For
+example, MintMaker enables Go indirect dependency updates; this repo disables
+them, so the disable rule must be in `gomod.packageRules` to take effect.
+
+**When top-level `packageRules` is fine:** Rules that do not conflict with
+anything in MintMaker's `gomod.packageRules` work at the top level. For
+example, the Go minor/patch/digest grouping rules in this repo's top-level
+`packageRules` have no conflicting counterpart upstream.
 
 When modifying `renovate.json`, check the MintMaker config to understand which
 manager-level `packageRules` are set upstream.
