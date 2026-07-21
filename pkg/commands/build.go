@@ -204,12 +204,12 @@ var BuildParamsConfig = map[string]common.Parameter{
 		DefaultValue: "false",
 		Usage:        "In addition to OCI annotations and labels, also set projectatomic labels (https://github.com/projectatomic/ContainerApplicationGenericLabels).",
 	},
-	"buildprobe-yaml-output": {
-		Name:       "buildprobe-yaml-output",
+	"buildprobe-output": {
+		Name:       "buildprobe-output",
 		ShortName:  "",
 		EnvVarName: "KBC_BUILD_BUILDPROBE_YAML_OUTPUT",
 		TypeKind:   reflect.String,
-		Usage:      "Write the parsed Buildprobe YAML representation to this path.",
+		Usage:      "Write the parsed Buildprobe result to this path.",
 	},
 	"containerfile-json-output": {
 		Name:       "containerfile-json-output",
@@ -497,7 +497,7 @@ type BuildParams struct {
 	RewriteTimestamp           bool     `paramName:"rewrite-timestamp"`
 	QuayImageExpiresAfter      string   `paramName:"quay-image-expires-after"`
 	AddLegacyLabels            bool     `paramName:"add-legacy-labels"`
-	BuildprobeYamlOutput       string   `paramName:"buildprobe-yaml-output"`
+	BuildprobeYamlOutput       string   `paramName:"buildprobe-output"`
 	ContainerfileJsonOutput    string   `paramName:"containerfile-json-output"`
 	SkipInjections             bool     `paramName:"skip-injections"`
 	InheritLabels              bool     `paramName:"inherit-labels"`
@@ -834,9 +834,9 @@ func (c *Build) run() error {
 	}
 
 	if c.Params.BuildprobeYamlOutput != "" {
-		buildArgs, parseErr := c.parseAndMergeBuildArgs()
-		if parseErr != nil {
-			l.Logger.Errorf("Failed to parse build args: %v", parseErr)
+		buildArgs, err := c.parseAndMergeBuildArgs()
+		if err != nil {
+			l.Logger.Errorf("Failed to parse build args: %v", err)
 		} else {
 			buildprobeErr := c.runBuildprobe(c.Params.BuildprobeYamlOutput, buildArgs)
 
@@ -2802,6 +2802,11 @@ func (c *Build) parseAndMergeBuildArgs() (buildArgs map[string]string, err error
 }
 
 func (c *Build) runBuildprobe(outputPath string, buildArgs map[string]string) (err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = fmt.Errorf("buildprobe generation panicked: %v", r)
+		}
+	}()
 	// grab the StorageClient
 	if c.storageClient == nil {
 		c.storageClient, err = capoStorageClient.DefaultBuildahClient()
@@ -2813,11 +2818,6 @@ func (c *Build) runBuildprobe(outputPath string, buildArgs map[string]string) (e
 }
 
 func (c *Build) writeBuildprobeYaml(outputPath string, buildArgs map[string]string) (err error) {
-	defer func() {
-		if r := recover(); r != nil {
-			err = fmt.Errorf("buildprobe generation panicked: %v", r)
-		}
-	}()
 	// open the containerfile to read
 	containerfilePath := c.containerfilePath
 	if c.containerfileCopyPath != "" {
@@ -2851,10 +2851,10 @@ func (c *Build) writeBuildprobeYaml(outputPath string, buildArgs map[string]stri
 	}
 	yamlData, err := yaml.Marshal(metadata)
 	if err != nil {
-		return fmt.Errorf("failed to generate buildprobe yaml: %w", err)
+		return fmt.Errorf("failed to generate buildprobe file: %w", err)
 	}
 	if err := os.WriteFile(outputPath, yamlData, 0644); err != nil {
-		return fmt.Errorf("failed to write buildprobe yaml: %w", err)
+		return fmt.Errorf("failed to write buildprobe file: %w", err)
 	}
 	return nil
 }
