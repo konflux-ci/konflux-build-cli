@@ -1,13 +1,10 @@
 package integration_tests_framework
 
 import (
-	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"os"
 	"path"
-	"strings"
 
 	l "github.com/konflux-ci/konflux-build-cli/pkg/logger"
 	"github.com/sirupsen/logrus"
@@ -127,109 +124,7 @@ func (q *QuayRegistry) GetCaCertPath() string {
 	return ""
 }
 
-// CheckTagExistence quaries Quay API to check the tag existence.
-// Args example: quay.io/namespace/repo, tag
-func (q *QuayRegistry) CheckTagExistence(repo string, tag string) (bool, error) {
-	repoParts := strings.Split(repo, "/")
-	if len(repoParts) != 3 {
-		return false, fmt.Errorf("invalid image format, expected quay.io/namespace/repo")
-	}
-	namespace := repoParts[1]
-	repository := repoParts[2]
-
-	url := fmt.Sprintf("https://quay.io/api/v1/repository/%s/%s/tag/?specificTag=%s", namespace, repository, tag)
-	req, err := http.NewRequest("GET", url, nil)
-	if err != nil {
-		return false, err
-	}
-	username, password := q.GetCredentials()
-	req.SetBasicAuth(username, password)
-
+func (q *QuayRegistry) DoRequest(req *http.Request) (*http.Response, error) {
 	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		return false, err
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return false, err
-	}
-	if resp.StatusCode != http.StatusOK {
-		return false, fmt.Errorf("API request failed with status code %d", resp.StatusCode)
-	}
-
-	// {
-	//   "tags": [
-	//     {
-	//       "name": "tag-name",
-	//       "reversion": false,
-	//       "start_ts": 1756740181,
-	//       "manifest_digest": "sha256:33735bd63cf84d7e388d9f6d297d348c523c044410f553bd878c6d7829612735",
-	//       "is_manifest_list": false,
-	//       "size": 3623807,
-	//       "last_modified": "Mon, 01 Sep 2025 15:23:01 -0000"
-	//     }
-	//   ]
-	// }
-	type Tag struct {
-		Name string `json:"name"`
-	}
-	type Response struct {
-		Tags []Tag `json:"tags"`
-	}
-	var result Response
-	err = json.Unmarshal(body, &result)
-	if err != nil {
-		return false, err
-	}
-
-	for _, t := range result.Tags {
-		if t.Name == tag {
-			return true, nil
-		}
-	}
-	return false, nil
-}
-
-func (z *QuayRegistry) GetImageIndexInfo(repo, tag string) (*ImageIndexManifest, error) {
-	repoParts := strings.Split(repo, "/")
-	if len(repoParts) != 3 {
-		return nil, fmt.Errorf("invalid image format, expected quay.io/namespace/repo")
-	}
-	namespace := repoParts[1]
-	repository := repoParts[2]
-
-	url := fmt.Sprintf("https://%s/v2/%s/%s/manifests/%s", z.GetRegistryDomain(), namespace, repository, tag)
-	req, err := http.NewRequest("GET", url, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	req.Header.Add("Accept", "application/vnd.oci.image.index.v1+json")
-	req.Header.Add("Accept", "application/vnd.docker.distribution.manifest.list.v2+json")
-
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("received non-200 response status: %s", resp.Status)
-	}
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("error reading response body: %v", err)
-	}
-
-	imageIndexInfo := &ImageIndexManifest{}
-	if err := json.Unmarshal(body, imageIndexInfo); err != nil {
-		return nil, fmt.Errorf("error unmarshaling response JSON: %v", err)
-	}
-	imageIndexInfo.RawManifest = body
-
-	return imageIndexInfo, nil
+	return client.Do(req)
 }

@@ -899,7 +899,7 @@ LABEL %s="1h"
 		lastColon := strings.LastIndex(outputRef, ":")
 		tag := outputRef[lastColon+1:]
 
-		tagExists, err := imageRegistry.CheckTagExistence(imageRepoUrl, tag)
+		tagExists, err := CheckTagExistence(imageRegistry, imageRepoUrl, tag)
 		Expect(err).ToNot(HaveOccurred(), fmt.Sprintf("failed to check for %s tag existence", tag))
 		Expect(tagExists).To(BeTrue(), fmt.Sprintf("Expected %s to exist in registry", outputRef))
 	})
@@ -938,7 +938,7 @@ LABEL %s="1h"
 			err = container.ExecuteCommand("buildah", "images", image)
 			Expect(err).ToNot(HaveOccurred(), fmt.Sprintf("Expected %s to exist in local buildah storage", image))
 
-			tagExists, err := imageRegistry.CheckTagExistence(imageRepoUrl, tag)
+			tagExists, err := CheckTagExistence(imageRegistry, imageRepoUrl, tag)
 			Expect(err).ToNot(HaveOccurred(), fmt.Sprintf("failed to check for %s tag existence", tag))
 			Expect(tagExists).To(BeTrue(), fmt.Sprintf("Expected %s to exist in registry", image))
 		}

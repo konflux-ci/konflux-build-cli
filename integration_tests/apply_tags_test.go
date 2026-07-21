@@ -8,6 +8,7 @@ import (
 
 	. "github.com/onsi/gomega"
 
+	"github.com/konflux-ci/konflux-build-cli/integration_tests/constants"
 	. "github.com/konflux-ci/konflux-build-cli/integration_tests/framework"
 )
 
@@ -93,7 +94,7 @@ func TestApplyTags(t *testing.T) {
 
 	// Check the result
 	for _, tag := range append(newTagsFromArg, newTagsFromLabel...) {
-		tagExists, err := imageRegistry.CheckTagExistence(imageRepoUrl, tag)
+		tagExists, err := CheckTagExistence(imageRegistry, imageRepoUrl, tag)
 		Expect(err).ToNot(HaveOccurred(), fmt.Sprintf("failed to check for %s tag existence", tag))
 		Expect(tagExists).To(BeTrue(), fmt.Sprintf("Expected %s:%s to exist", imageRepoUrl, tag))
 	}
@@ -156,22 +157,22 @@ func TestApplyTagsWithImageIndex(t *testing.T) {
 
 	// Check the result
 	for _, tag := range append(newTagsFromArg, newTagsFromLabel...) {
-		tagExists, err := imageRegistry.CheckTagExistence(imageRepoUrl, tag)
+		tagExists, err := CheckTagExistence(imageRegistry, imageRepoUrl, tag)
 		Expect(err).ToNot(HaveOccurred(), fmt.Sprintf("failed to check for %s tag existence", tag))
 		Expect(tagExists).To(BeTrue(), fmt.Sprintf("Expected %s:%s to exist", imageRepoUrl, tag))
 
 		// We need to be sure that the tag is applied to the image index, not a specific image.
 		// Because podman doesn't allow getting image index digest, check if the tag refers to the image index.
-		imageIndexInfo, err := imageRegistry.GetImageIndexInfo(imageRepoUrl, tag)
+		imageIndexInfo, err := GetImageIndexInfo(imageRegistry, imageRepoUrl, tag)
 		Expect(err).ToNot(HaveOccurred(), fmt.Sprintf("failed to get image index %s:%s", imageRepoUrl, tag))
 		Expect(imageIndexInfo.MediaType).To(BeElementOf([]string{
-			"application/vnd.oci.image.index.v1+json", "application/vnd.docker.distribution.manifest.list.v2+json"}),
+			constants.OCIImageIndex, constants.DockerManifestList}),
 			"Created reference is not an image index")
 		Expect(imageIndexInfo.Manifests).To(HaveLen(len(arches)))
 		obtainedDigests := make([]string, 0, len(arches))
 		for _, manifestInfo := range imageIndexInfo.Manifests {
 			Expect(manifestInfo.MediaType).To(BeElementOf([]string{
-				"application/vnd.oci.image.manifest.v1+json", "application/vnd.docker.distribution.manifest.v2+json"}))
+				constants.OCIImageManifest, constants.DockerManifestV2}))
 			obtainedDigests = append(obtainedDigests, manifestInfo.Digest)
 		}
 		// Check that all image manifests included in the image index match.
