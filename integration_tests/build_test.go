@@ -4392,6 +4392,7 @@ COPY --from=builder /opt/app /opt/app
 			buildParams := BuildParams{
 				Context:               contextDir,
 				OutputRef:             outputRef,
+				BuildprobeYamlOutput:  "/workspace/buildprobe.yaml",
 				BuilderMetadataOutput: "/workspace/builder-metadata.json",
 			}
 
@@ -4438,6 +4439,7 @@ COPY --from=builder /opt/app /opt/app
 			buildParams := BuildParams{
 				Context:               contextDir,
 				OutputRef:             outputRef,
+				BuildprobeYamlOutput:  "/workspace/buildprobe.yaml",
 				BuilderMetadataOutput: "/workspace/builder-metadata.json",
 				SyftSelectCatalogers:  "-python-installed-package-cataloger",
 			}
@@ -4470,6 +4472,7 @@ RUN echo hello
 			buildParams := BuildParams{
 				Context:               contextDir,
 				OutputRef:             outputRef,
+				BuildprobeYamlOutput:  "/workspace/buildprobe.yaml",
 				BuilderMetadataOutput: "/workspace/builder-metadata.json",
 			}
 
@@ -4510,6 +4513,7 @@ RUN echo "this stage should be ignored"
 				Context:               contextDir,
 				OutputRef:             outputRef,
 				Target:                "middle",
+				BuildprobeYamlOutput:  "/workspace/buildprobe.yaml",
 				BuilderMetadataOutput: "/workspace/builder-metadata.json",
 			}
 
@@ -4556,6 +4560,7 @@ COPY --from=builder $SRC/app /opt/app
 				Context:               contextDir,
 				OutputRef:             outputRef,
 				BuildArgs:             []string{"SRC=/opt"},
+				BuildprobeYamlOutput:  "/workspace/buildprobe.yaml",
 				BuilderMetadataOutput: "/workspace/builder-metadata.json",
 			}
 
@@ -4605,6 +4610,7 @@ COPY --from=builder $SRC_PART_1$SRC_PART_2/app /opt/app
 				Context:               contextDir,
 				OutputRef:             outputRef,
 				BuildArgsFile:         "/workspace/build-args-file",
+				BuildprobeYamlOutput:  "/workspace/buildprobe.yaml",
 				BuilderMetadataOutput: "/workspace/builder-metadata.json",
 			}
 
@@ -4651,6 +4657,7 @@ COPY --from=builder $SRC/app /opt/app
 				Context:               contextDir,
 				OutputRef:             outputRef,
 				Envs:                  []string{"SRC=/opt"},
+				BuildprobeYamlOutput:  "/workspace/buildprobe.yaml",
 				BuilderMetadataOutput: "/workspace/builder-metadata.json",
 			}
 

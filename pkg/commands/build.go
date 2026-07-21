@@ -833,33 +833,19 @@ func (c *Build) run() error {
 		c.Results.Digest = digest
 	}
 
-	if c.Params.BuildprobeYamlOutput != "" || c.Params.BuilderMetadataOutput != "" {
-		buildArgs, parseErr := capoBuildvars.ParseAndMerge([]string{c.Params.BuildArgsFile}, c.Params.BuildArgs)
+	if c.Params.BuildprobeYamlOutput != "" {
+		buildArgs, parseErr := c.parseAndMergeBuildArgs()
 		if parseErr != nil {
 			l.Logger.Errorf("Failed to parse build args: %v", parseErr)
 		} else {
-			if c.Params.BuildprobeYamlOutput != "" {
-				func() {
-					// ensure this does not panic; buildprobe is not process-critical
-					defer func() {
-						if r := recover(); r != nil {
-							err = fmt.Errorf("buildprobe generation panicked: %v", r)
-						}
-					}()
-					if c.storageClient == nil {
-						c.storageClient, err = capoStorageClient.DefaultBuildahClient()
-						if err != nil {
-							l.Logger.Errorf("Failed to set up storage client for Buildprobe: %v", err)
-						}
-					}
-					if err := c.writeBuildprobeYaml(c.Params.BuildprobeYamlOutput, buildArgs); err != nil {
-						l.Logger.Errorf("Buildprobe failed: %v", err)
-					}
-				}()
+			buildprobeErr := c.runBuildprobe(c.Params.BuildprobeYamlOutput, buildArgs)
+
+			if buildprobeErr != nil && c.Params.BuilderMetadataOutput != "" {
+				l.Logger.Warnf("Skipping builder content scan: buildprobe failed: %v", buildprobeErr)
 			}
-			if c.Params.BuilderMetadataOutput != "" {
-				if err := c.scanBuilderContent(buildArgs); err != nil {
-					l.Logger.Errorf("Builder content scanning failed: %v", err)
+			if buildprobeErr == nil && c.Params.BuilderMetadataOutput != "" {
+				if capoErr := c.scanBuilderContent(buildArgs); capoErr != nil {
+					l.Logger.Errorf("Builder content scanning failed: %v", capoErr)
 				}
 			}
 		}
@@ -2802,7 +2788,36 @@ func (c *Build) pushImage() (string, error) {
 	return digest, nil
 }
 
+func (c *Build) parseAndMergeBuildArgs() (buildArgs map[string]string, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = fmt.Errorf("panicked parsing build args for builder content: %v", r)
+		}
+	}()
+	var buildArgFiles []string
+	if c.Params.BuildArgsFile != "" {
+		buildArgFiles = []string{c.Params.BuildArgsFile}
+	}
+	return capoBuildvars.ParseAndMerge(buildArgFiles, c.Params.BuildArgs)
+}
+
+func (c *Build) runBuildprobe(outputPath string, buildArgs map[string]string) (err error) {
+	// grab the StorageClient
+	if c.storageClient == nil {
+		c.storageClient, err = capoStorageClient.DefaultBuildahClient()
+		if err != nil {
+			return fmt.Errorf("failed to set up storage client for buildprobe: %v", err)
+		}
+	}
+	return c.writeBuildprobeYaml(outputPath, buildArgs)
+}
+
 func (c *Build) writeBuildprobeYaml(outputPath string, buildArgs map[string]string) (err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = fmt.Errorf("buildprobe generation panicked: %v", r)
+		}
+	}()
 	// open the containerfile to read
 	containerfilePath := c.containerfilePath
 	if c.containerfileCopyPath != "" {
