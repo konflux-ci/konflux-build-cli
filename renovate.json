@@ -27,6 +27,11 @@
   },
   "packageRules": [
     {
+      "description": "Follow Golang version tags (1.x), not RHEL version tags (10.x)",
+      "matchPackageNames": ["registry.access.redhat.com/ubi10/go-toolset"],
+      "allowedVersions": "< 2.0"
+    },
+    {
       "description": "Group task-runner updates",
       "matchPackageNames": ["quay.io/konflux-ci/task-runner"],
       "groupName": "task-runner"
