@@ -3,7 +3,7 @@ module github.com/konflux-ci/konflux-build-cli
 go 1.25.5
 
 require (
-	github.com/containerd/platforms v1.0.0-rc.2
+	github.com/containerd/platforms v1.0.0-rc.4
 	github.com/containers/image/v5 v5.36.2
 	github.com/keilerkonzept/dockerfile-json v1.2.2
 	github.com/konflux-ci/capo v0.3.0
