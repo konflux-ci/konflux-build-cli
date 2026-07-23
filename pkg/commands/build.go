@@ -751,7 +751,6 @@ func (c *Build) run() error {
 	if err := c.detectContainerfile(); err != nil {
 		return err
 	}
-	c.detectIgnoreFile()
 
 	containerfile, err := c.parseContainerfile()
 	if err != nil {
@@ -987,26 +986,28 @@ func (c *Build) detectContainerfile() error {
 	}
 
 	c.containerfilePath = containerfile
-	return nil
-}
 
-// detectIgnoreFile looks for a per-Dockerfile ignore file next to the containerfile.
-// Buildah natively supports <Dockerfile>.containerignore and <Dockerfile>.dockerignore
-// but this association breaks when we copy the Dockerfile to a temp path for injection.
-// We detect it here and pass it explicitly via --ignorefile.
-func (c *Build) detectIgnoreFile() {
+	// Detect per-containerfile ignore files (<containerfile>.containerignore or
+	// <containerfile>.dockerignore). Buildah handles these natively, but the
+	// association breaks when we copy the containerfile to a temp path for
+	// label/ICM injection. We detect the companion file here and later pass it
+	// explicitly via --ignorefile. Root-level .containerignore/.dockerignore
+	// files don't need this treatment because they are resolved relative to the
+	// context directory, which is not affected by the copy.
 	for _, suffix := range []string{".containerignore", ".dockerignore"} {
 		candidate := c.containerfilePath + suffix
 		_, err := os.Stat(candidate)
 		if err == nil {
 			c.ignoreFilePath = candidate
-			l.Logger.Infof("Using per-Dockerfile ignore file: %s", candidate)
-			return
+			l.Logger.Infof("Using per-containerfile ignore file: %s", candidate)
+			break
 		}
 		if !errors.Is(err, os.ErrNotExist) {
 			l.Logger.Warnf("Could not check for ignore file %s: %s", candidate, err)
 		}
 	}
+
+	return nil
 }
 
 func (c *Build) setSecretArgs() error {

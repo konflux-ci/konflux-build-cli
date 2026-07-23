@@ -86,12 +86,9 @@ type BuildahBuildArgs struct {
 	Ulimits          []string
 	SaveStages       bool
 	StageLabels      bool
-	// IgnoreFile overrides buildah's ignore file discovery with an explicit path.
-	// Needed when the Dockerfile is copied to a temp path (e.g. for label injection),
-	// which breaks buildah's native <Dockerfile>.containerignore/.dockerignore lookup.
-	IgnoreFile string
-	ExtraArgs  []string
-	Wrapper    *WrapperCmd
+	IgnoreFile       string
+	ExtraArgs        []string
+	Wrapper          *WrapperCmd
 }
 
 type BuildahSecret struct {
