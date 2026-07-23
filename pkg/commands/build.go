@@ -19,7 +19,10 @@ import (
 
 	"github.com/containers/image/v5/docker/reference"
 	capo "github.com/konflux-ci/capo/pkg"
+	capoBuildvars "github.com/konflux-ci/capo/pkg/buildvars"
 	capoContainerfile "github.com/konflux-ci/capo/pkg/containerfile"
+	capoProbe "github.com/konflux-ci/capo/pkg/probe"
+	capoStorageClient "github.com/konflux-ci/capo/pkg/storageclient"
 	cliWrappers "github.com/konflux-ci/konflux-build-cli/pkg/cliwrappers"
 	"github.com/konflux-ci/konflux-build-cli/pkg/common"
 	dfeditor "github.com/konflux-ci/konflux-build-cli/pkg/common/containerfile_editor"
@@ -27,6 +30,7 @@ import (
 	"github.com/package-url/packageurl-go"
 	sloglogrus "github.com/samber/slog-logrus/v2"
 	"github.com/spf13/cobra"
+	"go.yaml.in/yaml/v3"
 
 	"github.com/containerd/platforms"
 	"github.com/keilerkonzept/dockerfile-json/pkg/buildargs"
@@ -206,6 +210,13 @@ var BuildParamsConfig = map[string]common.Parameter{
 		TypeKind:     reflect.Bool,
 		DefaultValue: "false",
 		Usage:        "In addition to OCI annotations and labels, also set projectatomic labels (https://github.com/projectatomic/ContainerApplicationGenericLabels).",
+	},
+	"buildprobe-output": {
+		Name:       "buildprobe-output",
+		ShortName:  "",
+		EnvVarName: "KBC_BUILD_BUILDPROBE_YAML_OUTPUT",
+		TypeKind:   reflect.String,
+		Usage:      "Write the parsed Buildprobe result to this path.",
 	},
 	"containerfile-json-output": {
 		Name:       "containerfile-json-output",
@@ -494,6 +505,7 @@ type BuildParams struct {
 	RewriteTimestamp           bool     `paramName:"rewrite-timestamp"`
 	QuayImageExpiresAfter      string   `paramName:"quay-image-expires-after"`
 	AddLegacyLabels            bool     `paramName:"add-legacy-labels"`
+	BuildprobeYamlOutput       string   `paramName:"buildprobe-output"`
 	ContainerfileJsonOutput    string   `paramName:"containerfile-json-output"`
 	SkipInjections             bool     `paramName:"skip-injections"`
 	InheritLabels              bool     `paramName:"inherit-labels"`
@@ -580,6 +592,8 @@ type Build struct {
 	hostEntitlements  string
 	hostConsumerCerts string
 	hostRHSMcaCerts   string
+
+	storageClient capoStorageClient.Client
 }
 
 func NewBuild(cmd *cobra.Command, extraArgs []string) (*Build, error) {
@@ -827,9 +841,21 @@ func (c *Build) run() error {
 		c.Results.Digest = digest
 	}
 
-	if c.Params.BuilderMetadataOutput != "" {
-		if err := c.scanBuilderContent(); err != nil {
-			l.Logger.Errorf("Builder content scanning failed: %v", err)
+	if c.Params.BuildprobeYamlOutput != "" {
+		buildArgs, err := c.parseAndMergeBuildArgs()
+		if err != nil {
+			l.Logger.Errorf("Failed to parse build args: %v", err)
+		} else {
+			buildprobeErr := c.runBuildprobe(c.Params.BuildprobeYamlOutput, buildArgs)
+
+			if buildprobeErr != nil && c.Params.BuilderMetadataOutput != "" {
+				l.Logger.Warnf("Skipping builder content scan: buildprobe failed: %v", buildprobeErr)
+			}
+			if buildprobeErr == nil && c.Params.BuilderMetadataOutput != "" {
+				if capoErr := c.scanBuilderContent(buildArgs); capoErr != nil {
+					l.Logger.Errorf("Builder content scanning failed: %v", capoErr)
+				}
+			}
 		}
 	}
 
@@ -2783,6 +2809,78 @@ func (c *Build) pushImage() (string, error) {
 	return digest, nil
 }
 
+func (c *Build) parseAndMergeBuildArgs() (buildArgs map[string]string, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = fmt.Errorf("panicked parsing build args for builder content: %v", r)
+		}
+	}()
+	var buildArgFiles []string
+	if c.Params.BuildArgsFile != "" {
+		buildArgFiles = []string{c.Params.BuildArgsFile}
+	}
+	return capoBuildvars.ParseAndMerge(buildArgFiles, c.Params.BuildArgs)
+}
+
+func (c *Build) runBuildprobe(outputPath string, buildArgs map[string]string) (err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = fmt.Errorf("buildprobe generation panicked: %v", r)
+		}
+	}()
+	// grab the StorageClient
+	if c.storageClient == nil {
+		c.storageClient, err = capoStorageClient.DefaultBuildahClient()
+		if err != nil {
+			return fmt.Errorf("failed to set up storage client for buildprobe: %v", err)
+		}
+	}
+	return c.writeBuildprobeYaml(outputPath, buildArgs)
+}
+
+func (c *Build) writeBuildprobeYaml(outputPath string, buildArgs map[string]string) (err error) {
+	// open the containerfile to read
+	containerfilePath := c.containerfilePath
+	if c.containerfileCopyPath != "" {
+		containerfilePath = c.containerfileCopyPath
+	}
+	containerfile, err := os.OpenFile(filepath.Clean(containerfilePath), os.O_RDONLY, 0)
+	if err != nil {
+		return fmt.Errorf("failed to open containerfile: %w", err)
+	}
+	defer func() {
+		if e := containerfile.Close(); e != nil && err == nil {
+			err = e
+		}
+	}()
+	// run probe & save to file
+	buildContexts := map[string]string{}
+	if c.buildinfoBuildContext != nil {
+		buildContexts[c.buildinfoBuildContext.Name] = c.buildinfoBuildContext.Location
+	}
+	metadata, err := capoProbe.Probe(
+		c.Params.OutputRef,
+		containerfile,
+		c.storageClient,
+		capoProbe.WithTarget(c.Params.Target),
+		capoProbe.WithArgs(buildArgs),
+		capoProbe.WithEnvVars(processKeyValueEnvs(c.Params.Envs)),
+		capoProbe.WithBuildContexts(buildContexts),
+		capoProbe.WithSkipUnusedStages(c.Params.SkipUnusedStages),
+	)
+	if err != nil {
+		return fmt.Errorf("failed to probe containerfile: %w", err)
+	}
+	yamlData, err := yaml.Marshal(metadata)
+	if err != nil {
+		return fmt.Errorf("failed to generate buildprobe file: %w", err)
+	}
+	if err := os.WriteFile(outputPath, yamlData, 0644); err != nil {
+		return fmt.Errorf("failed to write buildprobe file: %w", err)
+	}
+	return nil
+}
+
 func (c *Build) writeContainerfileJson(containerfile *dockerfile.Dockerfile, outputPath string) error {
 	l.Logger.Infof("Writing parsed Containerfile to: %s", outputPath)
 
@@ -2833,7 +2931,7 @@ func (c *Build) writeResolvedBaseImages(pulledImages []BaseImage, outputPath str
 // The output is consumed by mobster (in a separate Tekton step) for Contextual
 // SBOM builder content contextualization - reparenting SPDX CONTAINS
 // relationships from the final image to their origin builder/intermediate images.
-func (c *Build) scanBuilderContent() (err error) {
+func (c *Build) scanBuilderContent(buildArgs map[string]string) (err error) {
 	// Capo must never block the build - recover from panics and return as error.
 	defer func() {
 		if r := recover(); r != nil {
@@ -2871,11 +2969,10 @@ func (c *Build) scanBuilderContent() (err error) {
 		buildContexts[c.buildinfoBuildContext.Name] = c.buildinfoBuildContext.Location
 	}
 	cf, err := capoContainerfile.Parse(f, capoContainerfile.BuildOptions{
-		Args:             processKeyValueEnvs(c.Params.BuildArgs),
-		BuildArgFilePath: c.Params.BuildArgsFile,
-		EnvVars:          processKeyValueEnvs(c.Params.Envs),
-		Target:           c.Params.Target,
-		BuildContexts:    buildContexts,
+		Args:          buildArgs,
+		EnvVars:       processKeyValueEnvs(c.Params.Envs),
+		Target:        c.Params.Target,
+		BuildContexts: buildContexts,
 	})
 	if err != nil {
 		return fmt.Errorf("parsing containerfile with capo: %w", err)
