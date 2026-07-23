@@ -92,6 +92,13 @@ var BuildParamsConfig = map[string]common.Parameter{
 		DefaultValue: "false",
 		Usage:        "Push the built image (and its additional tags, if any) to the registry.",
 	},
+	"push-format": {
+		Name:       "push-format",
+		EnvVarName: "KBC_BUILD_PUSH_FORMAT",
+		TypeKind:   reflect.String,
+		Usage: "Manifest type to use when pushing the image (oci or docker). No effect without --push.\n" +
+			"Defaults to the type of the built image, which defaults to oci.",
+	},
 	"secret-dirs": {
 		Name:       "secret-dirs",
 		ShortName:  "",
@@ -471,6 +478,7 @@ type BuildParams struct {
 	OutputRef                  string   `paramName:"output-ref"`
 	AdditionalTags             []string `paramName:"additional-tags"`
 	Push                       bool     `paramName:"push"`
+	PushFormat                 string   `paramName:"push-format"`
 	SecretDirs                 []string `paramName:"secret-dirs"`
 	WorkdirMount               string   `paramName:"workdir-mount"`
 	BuildArgs                  []string `paramName:"build-args"`
@@ -854,6 +862,17 @@ func (c *Build) validateParams() error {
 	for _, tag := range c.Params.AdditionalTags {
 		if !common.IsImageTagValid(tag) {
 			return fmt.Errorf("invalid additional tag: %s", tag)
+		}
+	}
+
+	if c.Params.PushFormat != "" {
+		if c.Params.Push {
+			validFormats := map[string]bool{"oci": true, "docker": true}
+			if !validFormats[c.Params.PushFormat] {
+				return fmt.Errorf("push-format must be 'oci' or 'docker', got '%s'", c.Params.PushFormat)
+			}
+		} else {
+			l.Logger.Warn("push-format has no effect unless push is enabled, ignoring")
 		}
 	}
 
@@ -2733,6 +2752,7 @@ func (c *Build) pushImage() (string, error) {
 
 	pushArgs := &cliWrappers.BuildahPushArgs{
 		Image:     c.Params.OutputRef,
+		Format:    c.Params.PushFormat,
 		TLSVerify: &c.Params.DestTLSVerify,
 	}
 
@@ -2751,6 +2771,7 @@ func (c *Build) pushImage() (string, error) {
 
 		_, err := c.CliWrappers.BuildahCli.Push(&cliWrappers.BuildahPushArgs{
 			Image:     additionalImage,
+			Format:    c.Params.PushFormat,
 			TLSVerify: &c.Params.DestTLSVerify,
 		})
 		if err != nil {
