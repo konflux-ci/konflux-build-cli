@@ -4311,8 +4311,7 @@ RUN rm -r /etc/yum.repos.d && mkdir /etc/yum.repos.d
 	})
 
 	t.Run("BuildprobeOutput", func(t *testing.T) {
-		SetupGomega(t)
-
+		// these images are used between tests
 		imageRegistry := setupImageRegistry(t)
 
 		secondBase := imageRegistry.GetTestNamespace() + "second-base:test"
@@ -4336,35 +4335,152 @@ RUN rm -r /etc/yum.repos.d && mkdir /etc/yum.repos.d
 		_, err = PushImage(extraImage)
 		Expect(err).ToNot(HaveOccurred())
 		DeleteLocalImage(extraImage)
+		
+		// basic build with two builder stages and one "extra" image
+		t.Run("AllImageTypes", func (t *testing.T) {
+			SetupGomega(t)
 
-		contextDir := setupTestContext(t)
-		outputRef := "localhost/test-buildprobe:" + GenerateUniqueTag(t)
-		writeContainerfile(contextDir, `
-FROM `+secondBase+` AS second_base
-FROM `+baseImage+`
-COPY --from=second_base /random-data.bin /opt/first.bin
-COPY --from=`+extraImage+` /random-data.bin /opt/extra.bin
-`)
-		buildprobeYamlPath := "/workspace/buildprobe.yaml"
-		buildParams := BuildParams{
-			Context:              contextDir,
-			OutputRef:            outputRef,
-			BuildprobeOutput: buildprobeYamlPath,
-		}
-		container := setupBuildContainerWithCleanup(t, buildParams, imageRegistry)
-		Expect(runBuild(container, buildParams)).To(Succeed())
 
-		buildprobeYaml, err := container.GetFileContent(buildprobeYamlPath)
-		Expect(err).ToNot(HaveOccurred(), "buildprobe file should exist")
-		var buildprobeData capoProbe.BuildMetadata
-		err = yaml.Unmarshal([]byte(buildprobeYaml), &buildprobeData)
-		Expect(err).ToNot(HaveOccurred(), "buildprobe file should be valid")
-		Expect(buildprobeData.Image.Pullspec).To(Equal(outputRef))
-		Expect(buildprobeData.BaseImages).To(HaveLen(2))
-		Expect(buildprobeData.BaseImages[0].Pullspec).To(Equal(secondBase))
-		Expect(buildprobeData.BaseImages[1].Pullspec).To(Equal(baseImage))
-		Expect(buildprobeData.ExtraImages).To(HaveLen(1))
-		Expect(buildprobeData.ExtraImages[0].Pullspec).To(Equal(extraImage))
+			contextDir := setupTestContext(t)
+			outputRef := "localhost/test-buildprobe:" + GenerateUniqueTag(t)
+			writeContainerfile(contextDir, `
+	FROM `+secondBase+` AS second_base
+	FROM `+baseImage+`
+	COPY --from=second_base /random-data.bin /opt/first.bin
+	COPY --from=`+extraImage+` /random-data.bin /opt/extra.bin
+	`)
+			buildprobeYamlPath := "/workspace/buildprobe.yaml"
+			buildParams := BuildParams{
+				Context:              contextDir,
+				OutputRef:            outputRef,
+				BuildprobeOutput: buildprobeYamlPath,
+			}
+			container := setupBuildContainerWithCleanup(t, buildParams, imageRegistry)
+			Expect(runBuild(container, buildParams)).To(Succeed())
+
+			buildprobeYaml, err := container.GetFileContent(buildprobeYamlPath)
+			Expect(err).ToNot(HaveOccurred(), "buildprobe file should exist")
+			var buildprobeData capoProbe.BuildMetadata
+			err = yaml.Unmarshal([]byte(buildprobeYaml), &buildprobeData)
+			Expect(err).ToNot(HaveOccurred(), "buildprobe file should be valid")
+			Expect(buildprobeData.Image.Pullspec).To(Equal(outputRef))
+			Expect(buildprobeData.BaseImages).To(HaveLen(2))
+			Expect(buildprobeData.BaseImages[0].Pullspec).To(Equal(secondBase))
+			Expect(buildprobeData.BaseImages[1].Pullspec).To(Equal(baseImage))
+			Expect(buildprobeData.ExtraImages).To(HaveLen(1))
+			Expect(buildprobeData.ExtraImages[0].Pullspec).To(Equal(extraImage))
+		})
+
+		// ensures a "FROM scratch" image is parsed correctly
+		t.Run("FromScratch", func (t *testing.T) {
+			SetupGomega(t)
+
+
+			contextDir := setupTestContext(t)
+			outputRef := "localhost/test-buildprobe:" + GenerateUniqueTag(t)
+			writeContainerfile(contextDir, `
+	FROM scratch
+	COPY . .
+	`)
+			buildprobeYamlPath := "/workspace/buildprobe.yaml"
+			buildParams := BuildParams{
+				Context:              contextDir,
+				OutputRef:            outputRef,
+				BuildprobeOutput: buildprobeYamlPath,
+			}
+			container := setupBuildContainerWithCleanup(t, buildParams, imageRegistry)
+			Expect(runBuild(container, buildParams)).To(Succeed())
+
+			buildprobeYaml, err := container.GetFileContent(buildprobeYamlPath)
+			Expect(err).ToNot(HaveOccurred(), "buildprobe file should exist")
+			var buildprobeData capoProbe.BuildMetadata
+			err = yaml.Unmarshal([]byte(buildprobeYaml), &buildprobeData)
+			Expect(err).ToNot(HaveOccurred(), "buildprobe file should be valid")
+			Expect(buildprobeData.Image.Pullspec).To(Equal(outputRef))
+			Expect(buildprobeData.BaseImages).To(HaveLen(0))
+			Expect(buildprobeData.ExtraImages).To(HaveLen(0))
+		})
+
+		// ensure build args are properly parsed in buildprobe as they were passed
+		t.Run("BuildArgs", func (t *testing.T) {
+			SetupGomega(t)
+
+
+			contextDir := setupTestContext(t)
+			outputRef := "localhost/test-buildprobe:" + GenerateUniqueTag(t)
+			writeContainerfile(contextDir, `
+	ARG BASEIMG
+	ARG SECONDIMG
+	FROM $BASEIMG
+	COPY . .
+	COPY --from=$SECONDIMG /random-data.bin /opt/first.bin
+	`)
+
+			// set up build args (both from file and directly, to test merging)
+			testutil.WriteFileTree(t, contextDir, map[string]string{
+				"build-args-file": "SECONDIMG="+secondBase,
+			})
+			buildArgs := []string{
+				"BASEIMG="+baseImage,
+			}
+
+			buildprobeYamlPath := "/workspace/buildprobe.yaml"
+			buildParams := BuildParams{
+				Context:              contextDir,
+				OutputRef:            outputRef,
+				BuildArgs: buildArgs,
+				BuildArgsFile: "/workspace/build-args-file",
+				BuildprobeOutput: buildprobeYamlPath,
+			}
+			container := setupBuildContainerWithCleanup(t, buildParams, imageRegistry)
+			Expect(runBuild(container, buildParams)).To(Succeed())
+
+			buildprobeYaml, err := container.GetFileContent(buildprobeYamlPath)
+			Expect(err).ToNot(HaveOccurred(), "buildprobe file should exist")
+			var buildprobeData capoProbe.BuildMetadata
+			err = yaml.Unmarshal([]byte(buildprobeYaml), &buildprobeData)
+			Expect(err).ToNot(HaveOccurred(), "buildprobe file should be valid")
+			Expect(buildprobeData.Image.Pullspec).To(Equal(outputRef))
+			Expect(buildprobeData.ExtraImages).To(HaveLen(1))
+			Expect(buildprobeData.ExtraImages[0].Pullspec).To(Equal(secondBase))
+			Expect(buildprobeData.BaseImages).To(HaveLen(1))
+			Expect(buildprobeData.BaseImages[0].Pullspec).To(Equal(baseImage))
+		})
+
+		// ensures SkipUnusedStages = false behaves as expected
+		t.Run("DontSkipUnusedStages", func (t *testing.T) {
+			SetupGomega(t)
+
+
+			contextDir := setupTestContext(t)
+			outputRef := "localhost/test-buildprobe:" + GenerateUniqueTag(t)
+			writeContainerfile(contextDir, `
+	FROM `+secondBase+`
+	COPY . .
+	FROM `+baseImage+`
+	COPY . .
+	`)
+			buildprobeYamlPath := "/workspace/buildprobe.yaml"
+			buildParams := BuildParams{
+				Context:              contextDir,
+				OutputRef:            outputRef,
+				BuildprobeOutput: buildprobeYamlPath,
+				SkipUnusedStages: boolptr(false),
+			}
+			container := setupBuildContainerWithCleanup(t, buildParams, imageRegistry)
+			Expect(runBuild(container, buildParams)).To(Succeed())
+
+			buildprobeYaml, err := container.GetFileContent(buildprobeYamlPath)
+			Expect(err).ToNot(HaveOccurred(), "buildprobe file should exist")
+			var buildprobeData capoProbe.BuildMetadata
+			err = yaml.Unmarshal([]byte(buildprobeYaml), &buildprobeData)
+			Expect(err).ToNot(HaveOccurred(), "buildprobe file should be valid")
+			Expect(buildprobeData.Image.Pullspec).To(Equal(outputRef))
+			Expect(buildprobeData.ExtraImages).To(HaveLen(0))
+			Expect(buildprobeData.BaseImages).To(HaveLen(2))
+			Expect(buildprobeData.BaseImages[0].Pullspec).To(Equal(secondBase))
+			Expect(buildprobeData.BaseImages[1].Pullspec).To(Equal(baseImage))
+		})
 	})
 
 	t.Run("BuilderMetadataOutput", func(t *testing.T) {
