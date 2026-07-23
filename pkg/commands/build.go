@@ -2837,15 +2837,16 @@ func (c *Build) writeBuildprobeYaml(outputPath string, buildArgs map[string]stri
 	if c.buildinfoBuildContext != nil {
 		buildContexts[c.buildinfoBuildContext.Name] = c.buildinfoBuildContext.Location
 	}
-	opts := capoProbe.ProbeOpts{
-		Tag:           c.Params.OutputRef,
-		Containerfile: containerfile,
-		Target:        c.Params.Target,
-		Args:          buildArgs,
-		EnvVars:       processKeyValueEnvs(c.Params.Envs),
-		BuildContexts: buildContexts,
-	}
-	metadata, err := capoProbe.Probe(opts, c.storageClient)
+	metadata, err := capoProbe.Probe(
+		c.Params.OutputRef,
+		containerfile,
+		c.storageClient,
+		capoProbe.WithTarget(c.Params.Target),
+		capoProbe.WithArgs(buildArgs),
+		capoProbe.WithEnvVars(processKeyValueEnvs(c.Params.Envs)),
+		capoProbe.WithBuildContexts(buildContexts),
+		capoProbe.WithSkipUnusedStages(c.Params.SkipUnusedStages),
+	)
 	if err != nil {
 		return fmt.Errorf("failed to probe containerfile: %w", err)
 	}
