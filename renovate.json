@@ -32,6 +32,11 @@
       "allowedVersions": "< 2.0"
     },
     {
+      "description": "Group GitHub Actions updates",
+      "matchManagers": ["github-actions"],
+      "groupName": "github-actions"
+    },
+    {
       "description": "Group task-runner updates",
       "matchPackageNames": ["quay.io/konflux-ci/task-runner"],
       "groupName": "task-runner"
