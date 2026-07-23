@@ -585,7 +585,7 @@ type Build struct {
 	hostConsumerCerts string
 	hostRHSMcaCerts   string
 
-	storageClient storageclient.Client
+	storageClient capoStorageClient.Client
 }
 
 func NewBuild(cmd *cobra.Command, extraArgs []string) (*Build, error) {
@@ -2838,14 +2838,14 @@ func (c *Build) writeBuildprobeYaml(outputPath string, buildArgs map[string]stri
 		buildContexts[c.buildinfoBuildContext.Name] = c.buildinfoBuildContext.Location
 	}
 	opts := capoProbe.ProbeOpts{
-		Tag:           tag,
+		Tag:           c.Params.OutputRef,
 		Containerfile: containerfile,
 		Target:        c.Params.Target,
 		Args:          buildArgs,
 		EnvVars:       processKeyValueEnvs(c.Params.Envs),
 		BuildContexts: buildContexts,
 	}
-	metadata, err := probe.Probe(opts, c.storageClient)
+	metadata, err := capoProbe.Probe(opts, c.storageClient)
 	if err != nil {
 		return fmt.Errorf("failed to probe containerfile: %w", err)
 	}
