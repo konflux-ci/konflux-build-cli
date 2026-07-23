@@ -1094,6 +1094,42 @@ LABEL test.label="extra-args-test"
 		Expect(err).ToNot(HaveOccurred(), "Expected /tmp/kbc-build.log to exist")
 	})
 
+	t.Run("PerContainerfileIgnoreFile", func(t *testing.T) {
+		SetupGomega(t)
+
+		contextDir := setupTestContext(t)
+
+		testutil.WriteFileTree(t, contextDir, map[string]string{
+			// Root ignore file excludes the data directory
+			".dockerignore":        "data/\n",
+			"subdir/Containerfile": fmt.Sprintf("FROM %s\nCOPY data/ /data/\nRUN cat /data/hello.txt\n", baseImage),
+			// Per-containerfile ignore file overrides the root one (empty = ignore nothing)
+			"subdir/Containerfile.dockerignore": "# override root .dockerignore\n",
+			"data/hello.txt":                    "hello from data dir\n",
+		})
+
+		outputRef := "localhost/test-per-containerfile-ignorefile:" + GenerateUniqueTag(t)
+
+		buildParams := BuildParams{
+			Context:        contextDir,
+			Containerfile:  "subdir/Containerfile",
+			OutputRef:      outputRef,
+			Push:           false,
+			SkipInjections: true,
+		}
+
+		container := setupBuildContainerWithCleanup(t, buildParams, nil)
+
+		_, stderr, err := runBuildWithOutput(container, buildParams)
+		Expect(err).ToNot(HaveOccurred(), "Build with per-containerfile ignore file should succeed")
+
+		Expect(stderr).To(ContainSubstring("Using per-containerfile ignore file:"))
+		Expect(stderr).To(ContainSubstring("subdir/Containerfile.dockerignore"))
+
+		stderr = filterBuildahSteps(t, stderr)
+		Expect(stderr).To(ContainSubstring("hello from data dir"))
+	})
+
 	t.Run("UsesRunInstruction", func(t *testing.T) {
 		SetupGomega(t)
 
