@@ -30,6 +30,21 @@ Run these commands before submitting changes:
 When asserting on build stderr in `image build` integration tests, call
 `filterBuildahSteps` first to strip buildah's echoed RUN instructions.
 
+## Renovate / MintMaker Configuration
+
+This repo uses MintMaker for dependency management. MintMaker provides a
+platform-level Renovate config that sets `gomod.packageRules`. In Renovate's
+config hierarchy, manager-level `packageRules` take precedence over global
+`packageRules`. When adding Go-module-specific rules, place them under
+`gomod.packageRules` in `renovate.json`, not in the top-level `packageRules`
+array.
+
+When modifying `renovate.json`, check the MintMaker config to understand which
+manager-level `packageRules` are set upstream.
+
+MintMaker's config:
+https://github.com/konflux-ci/mintmaker/blob/main/config/renovate/renovate.json
+
 ## References
 
 [Documentation index](docs/index.md) which includes all docs articles.

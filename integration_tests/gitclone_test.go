@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"testing"
 
@@ -25,8 +26,8 @@ type gitCloneResult struct {
 // commit field, so unrelated log lines or earlier JSON fragments do not win.
 func parseGitCloneResult(stdout string) (gitCloneResult, error) {
 	lines := strings.Split(strings.TrimSpace(stdout), "\n")
-	for i := len(lines) - 1; i >= 0; i-- {
-		line := strings.TrimSpace(lines[i])
+	for _, line := range slices.Backward(lines) {
+		line := strings.TrimSpace(line)
 		if !strings.HasPrefix(line, "{") {
 			continue
 		}
@@ -122,6 +123,29 @@ func TestGitClone(t *testing.T) {
 			},
 		},
 		{
+			name: "shallow clone with tags",
+			setup: func(t *testing.T, workspaceDir string) map[string]string {
+				repo := createLocalTestRepo(t)
+				bareCloneToPath(t, repo.Path, filepath.Join(workspaceDir, "repo.git"))
+				return map[string]string{"tagCommit": repo.TagCommit}
+			},
+			url:  "file:///workspace/repo.git",
+			args: []string{"--depth", "1", "--revision", "main", "--fetch-tags=true"},
+			check: func(t *testing.T, workspaceDir, stdout, stderr string, setupData map[string]string) {
+				outDir := filepath.Join(workspaceDir, "out")
+				Expect(filepath.Join(outDir, "second.txt")).To(BeAnExistingFile())
+
+				isShallow := runGit(t, outDir, "rev-parse", "--is-shallow-repository")
+				Expect(isShallow).To(Equal("true"))
+
+				tags := runGit(t, outDir, "tag", "-l")
+				Expect(tags).To(Equal("v1.0.0"))
+
+				tagCommit := runGit(t, outDir, "rev-parse", "v1.0.0^{commit}")
+				Expect(tagCommit).To(Equal(setupData["tagCommit"]))
+			},
+		},
+		{
 			name: "sparse checkout single directory",
 			setup: func(t *testing.T, workspaceDir string) map[string]string {
 				repo := createLocalTestRepo(t)
@@ -214,6 +238,22 @@ func TestGitClone(t *testing.T) {
 				Expect(stderr).To(ContainSubstring("symlink"))
 			},
 		},
+		{
+			name: "clone passes with two conflicting submodules",
+			setup: func(t *testing.T, workspaceDir string) map[string]string {
+				return map[string]string{"revision": prepareBareRepoWithTwoSubmodules(t, workspaceDir)}
+			},
+			url:  "file:///workspace/repo.git",
+			args: []string{"--fetch-tags=true"},
+			check: func(t *testing.T, workspaceDir, stdout, stderr string, _ map[string]string) {
+				tags := runGit(t, filepath.Join(workspaceDir, "out"), "tag", "-l")
+				Expect(tags).To(Equal("tag-base-repo"))
+
+				submoduleTags := runGit(t, filepath.Join(workspaceDir, "out"), "submodule", "foreach", "git", "tag", "-l")
+				Expect(submoduleTags).To(ContainSubstring("tag-submodule-a"))
+				Expect(submoduleTags).ToNot(ContainSubstring("tag-submodule-b"))
+			},
+		},
 	}
 
 	for _, tc := range tests {
@@ -230,6 +270,10 @@ func TestGitClone(t *testing.T) {
 			container := startGitCloneContainer(t, workspaceDir)
 
 			args := append([]string{"git-clone", "--url", tc.url, "--output-dir", "/workspace/out", "--ssl-verify=false"}, tc.args...)
+			if revision, ok := setupData["revision"]; ok {
+				args = append(args, "--revision", revision)
+			}
+
 			stdout, stderr, err := container.ExecuteBuildCliWithOutput(args...)
 
 			if tc.wantErr {

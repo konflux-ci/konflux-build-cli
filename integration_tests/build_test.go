@@ -3,6 +3,7 @@ package integration_tests
 import (
 	"archive/tar"
 	"compress/gzip"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -22,6 +23,7 @@ import (
 
 	. "github.com/onsi/gomega"
 
+	"github.com/konflux-ci/konflux-build-cli/integration_tests/constants"
 	. "github.com/konflux-ci/konflux-build-cli/integration_tests/framework"
 	"github.com/konflux-ci/konflux-build-cli/testutil"
 
@@ -42,6 +44,7 @@ type BuildParams struct {
 	Containerfile           string
 	OutputRef               string
 	Push                    bool
+	PushFormat              string
 	SecretDirs              []string
 	WorkdirMount            string
 	BuildArgs               []string
@@ -57,7 +60,7 @@ type BuildParams struct {
 	RewriteTimestamp        bool
 	QuayImageExpiresAfter   string
 	AddLegacyLabels         bool
-	BuildprobeOutput    string
+	BuildprobeOutput        string
 	ContainerfileJsonOutput string
 	SkipInjections          bool
 	// Defaults to true in the CLI, need a way to distinguish between explicitly false and unset
@@ -274,6 +277,9 @@ func runBuildWithOutput(container *TestRunnerContainer, buildParams BuildParams)
 	if buildParams.Push {
 		args = append(args, "--push")
 	}
+	if buildParams.PushFormat != "" {
+		args = append(args, "--push-format", buildParams.PushFormat)
+	}
 	// Add secret directories if provided
 	if len(buildParams.SecretDirs) > 0 {
 		args = append(args, "--secret-dirs")
@@ -442,6 +448,17 @@ func runBuildWithOutput(container *TestRunnerContainer, buildParams BuildParams)
 	return container.ExecuteCommandWithOutput(KonfluxBuildCli, args...)
 }
 
+type imageBuildResults struct {
+	ImageUrl string `json:"image_url"`
+	Digest   string `json:"digest"`
+}
+
+func parseResults(kbcStdout string) imageBuildResults {
+	var results imageBuildResults
+	Expect(json.Unmarshal([]byte(kbcStdout), &results)).To(Succeed())
+	return results
+}
+
 // buildahStepLine matches buildah's instruction echo lines.
 // The leading .* is necessary because these lines are prefixed with logger
 // metadata and the CLI's "buildah [stdout]" prefix. For multistage builds,
@@ -496,6 +513,27 @@ func setupImageRegistry(t *testing.T) ImageRegistry {
 func writeContainerfile(contextDir, content string) {
 	err := os.WriteFile(path.Join(contextDir, "Containerfile"), []byte(content), 0644)
 	Expect(err).ToNot(HaveOccurred())
+}
+
+// Represents either an OCI manifest or a docker v2 manifest
+// (just the attributes we care about in the tests)
+type imageManifest struct {
+	MediaType string `json:"mediaType"`
+}
+
+func getBuiltImageManifest(container *TestRunnerContainer, imageRef string) imageManifest {
+	stdout, _, err := container.ExecuteCommandWithOutput("buildah", "inspect", imageRef)
+	Expect(err).ToNot(HaveOccurred())
+
+	var inspect struct {
+		Manifest string `json:"Manifest"`
+	}
+	Expect(json.Unmarshal([]byte(stdout), &inspect)).To(Succeed())
+
+	var manifest imageManifest
+	Expect(json.Unmarshal([]byte(inspect.Manifest), &manifest)).To(Succeed())
+
+	return manifest
 }
 
 type ociHistory struct {
@@ -825,6 +863,10 @@ func readCycloneDX(path string) cyclonedxDoc {
 	return cyclonedxDoc
 }
 
+func digest(bytes []byte) string {
+	return fmt.Sprintf("sha256:%x", sha256.Sum256(bytes))
+}
+
 func TestBuild(t *testing.T) {
 	SetupGomega(t)
 
@@ -900,15 +942,25 @@ LABEL %s="1h"
 
 		container := setupBuildContainerWithCleanup(t, buildParams, imageRegistry)
 
-		err := runBuild(container, buildParams)
+		stdout, _, err := runBuildWithOutput(container, buildParams)
 		Expect(err).ToNot(HaveOccurred())
 
 		lastColon := strings.LastIndex(outputRef, ":")
 		tag := outputRef[lastColon+1:]
 
-		tagExists, err := imageRegistry.CheckTagExistence(imageRepoUrl, tag)
-		Expect(err).ToNot(HaveOccurred(), fmt.Sprintf("failed to check for %s tag existence", tag))
-		Expect(tagExists).To(BeTrue(), fmt.Sprintf("Expected %s to exist in registry", outputRef))
+		// Verify that the image exists in the registry
+		manifestBytes, err := GetImageManifest(imageRegistry, imageRepoUrl, tag)
+		Expect(err).ToNot(HaveOccurred(), fmt.Sprintf("Expected %s:%s to exist in registry", imageRepoUrl, tag))
+
+		// Verify that the pushed image is OCI by default
+		var manifest imageManifest
+		Expect(json.Unmarshal(manifestBytes, &manifest)).To(Succeed())
+		Expect(manifest.MediaType).To(Equal(constants.OCIImageManifest))
+
+		// Verify the returned results
+		results := parseResults(stdout)
+		Expect(results.ImageUrl).To(Equal(outputRef))
+		Expect(results.Digest).To(Equal(digest(manifestBytes)))
 	})
 
 	t.Run("BuildAndPushAdditionalTags", func(t *testing.T) {
@@ -937,17 +989,82 @@ LABEL %s="1h"
 
 		container := setupBuildContainerWithCleanup(t, buildParams, imageRegistry)
 
-		err := runBuild(container, buildParams)
+		stdout, _, err := runBuildWithOutput(container, buildParams)
 		Expect(err).ToNot(HaveOccurred())
+
+		digests := make(map[string]struct{})
 
 		for _, tag := range []string{mainTag, addTag1, addTag2} {
 			image := imageRepoUrl + ":" + tag
 			err = container.ExecuteCommand("buildah", "images", image)
 			Expect(err).ToNot(HaveOccurred(), fmt.Sprintf("Expected %s to exist in local buildah storage", image))
 
-			tagExists, err := imageRegistry.CheckTagExistence(imageRepoUrl, tag)
-			Expect(err).ToNot(HaveOccurred(), fmt.Sprintf("failed to check for %s tag existence", tag))
-			Expect(tagExists).To(BeTrue(), fmt.Sprintf("Expected %s to exist in registry", image))
+			manifestBytes, err := GetImageManifest(imageRegistry, imageRepoUrl, tag)
+			Expect(err).ToNot(HaveOccurred(), fmt.Sprintf("Expected %s:%s to exist in registry", imageRepoUrl, tag))
+
+			digests[digest(manifestBytes)] = struct{}{}
+		}
+
+		Expect(digests).To(HaveLen(1), "All the pushed images should have the same digest")
+
+		results := parseResults(stdout)
+		Expect(results.ImageUrl).To(Equal(imageRepoUrl + ":" + mainTag))
+		for actualDigest := range digests {
+			Expect(results.Digest).To(Equal(actualDigest))
+		}
+	})
+
+	t.Run("BuildAndPushDockerFormat", func(t *testing.T) {
+		SetupGomega(t)
+
+		imageRegistry := setupImageRegistry(t)
+
+		contextDir := setupTestContext(t)
+		writeContainerfile(contextDir, fmt.Sprintf(`
+FROM scratch
+LABEL %s="1h"
+`, QuayExpiresAfterLabelName))
+
+		imageRepoUrl := imageRegistry.GetTestNamespace() + "test-docker-format"
+
+		mainTag := GenerateUniqueTag(t)
+		addTag := mainTag + "-additional-1"
+
+		buildParams := BuildParams{
+			Context:        contextDir,
+			OutputRef:      imageRepoUrl + ":" + mainTag,
+			Push:           true,
+			PushFormat:     "docker",
+			AdditionalTags: []string{addTag},
+		}
+
+		container := setupBuildContainerWithCleanup(t, buildParams, imageRegistry)
+
+		stdout, _, err := runBuildWithOutput(container, buildParams)
+		Expect(err).ToNot(HaveOccurred())
+
+		digests := make(map[string]struct{})
+
+		for _, tag := range []string{mainTag, addTag} {
+			// Verify pushed image uses the docker format
+			var remoteManifest imageManifest
+			manifestBytes, err := GetImageManifest(imageRegistry, imageRepoUrl, tag)
+			Expect(err).ToNot(HaveOccurred(), fmt.Sprintf("Expected %s:%s to exist in registry", imageRepoUrl, tag))
+			Expect(json.Unmarshal(manifestBytes, &remoteManifest)).To(Succeed())
+			Expect(remoteManifest.MediaType).To(Equal(constants.DockerManifestV2))
+
+			// ...but still uses the oci format locally
+			localManifest := getBuiltImageManifest(container, imageRepoUrl+":"+tag)
+			Expect(localManifest.MediaType).To(Equal(constants.OCIImageManifest))
+
+			digests[digest(manifestBytes)] = struct{}{}
+		}
+
+		Expect(digests).To(HaveLen(1), "All the pushed images should have the same digest")
+
+		results := parseResults(stdout)
+		for actualDigest := range digests {
+			Expect(results.Digest).To(Equal(actualDigest))
 		}
 	})
 
@@ -4335,11 +4452,10 @@ RUN rm -r /etc/yum.repos.d && mkdir /etc/yum.repos.d
 		_, err = PushImage(extraImage)
 		Expect(err).ToNot(HaveOccurred())
 		DeleteLocalImage(extraImage)
-		
-		// basic build with two builder stages and one "extra" image
-		t.Run("AllImageTypes", func (t *testing.T) {
-			SetupGomega(t)
 
+		// basic build with two builder stages and one "extra" image
+		t.Run("AllImageTypes", func(t *testing.T) {
+			SetupGomega(t)
 
 			contextDir := setupTestContext(t)
 			outputRef := "localhost/test-buildprobe:" + GenerateUniqueTag(t)
@@ -4351,8 +4467,8 @@ RUN rm -r /etc/yum.repos.d && mkdir /etc/yum.repos.d
 	`)
 			buildprobeYamlPath := "/workspace/buildprobe.yaml"
 			buildParams := BuildParams{
-				Context:              contextDir,
-				OutputRef:            outputRef,
+				Context:          contextDir,
+				OutputRef:        outputRef,
 				BuildprobeOutput: buildprobeYamlPath,
 			}
 			container := setupBuildContainerWithCleanup(t, buildParams, imageRegistry)
@@ -4372,9 +4488,8 @@ RUN rm -r /etc/yum.repos.d && mkdir /etc/yum.repos.d
 		})
 
 		// ensures a "FROM scratch" image is parsed correctly
-		t.Run("FromScratch", func (t *testing.T) {
+		t.Run("FromScratch", func(t *testing.T) {
 			SetupGomega(t)
-
 
 			contextDir := setupTestContext(t)
 			outputRef := "localhost/test-buildprobe:" + GenerateUniqueTag(t)
@@ -4384,8 +4499,8 @@ RUN rm -r /etc/yum.repos.d && mkdir /etc/yum.repos.d
 	`)
 			buildprobeYamlPath := "/workspace/buildprobe.yaml"
 			buildParams := BuildParams{
-				Context:              contextDir,
-				OutputRef:            outputRef,
+				Context:          contextDir,
+				OutputRef:        outputRef,
 				BuildprobeOutput: buildprobeYamlPath,
 			}
 			container := setupBuildContainerWithCleanup(t, buildParams, imageRegistry)
@@ -4402,9 +4517,8 @@ RUN rm -r /etc/yum.repos.d && mkdir /etc/yum.repos.d
 		})
 
 		// ensure build args are properly parsed in buildprobe as they were passed
-		t.Run("BuildArgs", func (t *testing.T) {
+		t.Run("BuildArgs", func(t *testing.T) {
 			SetupGomega(t)
-
 
 			contextDir := setupTestContext(t)
 			outputRef := "localhost/test-buildprobe:" + GenerateUniqueTag(t)
@@ -4418,18 +4532,18 @@ RUN rm -r /etc/yum.repos.d && mkdir /etc/yum.repos.d
 
 			// set up build args (both from file and directly, to test merging)
 			testutil.WriteFileTree(t, contextDir, map[string]string{
-				"build-args-file": "SECONDIMG="+secondBase,
+				"build-args-file": "SECONDIMG=" + secondBase,
 			})
 			buildArgs := []string{
-				"BASEIMG="+baseImage,
+				"BASEIMG=" + baseImage,
 			}
 
 			buildprobeYamlPath := "/workspace/buildprobe.yaml"
 			buildParams := BuildParams{
-				Context:              contextDir,
-				OutputRef:            outputRef,
-				BuildArgs: buildArgs,
-				BuildArgsFile: "/workspace/build-args-file",
+				Context:          contextDir,
+				OutputRef:        outputRef,
+				BuildArgs:        buildArgs,
+				BuildArgsFile:    "/workspace/build-args-file",
 				BuildprobeOutput: buildprobeYamlPath,
 			}
 			container := setupBuildContainerWithCleanup(t, buildParams, imageRegistry)
@@ -4448,9 +4562,8 @@ RUN rm -r /etc/yum.repos.d && mkdir /etc/yum.repos.d
 		})
 
 		// ensures SkipUnusedStages = false behaves as expected
-		t.Run("DontSkipUnusedStages", func (t *testing.T) {
+		t.Run("DontSkipUnusedStages", func(t *testing.T) {
 			SetupGomega(t)
-
 
 			contextDir := setupTestContext(t)
 			outputRef := "localhost/test-buildprobe:" + GenerateUniqueTag(t)
@@ -4462,8 +4575,8 @@ RUN rm -r /etc/yum.repos.d && mkdir /etc/yum.repos.d
 	`)
 			buildprobeYamlPath := "/workspace/buildprobe.yaml"
 			buildParams := BuildParams{
-				Context:              contextDir,
-				OutputRef:            outputRef,
+				Context:          contextDir,
+				OutputRef:        outputRef,
 				BuildprobeOutput: buildprobeYamlPath,
 				SkipUnusedStages: boolptr(false),
 			}
@@ -4516,7 +4629,7 @@ COPY --from=builder /opt/app /opt/app
 			buildParams := BuildParams{
 				Context:               contextDir,
 				OutputRef:             outputRef,
-				BuildprobeOutput:  "/workspace/buildprobe.yaml",
+				BuildprobeOutput:      "/workspace/buildprobe.yaml",
 				BuilderMetadataOutput: "/workspace/builder-metadata.json",
 			}
 
@@ -4552,9 +4665,9 @@ COPY --from=builder /opt/app /opt/app
 				"app/.dist-info/METADATA": "Name: app\nVersion: 1.2.3\n",
 			})
 			writeContainerfile(contextDir, `
-FROM `+baseImage+` AS builder
+FROM scratch AS builder
 COPY app /opt/app
-FROM `+baseImage+`
+FROM scratch
 COPY --from=builder /opt/app /opt/app
 `)
 
@@ -4563,7 +4676,7 @@ COPY --from=builder /opt/app /opt/app
 			buildParams := BuildParams{
 				Context:               contextDir,
 				OutputRef:             outputRef,
-				BuildprobeOutput:  "/workspace/buildprobe.yaml",
+				BuildprobeOutput:      "/workspace/buildprobe.yaml",
 				BuilderMetadataOutput: "/workspace/builder-metadata.json",
 				SyftSelectCatalogers:  "-python-installed-package-cataloger",
 			}
@@ -4597,15 +4710,15 @@ COPY --from=builder /opt/app /opt/app
 
 			contextDir := setupTestContext(t)
 			writeContainerfile(contextDir, `
-FROM `+baseImage+`
-RUN echo hello
+FROM scratch
+LABEL hello=hello
 `)
 			outputRef := "localhost/test-builder-metadata-single:" + GenerateUniqueTag(t)
 
 			buildParams := BuildParams{
 				Context:               contextDir,
 				OutputRef:             outputRef,
-				BuildprobeOutput:  "/workspace/buildprobe.yaml",
+				BuildprobeOutput:      "/workspace/buildprobe.yaml",
 				BuilderMetadataOutput: "/workspace/builder-metadata.json",
 			}
 
@@ -4633,9 +4746,9 @@ RUN echo hello
 				"app/.dist-info/METADATA": "Name: app\nVersion: 1.2.3\n",
 			})
 			writeContainerfile(contextDir, `
-FROM `+baseImage+` AS builder
+FROM scratch AS builder
 COPY app /opt/app
-FROM `+baseImage+` AS middle
+FROM scratch AS middle
 COPY --from=builder /opt/app /opt/app
 FROM `+baseImage+` AS final
 RUN echo "this stage should be ignored"
@@ -4647,7 +4760,7 @@ RUN echo "this stage should be ignored"
 				Context:               contextDir,
 				OutputRef:             outputRef,
 				Target:                "middle",
-				BuildprobeOutput:  "/workspace/buildprobe.yaml",
+				BuildprobeOutput:      "/workspace/buildprobe.yaml",
 				BuilderMetadataOutput: "/workspace/builder-metadata.json",
 			}
 
@@ -4662,6 +4775,7 @@ RUN echo "this stage should be ignored"
 				Packages []struct {
 					PackageURL string `json:"purl"`
 					OriginType string `json:"origin_type"`
+					Pullspec   string `json:"pullspec"`
 					StageAlias string `json:"stage_alias"`
 				} `json:"packages"`
 			}
@@ -4670,6 +4784,7 @@ RUN echo "this stage should be ignored"
 			Expect(metadata.Packages).To(HaveLen(1))
 			Expect(metadata.Packages[0].PackageURL).To(Equal("pkg:pypi/app@1.2.3"))
 			Expect(metadata.Packages[0].OriginType).To(Equal("intermediate"))
+			Expect(metadata.Packages[0].Pullspec).To(Equal("scratch"))
 			Expect(metadata.Packages[0].StageAlias).To(Equal("builder"))
 
 		})
@@ -4682,9 +4797,9 @@ RUN echo "this stage should be ignored"
 				"app/.dist-info/METADATA": "Name: app\nVersion: 1.2.3\n",
 			})
 			writeContainerfile(contextDir, `
-FROM `+baseImage+` AS builder
+FROM scratch AS builder
 COPY app /opt/app
-FROM `+baseImage+`
+FROM scratch
 ARG SRC
 COPY --from=builder $SRC/app /opt/app
 `)
@@ -4695,7 +4810,7 @@ COPY --from=builder $SRC/app /opt/app
 				Context:               contextDir,
 				OutputRef:             outputRef,
 				BuildArgs:             []string{"SRC=/opt"},
-				BuildprobeOutput:  "/workspace/buildprobe.yaml",
+				BuildprobeOutput:      "/workspace/buildprobe.yaml",
 				BuilderMetadataOutput: "/workspace/builder-metadata.json",
 			}
 
@@ -4732,9 +4847,9 @@ COPY --from=builder $SRC/app /opt/app
 				"build-args-file":         "SRC_PART_1=/o\nSRC_PART_2=pt",
 			})
 			writeContainerfile(contextDir, `
-FROM `+baseImage+` AS builder
+FROM scratch AS builder
 COPY app /opt/app
-FROM `+baseImage+`
+FROM scratch
 ARG SRC_PART_1
 ARG SRC_PART_2
 COPY --from=builder $SRC_PART_1$SRC_PART_2/app /opt/app
@@ -4746,7 +4861,7 @@ COPY --from=builder $SRC_PART_1$SRC_PART_2/app /opt/app
 				Context:               contextDir,
 				OutputRef:             outputRef,
 				BuildArgsFile:         "/workspace/build-args-file",
-				BuildprobeOutput:  "/workspace/buildprobe.yaml",
+				BuildprobeOutput:      "/workspace/buildprobe.yaml",
 				BuilderMetadataOutput: "/workspace/builder-metadata.json",
 			}
 
@@ -4782,9 +4897,9 @@ COPY --from=builder $SRC_PART_1$SRC_PART_2/app /opt/app
 				"app/.dist-info/METADATA": "Name: app\nVersion: 1.2.3\n",
 			})
 			writeContainerfile(contextDir, `
-FROM `+baseImage+` AS builder
+FROM scratch AS builder
 COPY app /opt/app
-FROM `+baseImage+`
+FROM scratch
 COPY --from=builder $SRC/app /opt/app
 `)
 
@@ -4794,7 +4909,7 @@ COPY --from=builder $SRC/app /opt/app
 				Context:               contextDir,
 				OutputRef:             outputRef,
 				Envs:                  []string{"SRC=/opt"},
-				BuildprobeOutput:  "/workspace/buildprobe.yaml",
+				BuildprobeOutput:      "/workspace/buildprobe.yaml",
 				BuilderMetadataOutput: "/workspace/builder-metadata.json",
 			}
 

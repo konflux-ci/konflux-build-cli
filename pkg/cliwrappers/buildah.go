@@ -351,6 +351,7 @@ func (b *BuildahCli) Build(args *BuildahBuildArgs) error {
 type BuildahPushArgs struct {
 	Image       string
 	Destination string
+	Format      string
 	TLSVerify   *bool
 }
 
@@ -374,6 +375,9 @@ func (b *BuildahCli) Push(args *BuildahPushArgs) (string, error) {
 	buildahArgs := []string{"push", "--digestfile", digestFile}
 	if args.TLSVerify != nil {
 		buildahArgs = append(buildahArgs, fmt.Sprintf("--tls-verify=%t", *args.TLSVerify))
+	}
+	if args.Format != "" {
+		buildahArgs = append(buildahArgs, "--format="+args.Format)
 	}
 	buildahArgs = append(buildahArgs, args.Image)
 	if args.Destination != "" {

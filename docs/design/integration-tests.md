@@ -203,7 +203,7 @@ func TestPipeline(t *testing.T) {
 	Expect(err).ToNot(HaveOccurred())
 	Expect(imageBuildResults.Url).To(HavePrefix(imageRepoUrl + ":" + tag))
 	Expect(imageBuildResults.Digest).To(MatchRegexp(`^sha256:[0-9a-f]{64}$`))
-	builtImageExists, err := imageRegistry.CheckTagExistence(imageBuildResults.Url, tag)
+	builtImageExists, err := CheckTagExistence(imageRegistry, imageBuildResults.Url, tag)
 	Expect(err).ToNot(HaveOccurred())
 	Expect(builtImageExists).To(BeTrue(), fmt.Sprintf("built image %s:%s does not exist in registry", imageBuildResults.Url, tag))
 
@@ -219,7 +219,7 @@ func TestPipeline(t *testing.T) {
 
 	Expect(err).ToNot(HaveOccurred())
 	for _, tag := range append(newTagsFromArg, additionalTagFromLabel...) {
-		tagExists, err := imageRegistry.CheckTagExistence(imageRepoUrl, tag)
+		tagExists, err := CheckTagExistence(imageRegistry, imageRepoUrl, tag)
 		Expect(err).ToNot(HaveOccurred(), fmt.Sprintf("failed to check for %s tag existence", tag))
 		Expect(tagExists).To(BeTrue(), fmt.Sprintf("Expected %s:%s to exist", imageRepoUrl, tag))
 	}
