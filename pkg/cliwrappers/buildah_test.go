@@ -611,6 +611,32 @@ func TestBuildahCli_Push(t *testing.T) {
 		g.Expect(err).ToNot(HaveOccurred())
 		g.Expect(capturedArgs).To(ContainElement("--format=v2s2"))
 	})
+
+	t.Run("should pass --compression-format and --force-compression", func(t *testing.T) {
+		buildahCli, executor := setupBuildahCli()
+		var capturedArgs []string
+		executor.executeFunc = mockSuccessfulPush(&capturedArgs)
+
+		_, err := buildahCli.Push(&cliwrappers.BuildahPushArgs{
+			Image:             image,
+			CompressionFormat: "zstd:chunked",
+			ForceCompression:  true,
+		})
+		g.Expect(err).ToNot(HaveOccurred())
+		g.Expect(capturedArgs).To(ContainElement("--compression-format=zstd:chunked"))
+		g.Expect(capturedArgs).To(ContainElement("--force-compression"))
+	})
+
+	t.Run("should omit compression flags by default", func(t *testing.T) {
+		buildahCli, executor := setupBuildahCli()
+		var capturedArgs []string
+		executor.executeFunc = mockSuccessfulPush(&capturedArgs)
+
+		_, err := buildahCli.Push(&cliwrappers.BuildahPushArgs{Image: image})
+		g.Expect(err).ToNot(HaveOccurred())
+		g.Expect(capturedArgs).ToNot(ContainElement(ContainSubstring("--compression-format")))
+		g.Expect(capturedArgs).ToNot(ContainElement("--force-compression"))
+	})
 }
 
 func TestBuildahCli_Pull(t *testing.T) {
