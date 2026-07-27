@@ -4512,8 +4512,8 @@ RUN rm -r /etc/yum.repos.d && mkdir /etc/yum.repos.d
 			err = yaml.Unmarshal([]byte(buildprobeYaml), &buildprobeData)
 			Expect(err).ToNot(HaveOccurred(), "buildprobe file should be valid")
 			Expect(buildprobeData.Image.Pullspec).To(Equal(outputRef))
-			Expect(buildprobeData.BaseImages).To(HaveLen(0))
-			Expect(buildprobeData.ExtraImages).To(HaveLen(0))
+			Expect(buildprobeData.BaseImages).To(BeEmpty())
+			Expect(buildprobeData.ExtraImages).To(BeEmpty())
 		})
 
 		// ensure build args are properly parsed in buildprobe as they were passed
@@ -4525,9 +4525,10 @@ RUN rm -r /etc/yum.repos.d && mkdir /etc/yum.repos.d
 			writeContainerfile(contextDir, `
 	ARG BASEIMG
 	ARG SECONDIMG
+	FROM $SECONDIMG AS second_base
 	FROM $BASEIMG
 	COPY . .
-	COPY --from=$SECONDIMG /random-data.bin /opt/first.bin
+	COPY --from=second_base /random-data.bin /opt/first.bin
 	`)
 
 			// set up build args (both from file and directly, to test merging)
@@ -4555,10 +4556,10 @@ RUN rm -r /etc/yum.repos.d && mkdir /etc/yum.repos.d
 			err = yaml.Unmarshal([]byte(buildprobeYaml), &buildprobeData)
 			Expect(err).ToNot(HaveOccurred(), "buildprobe file should be valid")
 			Expect(buildprobeData.Image.Pullspec).To(Equal(outputRef))
-			Expect(buildprobeData.ExtraImages).To(HaveLen(1))
-			Expect(buildprobeData.ExtraImages[0].Pullspec).To(Equal(secondBase))
-			Expect(buildprobeData.BaseImages).To(HaveLen(1))
-			Expect(buildprobeData.BaseImages[0].Pullspec).To(Equal(baseImage))
+			Expect(buildprobeData.ExtraImages).To(BeEmpty())
+			Expect(buildprobeData.BaseImages).To(HaveLen(2))
+			Expect(buildprobeData.BaseImages[0].Pullspec).To(Equal(secondBase))
+			Expect(buildprobeData.BaseImages[1].Pullspec).To(Equal(baseImage))
 		})
 
 		// ensures SkipUnusedStages = false behaves as expected
@@ -4589,7 +4590,7 @@ RUN rm -r /etc/yum.repos.d && mkdir /etc/yum.repos.d
 			err = yaml.Unmarshal([]byte(buildprobeYaml), &buildprobeData)
 			Expect(err).ToNot(HaveOccurred(), "buildprobe file should be valid")
 			Expect(buildprobeData.Image.Pullspec).To(Equal(outputRef))
-			Expect(buildprobeData.ExtraImages).To(HaveLen(0))
+			Expect(buildprobeData.ExtraImages).To(BeEmpty())
 			Expect(buildprobeData.BaseImages).To(HaveLen(2))
 			Expect(buildprobeData.BaseImages[0].Pullspec).To(Equal(secondBase))
 			Expect(buildprobeData.BaseImages[1].Pullspec).To(Equal(baseImage))
@@ -4700,8 +4701,7 @@ COPY --from=builder /opt/app /opt/app
 			var buildprobeData capoProbe.BuildMetadata
 			Expect(yaml.Unmarshal(buildprobeYaml, &buildprobeData)).To(Succeed())
 			Expect(buildprobeData.Image.Pullspec).To(Equal(outputRef))
-			Expect(buildprobeData.BaseImages).To(HaveLen(1))
-			Expect(buildprobeData.BaseImages[0].Pullspec).To(Equal(baseImage))
+			Expect(buildprobeData.BaseImages).To(BeEmpty())
 			Expect(buildprobeData.ExtraImages).To(BeEmpty())
 		})
 

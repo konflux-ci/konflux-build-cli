@@ -214,7 +214,7 @@ var BuildParamsConfig = map[string]common.Parameter{
 	"buildprobe-output": {
 		Name:       "buildprobe-output",
 		ShortName:  "",
-		EnvVarName: "KBC_BUILD_BUILDPROBE_YAML_OUTPUT",
+		EnvVarName: "KBC_BUILD_BUILDPROBE_OUTPUT",
 		TypeKind:   reflect.String,
 		Usage:      "Write the parsed Buildprobe result to this path.",
 	},
@@ -340,7 +340,7 @@ var BuildParamsConfig = map[string]common.Parameter{
 		Name:       "builder-metadata-output",
 		EnvVarName: "KBC_BUILD_BUILDER_METADATA_OUTPUT",
 		TypeKind:   reflect.String,
-		Usage:      "Path to write builder content metadata (capo output) for mobster consumption.\nEnables --save-stages and --stage-labels in buildah build.",
+		Usage:      "Path to write builder content metadata (capo output) for mobster consumption.\nAlso requires --buildprobe-output.\nEnables --save-stages and --stage-labels in buildah build.",
 	},
 	"rhsm-entitlements": {
 		Name:       "rhsm-entitlements",
@@ -505,7 +505,7 @@ type BuildParams struct {
 	RewriteTimestamp           bool     `paramName:"rewrite-timestamp"`
 	QuayImageExpiresAfter      string   `paramName:"quay-image-expires-after"`
 	AddLegacyLabels            bool     `paramName:"add-legacy-labels"`
-	BuildprobeYamlOutput       string   `paramName:"buildprobe-output"`
+	BuildprobeOutput           string   `paramName:"buildprobe-output"`
 	ContainerfileJsonOutput    string   `paramName:"containerfile-json-output"`
 	SkipInjections             bool     `paramName:"skip-injections"`
 	InheritLabels              bool     `paramName:"inherit-labels"`
@@ -841,17 +841,19 @@ func (c *Build) run() error {
 		c.Results.Digest = digest
 	}
 
-	if c.Params.BuildprobeYamlOutput != "" {
+	if c.Params.BuildprobeOutput != "" {
 		buildArgs, err := c.parseAndMergeBuildArgs()
 		if err != nil {
 			l.Logger.Errorf("Failed to parse build args: %v", err)
 		} else {
-			buildprobeErr := c.runBuildprobe(c.Params.BuildprobeYamlOutput, buildArgs)
+			buildprobeErr := c.runBuildprobe(c.Params.BuildprobeOutput, buildArgs)
 
-			if buildprobeErr != nil && c.Params.BuilderMetadataOutput != "" {
-				l.Logger.Warnf("Skipping builder content scan: buildprobe failed: %v", buildprobeErr)
-			}
-			if buildprobeErr == nil && c.Params.BuilderMetadataOutput != "" {
+			if buildprobeErr != nil {
+				l.Logger.Errorf("Buildprobe failed: %v", buildprobeErr)
+				if c.Params.BuilderMetadataOutput != "" {
+					l.Logger.Warnf("Skipping builder content scan: buildprobe failed")
+				}
+			} else if c.Params.BuilderMetadataOutput != "" {
 				if capoErr := c.scanBuilderContent(buildArgs); capoErr != nil {
 					l.Logger.Errorf("Builder content scanning failed: %v", capoErr)
 				}
@@ -978,6 +980,10 @@ func (c *Build) validateParams() error {
 	validSBOMFormats := map[string]bool{"cyclonedx": true, "spdx": true}
 	if !validSBOMFormats[c.Params.SBOMFormat] {
 		return fmt.Errorf("sbom-format must be 'cyclonedx' or 'spdx', got '%s'", c.Params.SBOMFormat)
+	}
+
+	if c.Params.BuilderMetadataOutput != "" && c.Params.BuildprobeOutput == "" {
+		return fmt.Errorf("builder-metadata-output requires buildprobe-output")
 	}
 
 	return nil
@@ -2835,7 +2841,12 @@ func (c *Build) runBuildprobe(outputPath string, buildArgs map[string]string) (e
 			return fmt.Errorf("failed to set up storage client for buildprobe: %v", err)
 		}
 	}
-	return c.writeBuildprobeYaml(outputPath, buildArgs)
+	err = c.writeBuildprobeYaml(outputPath, buildArgs)
+	if err != nil {
+		return err
+	}
+	l.Logger.Infof("Builder content metadata written to %s", c.Params.BuilderMetadataOutput)
+	return nil
 }
 
 func (c *Build) writeBuildprobeYaml(outputPath string, buildArgs map[string]string) (err error) {
