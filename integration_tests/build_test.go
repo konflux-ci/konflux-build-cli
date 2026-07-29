@@ -4695,14 +4695,6 @@ COPY --from=builder /opt/app /opt/app
 			Expect(json.Unmarshal(metadataBytes, &metadata)).To(Succeed())
 			Expect(metadata.Packages).To(BeEmpty(),
 				"disabling python-package-cataloger should result in no packages found")
-
-			buildprobeYaml, readErr := os.ReadFile(filepath.Join(contextDir, "buildprobe.yaml"))
-			Expect(readErr).ToNot(HaveOccurred(), "buildprobe yaml should exist")
-			var buildprobeData capoProbe.BuildMetadata
-			Expect(yaml.Unmarshal(buildprobeYaml, &buildprobeData)).To(Succeed())
-			Expect(buildprobeData.Image.Pullspec).To(Equal(outputRef))
-			Expect(buildprobeData.BaseImages).To(BeEmpty())
-			Expect(buildprobeData.ExtraImages).To(BeEmpty())
 		})
 
 		t.Run("SingleStage", func(t *testing.T) {

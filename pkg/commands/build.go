@@ -846,16 +846,16 @@ func (c *Build) run() error {
 		if err != nil {
 			l.Logger.Errorf("Failed to parse build args: %v", err)
 		} else {
-			buildprobeErr := c.runBuildprobe(c.Params.BuildprobeOutput, buildArgs)
+			err = c.runBuildprobe(c.Params.BuildprobeOutput, buildArgs)
 
-			if buildprobeErr != nil {
-				l.Logger.Errorf("Buildprobe failed: %v", buildprobeErr)
+			if err != nil {
+				l.Logger.Errorf("Buildprobe failed: %v", err)
 				if c.Params.BuilderMetadataOutput != "" {
 					l.Logger.Warnf("Skipping builder content scan: buildprobe failed")
 				}
 			} else if c.Params.BuilderMetadataOutput != "" {
-				if capoErr := c.scanBuilderContent(buildArgs); capoErr != nil {
-					l.Logger.Errorf("Builder content scanning failed: %v", capoErr)
+				if err = c.scanBuilderContent(buildArgs); err != nil {
+					l.Logger.Errorf("Builder content scanning failed: %v", err)
 				}
 			}
 		}
@@ -2834,6 +2834,7 @@ func (c *Build) runBuildprobe(outputPath string, buildArgs map[string]string) (e
 			err = fmt.Errorf("buildprobe generation panicked: %v", r)
 		}
 	}()
+	l.Logger.Infof("running Buildprobe...")
 	// grab the StorageClient
 	if c.storageClient == nil {
 		c.storageClient, err = capoStorageClient.DefaultBuildahClient()
@@ -2845,7 +2846,7 @@ func (c *Build) runBuildprobe(outputPath string, buildArgs map[string]string) (e
 	if err != nil {
 		return err
 	}
-	l.Logger.Infof("Builder content metadata written to %s", c.Params.BuilderMetadataOutput)
+	l.Logger.Infof("Buildprobe results written to %s", c.Params.BuildprobeOutput)
 	return nil
 }
 
