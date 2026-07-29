@@ -162,6 +162,8 @@ spec:
       value: $(params.image-expires-after)
     - name: enable-package-registry-proxy
       value: $(params.enable-package-registry-proxy)
+    - name: sbom-type
+      value: cyclonedx
     runAfter:
     - clone-repository
     taskRef:
@@ -220,6 +222,10 @@ spec:
       value: $(tasks.prefetch-dependencies.results.CACHI2_ARTIFACT)
     - name: IMAGE_APPEND_PLATFORM
       value: "true"
+    - name: SBOM_TYPE
+      value: cyclonedx
+    - name: SBOM_SYFT_SELECT_CATALOGERS
+      value: "-python"
     runAfter:
     - prefetch-dependencies
     taskRef:
