@@ -169,11 +169,15 @@ func (c *BuildImageIndex) initCliWrappers() error {
 	}
 	c.CliWrappers.BuildahCli = buildahCli
 
-	skopeoCli, err := cliwrappers.NewSkopeoCli(executor)
-	if err != nil {
-		return err
+	// skopeo is only needed to sort multiple images by platform. Builds with
+	// a single image keep working in environments that have no skopeo.
+	if len(c.Params.Images) > 1 {
+		skopeoCli, err := cliwrappers.NewSkopeoCli(executor)
+		if err != nil {
+			return err
+		}
+		c.CliWrappers.SkopeoCli = skopeoCli
 	}
-	c.CliWrappers.SkopeoCli = skopeoCli
 
 	return nil
 }
