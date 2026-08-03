@@ -103,6 +103,7 @@ type SkopeoInspectArgs struct {
 	ImageRef   string
 	RetryTimes int
 	Raw        bool
+	Config     bool
 	NoTags     bool
 	Format     string
 	ExtraArgs  []string
@@ -120,6 +121,9 @@ func (s *SkopeoCli) Inspect(args *SkopeoInspectArgs) (string, error) {
 	}
 	if args.Raw {
 		scopeoArgs = append(scopeoArgs, "--raw")
+	}
+	if args.Config {
+		scopeoArgs = append(scopeoArgs, "--config")
 	}
 	if args.NoTags {
 		scopeoArgs = append(scopeoArgs, "--no-tags")
