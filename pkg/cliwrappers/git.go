@@ -134,10 +134,9 @@ func (g *GitCli) buildCmd(args []string) Cmd {
 	return cmd
 }
 
-// run executes a git command in the working directory, logs it, and returns
-// the trimmed stdout. Returns an error if the command fails or exits non-zero.
+// run executes a git command in the working directory and returns the trimmed stdout.
+// Returns an error if the command fails or exits non-zero.
 func (g *GitCli) run(args ...string) (string, error) {
-	gitLog.Debugf("[command]: git %s (in %s)", strings.Join(args, " "), g.Workdir)
 	stdout, stderr, exitCode, err := g.Executor.Execute(g.buildCmd(args))
 	if err != nil || exitCode != 0 {
 		gitLog.Debugf("git %s stderr: %s", args[0], stderr)
@@ -151,6 +150,7 @@ func (g *GitCli) run(args ...string) (string, error) {
 // Init initializes a new git repository in the working directory.
 // Runs: git init
 func (g *GitCli) Init() error {
+	gitLog.Infof("[command] %s", shellJoin("git", "init"))
 	_, err := g.run("init")
 	return err
 }
@@ -168,6 +168,7 @@ func (g *GitCli) SetSparseCheckout(directories []string) error {
 	}
 
 	args := append([]string{"sparse-checkout", "set", "--"}, directories...)
+	gitLog.Infof("[command] %s", shellJoin("git", args...))
 	_, err := g.run(args...)
 	return err
 }
@@ -178,14 +179,19 @@ func (g *GitCli) ConfigLocal(key, value string) error {
 	if key == "" {
 		return errors.New("config key must not be empty")
 	}
-	_, err := g.run("config", "--local", key, value)
+
+	args := []string{"config", "--local", key, value}
+	gitLog.Infof("[command] %s", shellJoin("git", args...))
+	_, err := g.run(args...)
 	return err
 }
 
 // Commit creates a commit with the specified message.
 // Runs: git commit -m <message>
 func (g *GitCli) Commit(message string) (string, error) {
-	return g.run("commit", "-m", message)
+	args := []string{"commit", "-m", message}
+	gitLog.Infof("[command] %s", shellJoin("git", args...))
+	return g.run(args...)
 }
 
 // Merge merges the specified ref into the current branch with the given commit message.
@@ -196,7 +202,10 @@ func (g *GitCli) Merge(ref, message string) (string, error) {
 	if ref == "" {
 		return "", errors.New("ref must not be empty")
 	}
-	return g.run("merge", "-m", message, "--no-ff", "--allow-unrelated-histories", ref)
+
+	args := []string{"merge", "-m", message, "--no-ff", "--allow-unrelated-histories", ref}
+	gitLog.Infof("[command] %s", shellJoin("git", args...))
+	return g.run(args...)
 }
 
 // --- Remote operations ---
@@ -210,17 +219,23 @@ func (g *GitCli) RemoteAdd(name, url string) (string, error) {
 	if url == "" {
 		return "", errors.New("remote url must not be empty")
 	}
+	// Do not log the URL to avoid leaking credentials
+	gitLog.Infof("[command] %s", shellJoin("git", "remote", "add", name))
 	return g.run("remote", "add", name, url)
 }
 
 // FetchTags fetches tags from the remote.
 // Runs: git fetch --force origin refs/tags/*:refs/tags/* && git tag -l
 func (g *GitCli) FetchTags() ([]string, error) {
-	if _, err := g.run("fetch", "--force", "origin", "refs/tags/*:refs/tags/*"); err != nil {
+	args := []string{"fetch", "--force", "origin", "refs/tags/*:refs/tags/*"}
+	gitLog.Infof("[command] %s", shellJoin("git", args...))
+	if _, err := g.run(args...); err != nil {
 		return nil, err
 	}
 
-	stdout, err := g.run("tag", "-l")
+	args = []string{"tag", "-l"}
+	gitLog.Infof("[command] %s", shellJoin("git", args...))
+	stdout, err := g.run(args...)
 	if err != nil {
 		return nil, err
 	}
@@ -271,6 +286,7 @@ func (g *GitCli) FetchWithRefspec(opts GitFetchOptions) error {
 		StopIfOutputContains("Permission denied").
 		StopIfOutputContains("Could not resolve hostname")
 
+	gitLog.Infof("[command] %s", shellJoin("git", gitArgs...))
 	_, stderr, exitCode, err := retryer.Run()
 	if err != nil || exitCode != 0 {
 		gitLog.Debugf("git fetch stderr: %s", stderr)
@@ -285,7 +301,10 @@ func (g *GitCli) Checkout(ref string) error {
 	if ref == "" {
 		return errors.New("ref must not be empty")
 	}
-	_, err := g.run("checkout", ref)
+
+	args := []string{"checkout", ref}
+	gitLog.Infof("[command] %s", shellJoin("git", args...))
+	_, err := g.run(args...)
 	return err
 }
 
@@ -309,6 +328,7 @@ func (g *GitCli) SubmoduleUpdate(init bool, depth int, paths []string) error {
 		gitArgs = append(gitArgs, paths...)
 	}
 
+	gitLog.Infof("[command] %s", shellJoin("git", gitArgs...))
 	_, err := g.run(gitArgs...)
 	return err
 }
@@ -317,6 +337,7 @@ func (g *GitCli) SubmoduleUpdate(init bool, depth int, paths []string) error {
 // Runs: git submodule foreach --recursive git fetch --force origin refs/tags/*:refs/tags/*
 func (g *GitCli) SubmoduleFetchTags() error {
 	fetchTagsCmd := "git fetch --force origin refs/tags/*:refs/tags/*"
+	gitLog.Infof("[command] %s", shellJoin("git", "submodule", "foreach", "--recursive", fetchTagsCmd))
 	_, err := g.run("submodule", "foreach", "--recursive", fetchTagsCmd)
 	return err
 }
@@ -340,6 +361,7 @@ func (g *GitCli) RevParse(ref string, short bool, length int) (string, error) {
 	}
 	gitArgs = append(gitArgs, ref)
 
+	gitLog.Infof("[command] %s", shellJoin("git", gitArgs...))
 	return g.run(gitArgs...)
 }
 
@@ -355,5 +377,6 @@ func (g *GitCli) Log(format string, count int) (string, error) {
 		gitArgs = append(gitArgs, fmt.Sprintf("--pretty=%s", format))
 	}
 
+	gitLog.Infof("[command] %s", shellJoin("git", gitArgs...))
 	return g.run(gitArgs...)
 }
