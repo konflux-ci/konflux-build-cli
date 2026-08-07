@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"reflect"
+	"slices"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -126,6 +127,7 @@ type BuildImageIndexResults struct {
 
 type BuildImageIndexCliWrappers struct {
 	BuildahCli cliwrappers.BuildahCliInterface
+	SkopeoCli  cliwrappers.SkopeoCliInterface
 }
 
 type BuildImageIndex struct {
@@ -166,6 +168,16 @@ func (c *BuildImageIndex) initCliWrappers() error {
 		return err
 	}
 	c.CliWrappers.BuildahCli = buildahCli
+
+	// skopeo is only needed to sort multiple images by platform. Builds with
+	// a single image keep working in environments that have no skopeo.
+	if len(c.Params.Images) > 1 {
+		skopeoCli, err := cliwrappers.NewSkopeoCli(executor)
+		if err != nil {
+			return err
+		}
+		c.CliWrappers.SkopeoCli = skopeoCli
+	}
 
 	return nil
 }
@@ -232,7 +244,15 @@ func (c *BuildImageIndex) buildManifestIndex() error {
 		return err
 	}
 
-	for _, imageRef := range c.Params.Images {
+	imageRefs := c.Params.Images
+	if len(imageRefs) > 1 {
+		imageRefs, err = c.sortImageRefsByPlatform(imageRefs)
+		if err != nil {
+			return err
+		}
+	}
+
+	for _, imageRef := range imageRefs {
 		// Normalize the image reference to strip the tag when both tag and digest are present.
 		// buildah does not support the repository:tag@digest format unless the image is available locally.
 		normalizedRef := common.NormalizeImageRefWithDigest(imageRef)
@@ -316,6 +336,118 @@ func (c *BuildImageIndex) buildManifestIndex() error {
 	}
 
 	return nil
+}
+
+// sortImageRefsByPlatform orders the image refs by the platform of the image
+// each one points to, so the index lists its entries in the same order no
+// matter what order the inputs arrived in. The sort is stable: refs with the
+// same platform keep their input order, so a per-arch index that lists a gzip
+// manifest before a zstd one keeps gzip first after flattening.
+func (c *BuildImageIndex) sortImageRefsByPlatform(imageRefs []string) ([]string, error) {
+	type refWithPlatform struct {
+		ref      string
+		platform string
+	}
+
+	entries := make([]refWithPlatform, 0, len(imageRefs))
+	for _, imageRef := range imageRefs {
+		platform, err := c.imagePlatform(common.NormalizeImageRefWithDigest(imageRef))
+		if err != nil {
+			return nil, fmt.Errorf("failed to determine platform of %s: %w", imageRef, err)
+		}
+		entries = append(entries, refWithPlatform{ref: imageRef, platform: platform})
+	}
+
+	slices.SortStableFunc(entries, func(a, b refWithPlatform) int {
+		return strings.Compare(a.platform, b.platform)
+	})
+
+	sorted := make([]string, 0, len(entries))
+	l.Logger.Info("Image order in the index:")
+	for _, entry := range entries {
+		l.Logger.Infof("  %s %s", entry.platform, entry.ref)
+		sorted = append(sorted, entry.ref)
+	}
+
+	return sorted, nil
+}
+
+// imagePlatform returns the os/arch[/variant] of the image the ref points to.
+// A ref can be a single image manifest or an index (for example a per-arch
+// index holding one manifest per compression type). An index sorts by its
+// first child's platform. The children keep their own order because buildah's
+// manifest add --all copies them as they are.
+func (c *BuildImageIndex) imagePlatform(imageRef string) (string, error) {
+	type childManifest struct {
+		Platform struct {
+			OS           string `json:"os,omitempty"`
+			Architecture string `json:"architecture,omitempty"`
+			Variant      string `json:"variant,omitempty"`
+		} `json:"platform,omitempty"`
+	}
+	type rawManifest struct {
+		MediaType string          `json:"mediaType,omitempty"`
+		Manifests []childManifest `json:"manifests,omitempty"`
+	}
+
+	rawManifestJson, err := c.CliWrappers.SkopeoCli.Inspect(&cliwrappers.SkopeoInspectArgs{
+		ImageRef:   imageRef,
+		Raw:        true,
+		RetryTimes: 3,
+	})
+	if err != nil {
+		return "", err
+	}
+
+	manifest := &rawManifest{}
+	if err := json.Unmarshal([]byte(rawManifestJson), manifest); err != nil {
+		return "", fmt.Errorf("failed to unmarshal manifest: %w", err)
+	}
+
+	isIndex := strings.Contains(manifest.MediaType, ".index.") || strings.Contains(manifest.MediaType, ".manifest.list.")
+	if isIndex || (manifest.MediaType == "" && len(manifest.Manifests) > 0) {
+		if len(manifest.Manifests) == 0 {
+			return "", fmt.Errorf("image index has no manifests")
+		}
+		p := manifest.Manifests[0].Platform
+		return platformKey(p.OS, p.Architecture, p.Variant)
+	}
+
+	// A single image manifest doesn't have platform fields. They live in the
+	// image config blob.
+	rawConfigJson, err := c.CliWrappers.SkopeoCli.Inspect(&cliwrappers.SkopeoInspectArgs{
+		ImageRef:   imageRef,
+		Raw:        true,
+		Config:     true,
+		RetryTimes: 3,
+	})
+	if err != nil {
+		return "", err
+	}
+
+	imageConfig := &struct {
+		OS           string `json:"os,omitempty"`
+		Architecture string `json:"architecture,omitempty"`
+		Variant      string `json:"variant,omitempty"`
+	}{}
+	if err := json.Unmarshal([]byte(rawConfigJson), imageConfig); err != nil {
+		return "", fmt.Errorf("failed to unmarshal image config: %w", err)
+	}
+
+	return platformKey(imageConfig.OS, imageConfig.Architecture, imageConfig.Variant)
+}
+
+func platformKey(osName, architecture, variant string) (string, error) {
+	if osName == "" || architecture == "" {
+		return "", fmt.Errorf("image reports no platform (os '%s', architecture '%s')", osName, architecture)
+	}
+
+	platform := osName + "/" + architecture
+	if variant != "" {
+		platform += "/" + variant
+	}
+
+	return platform, nil
 }
 
 func (c *BuildImageIndex) validateParams() error {

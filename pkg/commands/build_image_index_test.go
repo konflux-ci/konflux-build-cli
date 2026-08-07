@@ -1,9 +1,12 @@
 package commands
 
 import (
+	"errors"
 	"testing"
 
 	. "github.com/onsi/gomega"
+
+	"github.com/konflux-ci/konflux-build-cli/pkg/cliwrappers"
 )
 
 func Test_BuildImageIndex_validateParams(t *testing.T) {
@@ -340,4 +343,187 @@ func Test_BuildImageIndex_extractPlatformImages(t *testing.T) {
 			}
 		})
 	}
+}
+
+func Test_BuildImageIndex_sortImageRefsByPlatform(t *testing.T) {
+	g := NewWithT(t)
+
+	const digest1 = "sha256:aaa111aaa111aaa111aaa111aaa111aaa111aaa111aaa111aaa111aaa111aaa1"
+
+	indexJson := func(platformFields string) string {
+		return `{
+			"mediaType": "application/vnd.oci.image.index.v1+json",
+			"manifests": [
+				{"mediaType": "application/vnd.oci.image.manifest.v1+json", "digest": "` + digest1 + `", "platform": {` + platformFields + `}}
+			]
+		}`
+	}
+	const manifestJson = `{"mediaType": "application/vnd.oci.image.manifest.v1+json", "config": {"digest": "` + digest1 + `"}}`
+
+	newIndexCommand := func(rawByRef, configByRef map[string]string) *BuildImageIndex {
+		return &BuildImageIndex{
+			CliWrappers: BuildImageIndexCliWrappers{
+				SkopeoCli: &mockSkopeoCli{
+					InspectFunc: func(args *cliwrappers.SkopeoInspectArgs) (string, error) {
+						if args.Config {
+							return configByRef[args.ImageRef], nil
+						}
+						return rawByRef[args.ImageRef], nil
+					},
+				},
+			},
+		}
+	}
+
+	t.Run("should order image refs by platform", func(t *testing.T) {
+		arm64Ref := "quay.io/org/myapp-arm64@" + digest1
+		amd64Ref := "quay.io/org/myapp-amd64@" + digest1
+		armV7Ref := "quay.io/org/myapp-armv7@" + digest1
+
+		c := newIndexCommand(
+			map[string]string{
+				arm64Ref: indexJson(`"os": "linux", "architecture": "arm64"`),
+				amd64Ref: manifestJson,
+				armV7Ref: indexJson(`"os": "linux", "architecture": "arm", "variant": "v7"`),
+			},
+			map[string]string{
+				amd64Ref: `{"os": "linux", "architecture": "amd64"}`,
+			},
+		)
+
+		sorted, err := c.sortImageRefsByPlatform([]string{arm64Ref, amd64Ref, armV7Ref})
+
+		g.Expect(err).ToNot(HaveOccurred())
+		g.Expect(sorted).To(Equal([]string{amd64Ref, armV7Ref, arm64Ref}))
+	})
+
+	t.Run("should keep input order for refs with the same platform", func(t *testing.T) {
+		firstRef := "quay.io/org/myapp-gzip@" + digest1
+		secondRef := "quay.io/org/myapp-zstd@" + digest1
+
+		c := newIndexCommand(
+			map[string]string{
+				firstRef:  indexJson(`"os": "linux", "architecture": "amd64"`),
+				secondRef: indexJson(`"os": "linux", "architecture": "amd64"`),
+			},
+			nil,
+		)
+
+		sorted, err := c.sortImageRefsByPlatform([]string{firstRef, secondRef})
+
+		g.Expect(err).ToNot(HaveOccurred())
+		g.Expect(sorted).To(Equal([]string{firstRef, secondRef}))
+	})
+
+	t.Run("should fail when the image reports no platform", func(t *testing.T) {
+		ref := "quay.io/org/myapp@" + digest1
+
+		c := newIndexCommand(
+			map[string]string{ref: indexJson(`"os": "linux"`)},
+			nil,
+		)
+
+		_, err := c.sortImageRefsByPlatform([]string{ref})
+
+		g.Expect(err).To(HaveOccurred())
+		g.Expect(err.Error()).To(ContainSubstring("reports no platform"))
+		g.Expect(err.Error()).To(ContainSubstring(ref))
+	})
+
+	t.Run("should fail when inspect fails", func(t *testing.T) {
+		ref := "quay.io/org/myapp@" + digest1
+
+		c := &BuildImageIndex{
+			CliWrappers: BuildImageIndexCliWrappers{
+				SkopeoCli: &mockSkopeoCli{
+					InspectFunc: func(args *cliwrappers.SkopeoInspectArgs) (string, error) {
+						return "", errors.New("connection refused")
+					},
+				},
+			},
+		}
+
+		_, err := c.sortImageRefsByPlatform([]string{ref})
+
+		g.Expect(err).To(HaveOccurred())
+		g.Expect(err.Error()).To(ContainSubstring("failed to determine platform of " + ref))
+	})
+}
+
+func Test_BuildImageIndex_buildManifestIndex_order(t *testing.T) {
+	g := NewWithT(t)
+
+	const digest1 = "sha256:aaa111aaa111aaa111aaa111aaa111aaa111aaa111aaa111aaa111aaa111aaa1"
+	const digest2 = "sha256:bbb222bbb222bbb222bbb222bbb222bbb222bbb222bbb222bbb222bbb222bbb2"
+
+	t.Run("should add images in platform order", func(t *testing.T) {
+		arm64Ref := "quay.io/org/myapp@" + digest1
+		amd64Ref := "quay.io/org/myapp@" + digest2
+
+		var addedRefs []string
+		c := &BuildImageIndex{
+			Params: &BuildImageIndexParams{
+				Image:            "quay.io/org/myapp:latest",
+				Images:           []string{arm64Ref, amd64Ref},
+				BuildahFormat:    "oci",
+				AlwaysBuildIndex: true,
+			},
+			CliWrappers: BuildImageIndexCliWrappers{
+				BuildahCli: &mockBuildahCli{
+					ManifestCreateFunc: func(args *cliwrappers.BuildahManifestCreateArgs) error { return nil },
+					ManifestAddFunc: func(args *cliwrappers.BuildahManifestAddArgs) error {
+						addedRefs = append(addedRefs, args.ImageRef)
+						return nil
+					},
+					ManifestInspectFunc: func(args *cliwrappers.BuildahManifestInspectArgs) (string, error) {
+						return `{"manifests": [{"digest": "` + digest1 + `"}, {"digest": "` + digest2 + `"}]}`, nil
+					},
+					ManifestPushFunc: func(args *cliwrappers.BuildahManifestPushArgs) (string, error) {
+						return digest1, nil
+					},
+				},
+				SkopeoCli: &mockSkopeoCli{
+					InspectFunc: func(args *cliwrappers.SkopeoInspectArgs) (string, error) {
+						platforms := map[string]string{
+							arm64Ref: `{"mediaType": "application/vnd.oci.image.index.v1+json", "manifests": [{"digest": "` + digest1 + `", "platform": {"os": "linux", "architecture": "arm64"}}]}`,
+							amd64Ref: `{"mediaType": "application/vnd.oci.image.index.v1+json", "manifests": [{"digest": "` + digest2 + `", "platform": {"os": "linux", "architecture": "amd64"}}]}`,
+						}
+						return platforms[args.ImageRef], nil
+					},
+				},
+			},
+			imageName: "quay.io/org/myapp",
+		}
+
+		g.Expect(c.buildManifestIndex()).To(Succeed())
+		g.Expect(addedRefs).To(Equal([]string{"docker://" + amd64Ref, "docker://" + arm64Ref}))
+	})
+
+	t.Run("should not inspect platforms for a single image", func(t *testing.T) {
+		inspectCalled := false
+		c := &BuildImageIndex{
+			Params: &BuildImageIndexParams{
+				Image:            "quay.io/org/myapp:latest",
+				Images:           []string{"quay.io/org/myapp@" + digest1},
+				BuildahFormat:    "oci",
+				AlwaysBuildIndex: false,
+			},
+			CliWrappers: BuildImageIndexCliWrappers{
+				BuildahCli: &mockBuildahCli{
+					ManifestCreateFunc: func(args *cliwrappers.BuildahManifestCreateArgs) error { return nil },
+				},
+				SkopeoCli: &mockSkopeoCli{
+					InspectFunc: func(args *cliwrappers.SkopeoInspectArgs) (string, error) {
+						inspectCalled = true
+						return "", nil
+					},
+				},
+			},
+			imageName: "quay.io/org/myapp",
+		}
+
+		g.Expect(c.buildManifestIndex()).To(Succeed())
+		g.Expect(inspectCalled).To(BeFalse())
+		g.Expect(c.imageDigest).To(Equal(digest1))
+	})
 }

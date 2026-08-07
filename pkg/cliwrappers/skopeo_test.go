@@ -199,6 +199,7 @@ func TestSkopeoCli_Inspect(t *testing.T) {
 			ImageRef:   imageRef,
 			RetryTimes: retryTimes,
 			Raw:        raw,
+			Config:     true,
 			NoTags:     noTags,
 			Format:     format,
 		}
@@ -206,12 +207,13 @@ func TestSkopeoCli_Inspect(t *testing.T) {
 		stdout, err := skopeoCli.Inspect(inspectArgs)
 
 		g.Expect(err).ToNot(HaveOccurred())
-		g.Expect(capturedArgs).To(HaveLen(8))
+		g.Expect(capturedArgs).To(HaveLen(9))
 		g.Expect(capturedArgs[0]).To(Equal("inspect"))
 		g.Expect(capturedArgs[len(capturedArgs)-1]).To(Equal("docker://" + imageRef))
 		expectArgAndValue(g, capturedArgs, "--retry-times", strconv.Itoa(retryTimes))
 		expectArgAndValue(g, capturedArgs, "--format", format)
 		g.Expect(capturedArgs).To(ContainElement("--raw"))
+		g.Expect(capturedArgs).To(ContainElement("--config"))
 		g.Expect(capturedArgs).To(ContainElement("--no-tags"))
 		g.Expect(stdout).To(Equal(output))
 	})
