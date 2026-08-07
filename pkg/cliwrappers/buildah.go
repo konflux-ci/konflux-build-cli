@@ -361,10 +361,12 @@ func (b *BuildahCli) Build(args *BuildahBuildArgs) error {
 }
 
 type BuildahPushArgs struct {
-	Image       string
-	Destination string
-	Format      string
-	TLSVerify   *bool
+	Image             string
+	Destination       string
+	Format            string
+	TLSVerify         *bool
+	CompressionFormat string
+	ForceCompression  bool
 }
 
 // Push an image from local storage to the registry. Return the digest of the pushed manifest.
@@ -390,6 +392,12 @@ func (b *BuildahCli) Push(args *BuildahPushArgs) (string, error) {
 	}
 	if args.Format != "" {
 		buildahArgs = append(buildahArgs, "--format="+args.Format)
+	}
+	if args.CompressionFormat != "" {
+		buildahArgs = append(buildahArgs, "--compression-format="+args.CompressionFormat)
+	}
+	if args.ForceCompression {
+		buildahArgs = append(buildahArgs, "--force-compression")
 	}
 	buildahArgs = append(buildahArgs, args.Image)
 	if args.Destination != "" {
