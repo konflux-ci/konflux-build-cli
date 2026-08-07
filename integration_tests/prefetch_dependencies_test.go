@@ -19,7 +19,7 @@ const (
 )
 
 type prefetchDependenciesTestParams struct {
-	Context             string
+	MountPoint          string
 	Input               string
 	OutputDir           string
 	OutputDirMountPoint string
@@ -61,9 +61,15 @@ func runPrefetchDependencies(params prefetchDependenciesTestParams) error {
 	container := NewBuildCliRunnerContainer("kbc-prefetch-dependencies", hermetoLatestImage)
 	defer container.DeleteIfExists()
 
-	container.AddVolumeWithOptions(params.Context, "/workspace", "z")
+	container.AddVolumeWithOptions(params.MountPoint, "/workspace", "z")
 	container.SetWorkdir("/workspace")
 	if err := container.Start(); err != nil {
+		return err
+	}
+
+	// Workaround to prevent Hermeto fail in container with:
+	// GitInvalidRevisionError: Failed to access HEAD commit: SHA is empty, possible dubious ownership in the repository
+	if err := container.ExecuteCommand("git", "config", "--global", "--add", "safe.directory", "/workspace"); err != nil {
 		return err
 	}
 
@@ -91,8 +97,8 @@ func TestPrefetchDependencies(t *testing.T) {
 		tempDir := setupContext(t)
 
 		params := prefetchDependenciesTestParams{
-			Context: tempDir,
-			Input:   "",
+			MountPoint: tempDir,
+			Input:      "",
 		}
 		Expect(runPrefetchDependencies(params)).To(Succeed())
 	})
@@ -105,8 +111,8 @@ func TestPrefetchDependencies(t *testing.T) {
 		Expect(cloneGitRepo(hermetoIntegrationTestsRepoURL, branch, repoPath)).To(Succeed())
 
 		params := prefetchDependenciesTestParams{
-			Context: repoPath,
-			Input:   `{"packages": [{"type": "rpm"}]}`,
+			MountPoint: repoPath,
+			Input:      `{"packages": [{"type": "rpm"}]}`,
 		}
 		Expect(runPrefetchDependencies(params)).To(Succeed())
 
@@ -156,7 +162,7 @@ func TestPrefetchDependencies(t *testing.T) {
 		Expect(cloneGitRepo(hermetoIntegrationTestsRepoURL, branch, repoPath)).To(Succeed())
 
 		params := prefetchDependenciesTestParams{
-			Context:             repoPath,
+			MountPoint:          repoPath,
 			Input:               `{"packages": [{"type": "gomod"}]}`,
 			OutputDirMountPoint: "/tmp",
 			EnvFiles:            []string{"hermeto.env", "prefetch.env", "prefetch-env.json"},
