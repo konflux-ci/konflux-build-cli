@@ -150,7 +150,7 @@ func (r *Retryer) applyJitter(delay time.Duration) time.Duration {
 	if span <= 0 {
 		return delay
 	}
-	return minDelay + time.Duration(rand.Int64N(int64(span)+1))
+	return minDelay + rand.N(span + 1)
 }
 
 // StopOnExitCode adds an stop exit code.
