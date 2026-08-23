@@ -186,17 +186,6 @@ func Test_Build_validateParams(t *testing.T) {
 			errSubstring: "commit-timestamp is not set",
 		},
 		{
-			name: "should fail when commit-timestamp is not a number",
-			params: BuildParams{
-				OutputRef:       "quay.io/org/image:tag",
-				Context:         tempDir,
-				SourceDateEpoch: sourceDateEpochFromCommitTimestamp,
-				CommitTimestamp: "not-a-timestamp",
-			},
-			errExpected:  true,
-			errSubstring: "is not a valid Unix timestamp",
-		},
-		{
 			name: "should allow commit-timestamp without the source-date-epoch sentinel",
 			params: BuildParams{
 				OutputRef:       "quay.io/org/image:tag",
@@ -617,7 +606,7 @@ func Test_Build_resolveSourceDateEpoch(t *testing.T) {
 			CommitTimestamp: "1779309030",
 		}}
 
-		g.Expect(c.resolveSourceDateEpoch()).To(Succeed())
+		c.resolveSourceDateEpoch()
 		g.Expect(c.Params.SourceDateEpoch).To(Equal("1779309030"))
 	})
 
@@ -627,7 +616,7 @@ func Test_Build_resolveSourceDateEpoch(t *testing.T) {
 			CommitTimestamp: "1779309030",
 		}}
 
-		g.Expect(c.resolveSourceDateEpoch()).To(Succeed())
+		c.resolveSourceDateEpoch()
 		g.Expect(c.Params.SourceDateEpoch).To(Equal("1234567890"))
 	})
 
@@ -636,7 +625,7 @@ func Test_Build_resolveSourceDateEpoch(t *testing.T) {
 			CommitTimestamp: "1779309030",
 		}}
 
-		g.Expect(c.resolveSourceDateEpoch()).To(Succeed())
+		c.resolveSourceDateEpoch()
 		g.Expect(c.Params.SourceDateEpoch).To(BeEmpty())
 	})
 }
@@ -2392,6 +2381,23 @@ func Test_Build_processLabelsAndAnnotations(t *testing.T) {
 		))
 	})
 
+	t.Run("should use source-date-epoch resolved from commit-timestamp", func(t *testing.T) {
+		c := &Build{
+			Params: &BuildParams{
+				SourceDateEpoch: sourceDateEpochFromCommitTimestamp,
+				CommitTimestamp: "1767225600", // 2026-01-01
+			},
+		}
+		c.resolveSourceDateEpoch()
+
+		err := c.processLabelsAndAnnotations()
+		g.Expect(err).ToNot(HaveOccurred())
+
+		g.Expect(c.mergedLabels).To(ContainElement(
+			"org.opencontainers.image.created=2026-01-01T00:00:00Z",
+		))
+	})
+
 	t.Run("should add quay.expires-after label when provided", func(t *testing.T) {
 		c := &Build{
 			Params: &BuildParams{
@@ -2424,6 +2430,20 @@ func Test_Build_processLabelsAndAnnotations(t *testing.T) {
 				SourceDateEpoch: "1767225600.5",
 			},
 		}
+
+		err := c.processLabelsAndAnnotations()
+		g.Expect(err).To(HaveOccurred())
+		g.Expect(err.Error()).To(ContainSubstring("determining build timestamp: parsing source-date-epoch:"))
+	})
+
+	t.Run("should return error when commit-timestamp is not a number", func(t *testing.T) {
+		c := &Build{
+			Params: &BuildParams{
+				SourceDateEpoch: sourceDateEpochFromCommitTimestamp,
+				CommitTimestamp: "not-a-timestamp",
+			},
+		}
+		c.resolveSourceDateEpoch()
 
 		err := c.processLabelsAndAnnotations()
 		g.Expect(err).To(HaveOccurred())

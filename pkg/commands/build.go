@@ -776,6 +776,8 @@ func (c *Build) run() error {
 		return err
 	}
 
+	c.resolveSourceDateEpoch()
+
 	if err := c.detectBuildahVersion(); err != nil {
 		return err
 	}
@@ -897,27 +899,24 @@ func (c *Build) run() error {
 // source-date-epoch with the actual commit timestamp. The user opts into
 // the substitution by writing the special value. An empty or unset
 // source-date-epoch stays empty.
-func (c *Build) resolveSourceDateEpoch() error {
+//
+// Callers must run validateParams first: it guarantees commit-timestamp is
+// set whenever the sentinel is used, so this never needs to fail. Format
+// validation of the resulting value happens once, downstream, wherever
+// source-date-epoch is actually parsed (getBuildTimeRFC3339) -- the same
+// path an explicit numeric source-date-epoch already goes through.
+func (c *Build) resolveSourceDateEpoch() {
 	if c.Params.SourceDateEpoch != sourceDateEpochFromCommitTimestamp {
-		return nil
-	}
-
-	if c.Params.CommitTimestamp == "" {
-		return fmt.Errorf("source-date-epoch is %s but commit-timestamp is not set", sourceDateEpochFromCommitTimestamp)
-	}
-
-	if _, err := strconv.ParseInt(c.Params.CommitTimestamp, 10, 64); err != nil {
-		return fmt.Errorf("commit-timestamp '%s' is not a valid Unix timestamp", c.Params.CommitTimestamp)
+		return
 	}
 
 	l.Logger.Infof("Resolved source-date-epoch to commit timestamp %s", c.Params.CommitTimestamp)
 	c.Params.SourceDateEpoch = c.Params.CommitTimestamp
-	return nil
 }
 
 func (c *Build) validateParams() error {
-	if err := c.resolveSourceDateEpoch(); err != nil {
-		return err
+	if c.Params.SourceDateEpoch == sourceDateEpochFromCommitTimestamp && c.Params.CommitTimestamp == "" {
+		return fmt.Errorf("source-date-epoch is %s but commit-timestamp is not set", sourceDateEpochFromCommitTimestamp)
 	}
 
 	if !common.IsImageNameValid(common.GetImageName(c.Params.OutputRef)) {
