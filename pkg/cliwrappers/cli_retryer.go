@@ -150,6 +150,7 @@ func (r *Retryer) applyJitter(delay time.Duration) time.Duration {
 	if span <= 0 {
 		return delay
 	}
+	//nolint:gosec // G404: math/rand is intentional for retry jitter, not cryptographic use
 	return minDelay + rand.N(span+1)
 }
 
