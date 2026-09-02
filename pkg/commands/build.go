@@ -35,8 +35,8 @@ import (
 	"go.yaml.in/yaml/v3"
 
 	"github.com/containerd/platforms"
-	"github.com/keilerkonzept/dockerfile-json/pkg/buildargs"
-	"github.com/keilerkonzept/dockerfile-json/pkg/dockerfile"
+	"github.com/konflux-ci/dockerfile-json/pkg/buildargs"
+	"github.com/konflux-ci/dockerfile-json/pkg/dockerfile"
 	l "github.com/konflux-ci/konflux-build-cli/pkg/logger"
 	"github.com/moby/buildkit/frontend/dockerfile/instructions"
 )
