@@ -6,8 +6,8 @@ require (
 	github.com/containerd/platforms v1.0.0-rc.4
 	github.com/containers/image/v5 v5.36.2
 	github.com/cyphar/filepath-securejoin v0.7.0
-	github.com/keilerkonzept/dockerfile-json v1.2.2
 	github.com/konflux-ci/capo v0.5.1
+	github.com/konflux-ci/dockerfile-json v1.3.0
 	github.com/moby/buildkit v0.25.1
 	github.com/onsi/gomega v1.38.2
 	github.com/opencontainers/go-digest v1.0.0
@@ -337,5 +337,3 @@ require (
 	sigs.k8s.io/structured-merge-diff/v6 v6.3.2 // indirect
 	sigs.k8s.io/yaml v1.6.0 // indirect
 )
-
-replace github.com/keilerkonzept/dockerfile-json => github.com/konflux-ci/dockerfile-json v0.0.0-20260617133258-290fb3e2de6c
