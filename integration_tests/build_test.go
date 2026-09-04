@@ -52,7 +52,7 @@ type BuildParams struct {
 	SecretDirs              []string
 	WorkdirMount            string
 	BuildArgs               []string
-	BuildArgsFile           []string
+	BuildArgsFiles          []string
 	Envs                    []string
 	Labels                  []string
 	Annotations             []string
@@ -311,9 +311,9 @@ func runBuildWithOutput(container *TestRunnerContainer, buildParams BuildParams)
 		args = append(args, "--build-args")
 		args = append(args, buildParams.BuildArgs...)
 	}
-	if len(buildParams.BuildArgsFile) > 0 {
-		args = append(args, "--build-args-file")
-		args = append(args, buildParams.BuildArgsFile...)
+	if len(buildParams.BuildArgsFiles) > 0 {
+		args = append(args, "--build-args-files")
+		args = append(args, buildParams.BuildArgsFiles...)
 	}
 	if len(buildParams.Envs) > 0 {
 		args = append(args, "--envs")
@@ -1646,7 +1646,7 @@ LABEL test.label="build-args-test"
 			OutputRef:               outputRef,
 			Push:                    false,
 			BuildArgs:               []string{"NAME=foo", "VERSION=1.2.3"},
-			BuildArgsFile:           []string{"/workspace/build-args-file-1", "/workspace/build-args-file-2"},
+			BuildArgsFiles:          []string{"/workspace/build-args-file-1", "/workspace/build-args-file-2"},
 			ContainerfileJsonOutput: containerfileJsonPath,
 		}
 
@@ -4884,7 +4884,7 @@ RUN rm -r /etc/yum.repos.d && mkdir /etc/yum.repos.d
 				Context:          contextDir,
 				OutputRef:        outputRef,
 				BuildArgs:        buildArgs,
-				BuildArgsFile:    []string{"/workspace/build-args-file-1", "/workspace/build-args-file-2"},
+				BuildArgsFiles:   []string{"/workspace/build-args-file-1", "/workspace/build-args-file-2"},
 				BuildprobeOutput: buildprobeYamlPath,
 			}
 			container := setupBuildContainerWithCleanup(t, buildParams, imageRegistry)
@@ -5170,7 +5170,7 @@ COPY --from=builder $SRC/app /opt/app
 
 		})
 
-		t.Run("WithBuildArgsFile", func(t *testing.T) {
+		t.Run("WithBuildArgsFiles", func(t *testing.T) {
 			SetupGomega(t)
 
 			contextDir := setupTestContext(t)
@@ -5193,7 +5193,7 @@ COPY --from=builder $SRC_PART_1$SRC_PART_2/app /opt/app
 			buildParams := BuildParams{
 				Context:               contextDir,
 				OutputRef:             outputRef,
-				BuildArgsFile:         []string{"/workspace/build-args-file-1", "/workspace/build-args-file-2"},
+				BuildArgsFiles:        []string{"/workspace/build-args-file-1", "/workspace/build-args-file-2"},
 				BuildprobeOutput:      "/workspace/buildprobe.yaml",
 				BuilderMetadataOutput: "/workspace/builder-metadata.json",
 			}
@@ -5215,7 +5215,7 @@ COPY --from=builder $SRC_PART_1$SRC_PART_2/app /opt/app
 			Expect(json.Unmarshal(metadataBytes, &metadata)).To(Succeed())
 
 			Expect(metadata.Packages).To(HaveLen(1),
-				"capo should find the package at /opt/app (ARGs resolved via --build-args-file)")
+				"capo should find the package at /opt/app (ARGs resolved via --build-args-files)")
 			Expect(metadata.Packages[0].PackageURL).To(Equal("pkg:pypi/app@1.2.3"))
 			Expect(metadata.Packages[0].OriginType).To(Equal("intermediate"))
 			Expect(metadata.Packages[0].StageAlias).To(Equal("builder"))

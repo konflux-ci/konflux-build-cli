@@ -67,7 +67,7 @@ type BuildahBuildArgs struct {
 	Volumes          []BuildahVolume
 	BuildContexts    []BuildahBuildContext
 	BuildArgs        []string
-	BuildArgsFile    []string
+	BuildArgsFiles   []string
 	Envs             []string
 	Labels           []string
 	Annotations      []string
@@ -199,8 +199,8 @@ func (args *BuildahBuildArgs) MakePathsAbsolute(baseDir string) error {
 		}
 	}
 
-	for i := range args.BuildArgsFile {
-		err = ensureAbsolute(&args.BuildArgsFile[i])
+	for i := range args.BuildArgsFiles {
+		err = ensureAbsolute(&args.BuildArgsFiles[i])
 		if err != nil {
 			return err
 		}
@@ -251,7 +251,7 @@ func (b *BuildahCli) Build(args *BuildahBuildArgs) error {
 		buildahArgs = append(buildahArgs, "--build-arg="+buildArg)
 	}
 
-	for _, file := range args.BuildArgsFile {
+	for _, file := range args.BuildArgsFiles {
 		buildahArgs = append(buildahArgs, "--build-arg-file="+file)
 	}
 

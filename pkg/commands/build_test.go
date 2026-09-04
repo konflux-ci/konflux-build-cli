@@ -1402,7 +1402,7 @@ func Test_Build_createBuildArgExpander(t *testing.T) {
 
 		c := &Build{
 			Params: &BuildParams{
-				BuildArgsFile: []string{filepath.Join(tempDir, "build-args")},
+				BuildArgsFiles: []string{filepath.Join(tempDir, "build-args")},
 			},
 		}
 
@@ -1427,7 +1427,7 @@ func Test_Build_createBuildArgExpander(t *testing.T) {
 
 		c := &Build{
 			Params: &BuildParams{
-				BuildArgsFile: []string{
+				BuildArgsFiles: []string{
 					filepath.Join(tempDir, "build-args-1"),
 					filepath.Join(tempDir, "build-args-2"),
 				},
@@ -1456,7 +1456,7 @@ func Test_Build_createBuildArgExpander(t *testing.T) {
 
 		c := &Build{
 			Params: &BuildParams{
-				BuildArgsFile: []string{
+				BuildArgsFiles: []string{
 					filepath.Join(tempDir, "build-args-1"),
 					filepath.Join(tempDir, "build-args-2"),
 					filepath.Join(tempDir, "build-args-3"),
@@ -1480,8 +1480,8 @@ func Test_Build_createBuildArgExpander(t *testing.T) {
 
 		c := &Build{
 			Params: &BuildParams{
-				BuildArgs:     []string{"NAME=cli-value"},
-				BuildArgsFile: []string{filepath.Join(tempDir, "build-args")},
+				BuildArgs:      []string{"NAME=cli-value"},
+				BuildArgsFiles: []string{filepath.Join(tempDir, "build-args")},
 			},
 		}
 
@@ -1531,7 +1531,7 @@ func Test_Build_createBuildArgExpander(t *testing.T) {
 
 		c := &Build{
 			Params: &BuildParams{
-				BuildArgsFile: []string{filepath.Join(tempDir, "build-args")},
+				BuildArgsFiles: []string{filepath.Join(tempDir, "build-args")},
 			},
 		}
 
@@ -1583,7 +1583,7 @@ func Test_Build_createBuildArgExpander(t *testing.T) {
 	t.Run("should error when build args file not found", func(t *testing.T) {
 		c := &Build{
 			Params: &BuildParams{
-				BuildArgsFile: []string{"/nonexistent/build-args"},
+				BuildArgsFiles: []string{"/nonexistent/build-args"},
 			},
 		}
 
@@ -1602,7 +1602,7 @@ func Test_Build_createBuildArgExpander(t *testing.T) {
 
 		c := &Build{
 			Params: &BuildParams{
-				BuildArgsFile: []string{filepath.Join(tempDir, "build-args")},
+				BuildArgsFiles: []string{filepath.Join(tempDir, "build-args")},
 			},
 		}
 
