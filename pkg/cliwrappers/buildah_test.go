@@ -223,7 +223,7 @@ func TestBuildahCli_Build(t *testing.T) {
 			ContextDir:    contextDir,
 			Tags:          []string{outputRef},
 			BuildArgs:     []string{"VERSION=1.0.0", "BUILD_DATE=2024-01-01"},
-			BuildArgsFile: []string{"/path/to/build-args-file"},
+			BuildArgsFile: []string{"/path/to/build-args-file-1", "/path/to/build-args-file-2"},
 		}
 
 		err := buildahCli.Build(buildArgs)
@@ -231,7 +231,8 @@ func TestBuildahCli_Build(t *testing.T) {
 
 		g.Expect(capturedArgs).To(ContainElement("--build-arg=VERSION=1.0.0"))
 		g.Expect(capturedArgs).To(ContainElement("--build-arg=BUILD_DATE=2024-01-01"))
-		g.Expect(capturedArgs).To(ContainElement("--build-arg-file=/path/to/build-args-file"))
+		g.Expect(capturedArgs).To(ContainElement("--build-arg-file=/path/to/build-args-file-1"))
+		g.Expect(capturedArgs).To(ContainElement("--build-arg-file=/path/to/build-args-file-2"))
 	})
 
 	t.Run("should turn IgnoreFile into --ignorefile param", func(t *testing.T) {

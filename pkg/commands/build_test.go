@@ -1418,6 +1418,60 @@ func Test_Build_createBuildArgExpander(t *testing.T) {
 		g.Expect(value).To(Equal("konflux-ci.dev"))
 	})
 
+	t.Run("should expand multiple build args files", func(t *testing.T) {
+		tempDir := t.TempDir()
+		testutil.WriteFileTree(t, tempDir, map[string]string{
+			"build-args-1": "AUTHOR=John Doe\n",
+			"build-args-2": "VENDOR=konflux-ci.dev\n",
+		})
+
+		c := &Build{
+			Params: &BuildParams{
+				BuildArgsFile: []string{
+					filepath.Join(tempDir, "build-args-1"),
+					filepath.Join(tempDir, "build-args-2"),
+				},
+			},
+		}
+
+		expander, err := c.createBuildArgExpander()
+		g.Expect(err).ToNot(HaveOccurred())
+
+		value, err := expander("AUTHOR")
+		g.Expect(err).ToNot(HaveOccurred())
+		g.Expect(value).To(Equal("John Doe"))
+
+		value, err = expander("VENDOR")
+		g.Expect(err).ToNot(HaveOccurred())
+		g.Expect(value).To(Equal("konflux-ci.dev"))
+	})
+
+	t.Run("should resolve last build args file with conflicting keys", func(t *testing.T) {
+		tempDir := t.TempDir()
+		testutil.WriteFileTree(t, tempDir, map[string]string{
+			"build-args-1": "AUTHOR=John Doe\n",
+			"build-args-2": "AUTHOR=Jane Doe\n",
+			"build-args-3": "AUTHOR=Jack Doe\n",
+		})
+
+		c := &Build{
+			Params: &BuildParams{
+				BuildArgsFile: []string{
+					filepath.Join(tempDir, "build-args-1"),
+					filepath.Join(tempDir, "build-args-2"),
+					filepath.Join(tempDir, "build-args-3"),
+				},
+			},
+		}
+
+		expander, err := c.createBuildArgExpander()
+		g.Expect(err).ToNot(HaveOccurred())
+
+		value, err := expander("AUTHOR")
+		g.Expect(err).ToNot(HaveOccurred())
+		g.Expect(value).To(Equal("Jack Doe"))
+	})
+
 	t.Run("should give CLI args precedence over file args", func(t *testing.T) {
 		tempDir := t.TempDir()
 		testutil.WriteFileTree(t, tempDir, map[string]string{
