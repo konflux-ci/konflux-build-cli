@@ -46,6 +46,8 @@ const (
 	defaultPrefetchEnvMount    = "/tmp/.prefetch.env"
 
 	envVarInUserNamespace = "_KBC_IN_USER_NAMESPACE"
+
+	sourceDateEpochFromCommitTimestamp = ":from-commit-timestamp:"
 )
 
 var BuildParamsConfig = map[string]common.Parameter{
@@ -200,7 +202,14 @@ var BuildParamsConfig = map[string]common.Parameter{
 		// Note: intentionally omits the KBC_BUILD_ prefix. SOURCE_DATE_EPOCH is a standard variable.
 		EnvVarName: "SOURCE_DATE_EPOCH",
 		TypeKind:   reflect.String,
-		Usage:      "See https://www.mankier.com/1/buildah-build#--source-date-epoch.\nThe timestamp will also be used for the org.opencontainers.image.created annotation and label.\nConflicts with --legacy-build-timestamp.",
+		Usage:      "See https://www.mankier.com/1/buildah-build#--source-date-epoch.\nThe timestamp will also be used for the org.opencontainers.image.created annotation and label.\nSet to " + sourceDateEpochFromCommitTimestamp + " to use the value of --commit-timestamp.\nConflicts with --legacy-build-timestamp.",
+	},
+	"commit-timestamp": {
+		Name:       "commit-timestamp",
+		ShortName:  "",
+		EnvVarName: "KBC_BUILD_COMMIT_TIMESTAMP",
+		TypeKind:   reflect.String,
+		Usage:      "Committer timestamp of the commit being built, in seconds since the Unix epoch, as reported by the git clone step.\nOnly used when --source-date-epoch is " + sourceDateEpochFromCommitTimestamp + ".",
 	},
 	"rewrite-timestamp": {
 		Name:       "rewrite-timestamp",
@@ -524,6 +533,7 @@ type BuildParams struct {
 	ImageRevision              string   `paramName:"image-revision"`
 	LegacyBuildTimestamp       string   `paramName:"legacy-build-timestamp"`
 	SourceDateEpoch            string   `paramName:"source-date-epoch"`
+	CommitTimestamp            string   `paramName:"commit-timestamp"`
 	RewriteTimestamp           bool     `paramName:"rewrite-timestamp"`
 	QuayImageExpiresAfter      string   `paramName:"quay-image-expires-after"`
 	AddLegacyLabels            bool     `paramName:"add-legacy-labels"`
@@ -796,6 +806,8 @@ func (c *Build) run() error {
 		return err
 	}
 
+	c.resolveSourceDateEpoch()
+
 	if err := c.detectBuildahVersion(); err != nil {
 		return err
 	}
@@ -913,7 +925,30 @@ func (c *Build) run() error {
 	return nil
 }
 
+// resolveSourceDateEpoch replaces the :from-commit-timestamp: value of
+// source-date-epoch with the actual commit timestamp. The user opts into
+// the substitution by writing the special value. An empty or unset
+// source-date-epoch stays empty.
+//
+// Callers must run validateParams first: it guarantees commit-timestamp is
+// set whenever the sentinel is used, so this never needs to fail. Format
+// validation of the resulting value happens once, downstream, wherever
+// source-date-epoch is actually parsed (getBuildTimeRFC3339) -- the same
+// path an explicit numeric source-date-epoch already goes through.
+func (c *Build) resolveSourceDateEpoch() {
+	if c.Params.SourceDateEpoch != sourceDateEpochFromCommitTimestamp {
+		return
+	}
+
+	l.Logger.Infof("Resolved source-date-epoch to commit timestamp %s", c.Params.CommitTimestamp)
+	c.Params.SourceDateEpoch = c.Params.CommitTimestamp
+}
+
 func (c *Build) validateParams() error {
+	if c.Params.SourceDateEpoch == sourceDateEpochFromCommitTimestamp && c.Params.CommitTimestamp == "" {
+		return fmt.Errorf("source-date-epoch is %s but commit-timestamp is not set", sourceDateEpochFromCommitTimestamp)
+	}
+
 	if !common.IsImageNameValid(common.GetImageName(c.Params.OutputRef)) {
 		return fmt.Errorf("output-ref '%s' is invalid", c.Params.OutputRef)
 	}

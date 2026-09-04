@@ -165,6 +165,49 @@ func Test_Build_validateParams(t *testing.T) {
 			errSubstring: "are mutually exclusive",
 		},
 		{
+			name: "should allow source-date-epoch from commit timestamp",
+			params: BuildParams{
+				OutputRef:       "quay.io/org/image:tag",
+				Context:         tempDir,
+				SourceDateEpoch: sourceDateEpochFromCommitTimestamp,
+				CommitTimestamp: "1779309030",
+				SBOMFormat:      "spdx",
+			},
+			errExpected: false,
+		},
+		{
+			name: "should fail when source-date-epoch wants the commit timestamp but it is not set",
+			params: BuildParams{
+				OutputRef:       "quay.io/org/image:tag",
+				Context:         tempDir,
+				SourceDateEpoch: sourceDateEpochFromCommitTimestamp,
+			},
+			errExpected:  true,
+			errSubstring: "commit-timestamp is not set",
+		},
+		{
+			name: "should allow commit-timestamp without the source-date-epoch sentinel",
+			params: BuildParams{
+				OutputRef:       "quay.io/org/image:tag",
+				Context:         tempDir,
+				CommitTimestamp: "1779309030",
+				SBOMFormat:      "spdx",
+			},
+			errExpected: false,
+		},
+		{
+			name: "should fail when legacy-build-timestamp is combined with the sentinel",
+			params: BuildParams{
+				OutputRef:            "quay.io/org/image:tag",
+				Context:              tempDir,
+				LegacyBuildTimestamp: "1",
+				SourceDateEpoch:      sourceDateEpochFromCommitTimestamp,
+				CommitTimestamp:      "1779309030",
+			},
+			errExpected:  true,
+			errSubstring: "are mutually exclusive",
+		},
+		{
 			name: "should fail when yum-repos-d-target is a relative path",
 			params: BuildParams{
 				OutputRef:       "quay.io/org/image:tag",
@@ -552,6 +595,39 @@ func Test_Build_validateParams(t *testing.T) {
 			}
 		})
 	}
+}
+
+func Test_Build_resolveSourceDateEpoch(t *testing.T) {
+	g := NewWithT(t)
+
+	t.Run("should replace the sentinel with the commit timestamp", func(t *testing.T) {
+		c := &Build{Params: &BuildParams{
+			SourceDateEpoch: sourceDateEpochFromCommitTimestamp,
+			CommitTimestamp: "1779309030",
+		}}
+
+		c.resolveSourceDateEpoch()
+		g.Expect(c.Params.SourceDateEpoch).To(Equal("1779309030"))
+	})
+
+	t.Run("should leave an explicit source-date-epoch alone", func(t *testing.T) {
+		c := &Build{Params: &BuildParams{
+			SourceDateEpoch: "1234567890",
+			CommitTimestamp: "1779309030",
+		}}
+
+		c.resolveSourceDateEpoch()
+		g.Expect(c.Params.SourceDateEpoch).To(Equal("1234567890"))
+	})
+
+	t.Run("should leave an empty source-date-epoch empty", func(t *testing.T) {
+		c := &Build{Params: &BuildParams{
+			CommitTimestamp: "1779309030",
+		}}
+
+		c.resolveSourceDateEpoch()
+		g.Expect(c.Params.SourceDateEpoch).To(BeEmpty())
+	})
 }
 
 func Test_Build_detectBuildahVersion(t *testing.T) {
@@ -2643,6 +2719,23 @@ func Test_Build_processLabelsAndAnnotations(t *testing.T) {
 		))
 	})
 
+	t.Run("should use source-date-epoch resolved from commit-timestamp", func(t *testing.T) {
+		c := &Build{
+			Params: &BuildParams{
+				SourceDateEpoch: sourceDateEpochFromCommitTimestamp,
+				CommitTimestamp: "1767225600", // 2026-01-01
+			},
+		}
+		c.resolveSourceDateEpoch()
+
+		err := c.processLabelsAndAnnotations()
+		g.Expect(err).ToNot(HaveOccurred())
+
+		g.Expect(c.mergedLabels).To(ContainElement(
+			"org.opencontainers.image.created=2026-01-01T00:00:00Z",
+		))
+	})
+
 	t.Run("should add quay.expires-after label when provided", func(t *testing.T) {
 		c := &Build{
 			Params: &BuildParams{
@@ -2675,6 +2768,20 @@ func Test_Build_processLabelsAndAnnotations(t *testing.T) {
 				SourceDateEpoch: "1767225600.5",
 			},
 		}
+
+		err := c.processLabelsAndAnnotations()
+		g.Expect(err).To(HaveOccurred())
+		g.Expect(err.Error()).To(ContainSubstring("determining build timestamp: parsing source-date-epoch:"))
+	})
+
+	t.Run("should return error when commit-timestamp is not a number", func(t *testing.T) {
+		c := &Build{
+			Params: &BuildParams{
+				SourceDateEpoch: sourceDateEpochFromCommitTimestamp,
+				CommitTimestamp: "not-a-timestamp",
+			},
+		}
+		c.resolveSourceDateEpoch()
 
 		err := c.processLabelsAndAnnotations()
 		g.Expect(err).To(HaveOccurred())
