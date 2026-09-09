@@ -2715,7 +2715,7 @@ func (c *Build) buildImage() (err error) {
 		Mounts:           c.buildahMounts,
 		Volumes:          c.buildahVolumes,
 		BuildArgs:        c.Params.BuildArgs,
-		BuildArgsFile:    c.Params.BuildArgsFile,
+		BuildArgsFile:    []string{c.Params.BuildArgsFile},
 		Envs:             c.Params.Envs,
 		Labels:           c.mergedLabels,
 		Annotations:      c.mergedAnnotations,

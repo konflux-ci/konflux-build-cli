@@ -223,7 +223,7 @@ func TestBuildahCli_Build(t *testing.T) {
 			ContextDir:    contextDir,
 			Tags:          []string{outputRef},
 			BuildArgs:     []string{"VERSION=1.0.0", "BUILD_DATE=2024-01-01"},
-			BuildArgsFile: "/path/to/build-args-file",
+			BuildArgsFile: []string{"/path/to/build-args-file"},
 		}
 
 		err := buildahCli.Build(buildArgs)
@@ -1062,7 +1062,7 @@ func TestBuildahBuildArgs_MakePathsAbsolute(t *testing.T) {
 			BuildContexts: []cliwrappers.BuildahBuildContext{
 				{Name: "additional-context", Location: "/absolute/additional-context"},
 			},
-			BuildArgsFile: "/absolute/path/build-args-file",
+			BuildArgsFile: []string{"/absolute/path/build-args-file"},
 			IgnoreFile:    "/absolute/path/ignorefile",
 		}
 
@@ -1073,7 +1073,7 @@ func TestBuildahBuildArgs_MakePathsAbsolute(t *testing.T) {
 		g.Expect(args.Secrets[0].Src).To(Equal("/absolute/path/secret"))
 		g.Expect(args.Volumes[0].HostDir).To(Equal("/absolute/path/volume"))
 		g.Expect(args.BuildContexts[0].Location).To(Equal("/absolute/additional-context"))
-		g.Expect(args.BuildArgsFile).To(Equal("/absolute/path/build-args-file"))
+		g.Expect(args.BuildArgsFile).To(Equal([]string{"/absolute/path/build-args-file"}))
 		g.Expect(args.IgnoreFile).To(Equal("/absolute/path/ignorefile"))
 	})
 
@@ -1090,7 +1090,7 @@ func TestBuildahBuildArgs_MakePathsAbsolute(t *testing.T) {
 			BuildContexts: []cliwrappers.BuildahBuildContext{
 				{Name: "additional-context", Location: "relative/additional-context"},
 			},
-			BuildArgsFile: "relative/build-args-file",
+			BuildArgsFile: []string{"relative/build-args-file"},
 			IgnoreFile:    "relative/ignorefile",
 		}
 
@@ -1101,7 +1101,7 @@ func TestBuildahBuildArgs_MakePathsAbsolute(t *testing.T) {
 		g.Expect(args.Secrets[0].Src).To(Equal("/base/dir/relative/secret"))
 		g.Expect(args.Volumes[0].HostDir).To(Equal("/base/dir/relative/volume"))
 		g.Expect(args.BuildContexts[0].Location).To(Equal("/base/dir/relative/additional-context"))
-		g.Expect(args.BuildArgsFile).To(Equal("/base/dir/relative/build-args-file"))
+		g.Expect(args.BuildArgsFile).To(Equal([]string{"/base/dir/relative/build-args-file"}))
 		g.Expect(args.IgnoreFile).To(Equal("/base/dir/relative/ignorefile"))
 	})
 
@@ -1155,12 +1155,12 @@ func TestBuildahBuildArgs_MakePathsAbsolute(t *testing.T) {
 		args := &cliwrappers.BuildahBuildArgs{
 			Containerfile: "/absolute/path/Containerfile",
 			ContextDir:    "/absolute/path/context",
-			BuildArgsFile: "",
+			BuildArgsFile: []string{},
 		}
 
 		err := args.MakePathsAbsolute("/base/dir")
 		g.Expect(err).ToNot(HaveOccurred())
-		g.Expect(args.BuildArgsFile).To(Equal(""))
+		g.Expect(args.BuildArgsFile).To(Equal([]string{}))
 	})
 
 	t.Run("should not modify empty IgnoreFile", func(t *testing.T) {
