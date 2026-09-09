@@ -2988,6 +2988,16 @@ func (c *Build) pushImageDual() (string, error) {
 
 	c.Results.Images = strings.Join([]string{gzipVariant.ref, zstdVariant.ref}, ",")
 
+	// The per-arch index has no image config, so quay cannot read the
+	// quay.expires-after label from it. Use the quay REST API to set tag
+	// expiration on all index tags (primary + additional). The temporary
+	// per-compression tags point at single manifests, so they expire via the
+	// label on their own.
+	if c.Params.QuayImageExpiresAfter != "" {
+		indexTags := append([]string{imageTag}, c.Params.AdditionalTags...)
+		common.SetQuayTagExpiration(c.Params.OutputRef, c.Params.QuayImageExpiresAfter, indexTags)
+	}
+
 	return indexDigest, nil
 }
 
