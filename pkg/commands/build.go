@@ -142,8 +142,8 @@ var BuildParamsConfig = map[string]common.Parameter{
 		Name:       "build-args-file",
 		ShortName:  "",
 		EnvVarName: "KBC_BUILD_BUILD_ARGS_FILE",
-		TypeKind:   reflect.String,
-		Usage:      "Path to a file with build arguments, see https://www.mankier.com/1/buildah-build#--build-arg-file",
+		TypeKind:   reflect.Slice,
+		Usage:      "Paths to files with build arguments, see https://www.mankier.com/1/buildah-build#--build-arg-file",
 	},
 	"envs": {
 		Name:       "envs",
@@ -515,7 +515,7 @@ type BuildParams struct {
 	SecretDirs                 []string `paramName:"secret-dirs"`
 	WorkdirMount               string   `paramName:"workdir-mount"`
 	BuildArgs                  []string `paramName:"build-args"`
-	BuildArgsFile              string   `paramName:"build-args-file"`
+	BuildArgsFile              []string `paramName:"build-args-file"`
 	Envs                       []string `paramName:"envs"`
 	Labels                     []string `paramName:"labels"`
 	Annotations                []string `paramName:"annotations"`
@@ -1919,8 +1919,8 @@ func (c *Build) createBuildArgExpander() (dockerfile.SingleWordExpander, error) 
 	}
 
 	// Load from --build-args-file, can override built-in args
-	if c.Params.BuildArgsFile != "" {
-		fileArgs, err := buildargs.ParseBuildArgFile(c.Params.BuildArgsFile)
+	for _, file := range c.Params.BuildArgsFile {
+		fileArgs, err := buildargs.ParseBuildArgFile(file)
 		if err != nil {
 			return nil, fmt.Errorf("failed to read build args file: %w", err)
 		}
@@ -2715,7 +2715,7 @@ func (c *Build) buildImage() (err error) {
 		Mounts:           c.buildahMounts,
 		Volumes:          c.buildahVolumes,
 		BuildArgs:        c.Params.BuildArgs,
-		BuildArgsFile:    []string{c.Params.BuildArgsFile},
+		BuildArgsFile:    c.Params.BuildArgsFile,
 		Envs:             c.Params.Envs,
 		Labels:           c.mergedLabels,
 		Annotations:      c.mergedAnnotations,
@@ -3129,11 +3129,7 @@ func (c *Build) parseAndMergeBuildArgs() (buildArgs map[string]string, err error
 			err = fmt.Errorf("panicked parsing build args for builder content: %v", r)
 		}
 	}()
-	var buildArgFiles []string
-	if c.Params.BuildArgsFile != "" {
-		buildArgFiles = []string{c.Params.BuildArgsFile}
-	}
-	return capoBuildvars.ParseAndMerge(buildArgFiles, c.Params.BuildArgs)
+	return capoBuildvars.ParseAndMerge(c.Params.BuildArgsFile, c.Params.BuildArgs)
 }
 
 func (c *Build) runBuildprobe(outputPath string, buildArgs map[string]string) (err error) {

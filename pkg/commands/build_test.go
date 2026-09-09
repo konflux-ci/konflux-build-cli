@@ -1402,7 +1402,7 @@ func Test_Build_createBuildArgExpander(t *testing.T) {
 
 		c := &Build{
 			Params: &BuildParams{
-				BuildArgsFile: filepath.Join(tempDir, "build-args"),
+				BuildArgsFile: []string{filepath.Join(tempDir, "build-args")},
 			},
 		}
 
@@ -1427,7 +1427,7 @@ func Test_Build_createBuildArgExpander(t *testing.T) {
 		c := &Build{
 			Params: &BuildParams{
 				BuildArgs:     []string{"NAME=cli-value"},
-				BuildArgsFile: filepath.Join(tempDir, "build-args"),
+				BuildArgsFile: []string{filepath.Join(tempDir, "build-args")},
 			},
 		}
 
@@ -1477,7 +1477,7 @@ func Test_Build_createBuildArgExpander(t *testing.T) {
 
 		c := &Build{
 			Params: &BuildParams{
-				BuildArgsFile: filepath.Join(tempDir, "build-args"),
+				BuildArgsFile: []string{filepath.Join(tempDir, "build-args")},
 			},
 		}
 
@@ -1529,7 +1529,7 @@ func Test_Build_createBuildArgExpander(t *testing.T) {
 	t.Run("should error when build args file not found", func(t *testing.T) {
 		c := &Build{
 			Params: &BuildParams{
-				BuildArgsFile: "/nonexistent/build-args",
+				BuildArgsFile: []string{"/nonexistent/build-args"},
 			},
 		}
 
@@ -1548,7 +1548,7 @@ func Test_Build_createBuildArgExpander(t *testing.T) {
 
 		c := &Build{
 			Params: &BuildParams{
-				BuildArgsFile: filepath.Join(tempDir, "build-args"),
+				BuildArgsFile: []string{filepath.Join(tempDir, "build-args")},
 			},
 		}
 

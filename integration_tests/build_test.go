@@ -52,7 +52,7 @@ type BuildParams struct {
 	SecretDirs              []string
 	WorkdirMount            string
 	BuildArgs               []string
-	BuildArgsFile           string
+	BuildArgsFile           []string
 	Envs                    []string
 	Labels                  []string
 	Annotations             []string
@@ -311,8 +311,9 @@ func runBuildWithOutput(container *TestRunnerContainer, buildParams BuildParams)
 		args = append(args, "--build-args")
 		args = append(args, buildParams.BuildArgs...)
 	}
-	if buildParams.BuildArgsFile != "" {
-		args = append(args, "--build-args-file", buildParams.BuildArgsFile)
+	if len(buildParams.BuildArgsFile) > 0 {
+		args = append(args, "--build-args-file")
+		args = append(args, buildParams.BuildArgsFile...)
 	}
 	if len(buildParams.Envs) > 0 {
 		args = append(args, "--envs")
@@ -1644,7 +1645,7 @@ LABEL test.label="build-args-test"
 			OutputRef:               outputRef,
 			Push:                    false,
 			BuildArgs:               []string{"NAME=foo", "VERSION=1.2.3"},
-			BuildArgsFile:           "/workspace/build-args-file",
+			BuildArgsFile:           []string{"/workspace/build-args-file"},
 			ContainerfileJsonOutput: containerfileJsonPath,
 		}
 
@@ -4881,7 +4882,7 @@ RUN rm -r /etc/yum.repos.d && mkdir /etc/yum.repos.d
 				Context:          contextDir,
 				OutputRef:        outputRef,
 				BuildArgs:        buildArgs,
-				BuildArgsFile:    "/workspace/build-args-file",
+				BuildArgsFile:    []string{"/workspace/build-args-file"},
 				BuildprobeOutput: buildprobeYamlPath,
 			}
 			container := setupBuildContainerWithCleanup(t, buildParams, imageRegistry)
@@ -5189,7 +5190,7 @@ COPY --from=builder $SRC_PART_1$SRC_PART_2/app /opt/app
 			buildParams := BuildParams{
 				Context:               contextDir,
 				OutputRef:             outputRef,
-				BuildArgsFile:         "/workspace/build-args-file",
+				BuildArgsFile:         []string{"/workspace/build-args-file"},
 				BuildprobeOutput:      "/workspace/buildprobe.yaml",
 				BuilderMetadataOutput: "/workspace/builder-metadata.json",
 			}
