@@ -1633,7 +1633,8 @@ LABEL test.label="build-args-test"
 `)
 
 		testutil.WriteFileTree(t, contextDir, map[string]string{
-			"build-args-file": "AUTHOR=John Doe\nVENDOR=konflux-ci.dev",
+			"build-args-file-1": "AUTHOR=John Doe",
+			"build-args-file-2": "VENDOR=konflux-ci.dev",
 		})
 
 		outputRef := "localhost/test-image-build-args:" + GenerateUniqueTag(t)
@@ -1645,7 +1646,7 @@ LABEL test.label="build-args-test"
 			OutputRef:               outputRef,
 			Push:                    false,
 			BuildArgs:               []string{"NAME=foo", "VERSION=1.2.3"},
-			BuildArgsFile:           []string{"/workspace/build-args-file"},
+			BuildArgsFile:           []string{"/workspace/build-args-file-1", "/workspace/build-args-file-2"},
 			ContainerfileJsonOutput: containerfileJsonPath,
 		}
 
@@ -4869,9 +4870,10 @@ RUN rm -r /etc/yum.repos.d && mkdir /etc/yum.repos.d
 	COPY --from=second_base /random-data.bin /opt/first.bin
 	`)
 
-			// set up build args (both from file and directly, to test merging)
+			// set up build args (both from files and directly, to test merging)
 			testutil.WriteFileTree(t, contextDir, map[string]string{
-				"build-args-file": "SECONDIMG=" + secondBase,
+				"build-args-file-1": "SECONDIMG=localhost/should-not-be-used:latest\n",
+				"build-args-file-2": "SECONDIMG=" + secondBase + "\n",
 			})
 			buildArgs := []string{
 				"BASEIMG=" + baseImage,
@@ -4882,7 +4884,7 @@ RUN rm -r /etc/yum.repos.d && mkdir /etc/yum.repos.d
 				Context:          contextDir,
 				OutputRef:        outputRef,
 				BuildArgs:        buildArgs,
-				BuildArgsFile:    []string{"/workspace/build-args-file"},
+				BuildArgsFile:    []string{"/workspace/build-args-file-1", "/workspace/build-args-file-2"},
 				BuildprobeOutput: buildprobeYamlPath,
 			}
 			container := setupBuildContainerWithCleanup(t, buildParams, imageRegistry)
@@ -5174,7 +5176,8 @@ COPY --from=builder $SRC/app /opt/app
 			contextDir := setupTestContext(t)
 			testutil.WriteFileTree(t, contextDir, map[string]string{
 				"app/.dist-info/METADATA": "Name: app\nVersion: 1.2.3\n",
-				"build-args-file":         "SRC_PART_1=/o\nSRC_PART_2=pt",
+				"build-args-file-1":       "SRC_PART_1=/o",
+				"build-args-file-2":       "SRC_PART_2=pt",
 			})
 			writeContainerfile(contextDir, `
 FROM scratch AS builder
@@ -5190,7 +5193,7 @@ COPY --from=builder $SRC_PART_1$SRC_PART_2/app /opt/app
 			buildParams := BuildParams{
 				Context:               contextDir,
 				OutputRef:             outputRef,
-				BuildArgsFile:         []string{"/workspace/build-args-file"},
+				BuildArgsFile:         []string{"/workspace/build-args-file-1", "/workspace/build-args-file-2"},
 				BuildprobeOutput:      "/workspace/buildprobe.yaml",
 				BuilderMetadataOutput: "/workspace/builder-metadata.json",
 			}
