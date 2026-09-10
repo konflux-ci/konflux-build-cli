@@ -61,6 +61,7 @@ type BuildParams struct {
 	ImageRevision           string
 	LegacyBuildTimestamp    string
 	SourceDateEpoch         string
+	CommitTimestamp         string
 	RewriteTimestamp        bool
 	QuayImageExpiresAfter   string
 	AddLegacyLabels         bool
@@ -340,6 +341,9 @@ func runBuildWithOutput(container *TestRunnerContainer, buildParams BuildParams)
 	}
 	if buildParams.SourceDateEpoch != "" {
 		args = append(args, "--source-date-epoch", buildParams.SourceDateEpoch)
+	}
+	if buildParams.CommitTimestamp != "" {
+		args = append(args, "--commit-timestamp", buildParams.CommitTimestamp)
 	}
 	if buildParams.RewriteTimestamp {
 		args = append(args, "--rewrite-timestamp")
@@ -2189,6 +2193,29 @@ LABEL source-date-epoch=$SOURCE_DATE_EPOCH
 			container := setupBuildContainerWithCleanup(
 				t, buildParams, nil, WithEnv("SOURCE_DATE_EPOCH", sourceDateEpoch),
 			)
+
+			err := runBuild(container, buildParams)
+			Expect(err).ToNot(HaveOccurred())
+
+			imageMeta := getImageMeta(container, outputRef)
+			checkSourceDateEpochEffects(imageMeta)
+		})
+
+		t.Run("FromCommitTimestamp", func(t *testing.T) {
+			SetupGomega(t)
+
+			outputRef := "localhost/test-source-date-epoch-from-commit-timestamp:" + GenerateUniqueTag(t)
+
+			buildParams := BuildParams{
+				Context:         contextDir,
+				OutputRef:       outputRef,
+				Push:            false,
+				SourceDateEpoch: ":from-commit-timestamp:",
+				CommitTimestamp: sourceDateEpoch,
+				AddLegacyLabels: true,
+			}
+
+			container := setupBuildContainerWithCleanup(t, buildParams, nil)
 
 			err := runBuild(container, buildParams)
 			Expect(err).ToNot(HaveOccurred())
