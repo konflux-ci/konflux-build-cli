@@ -138,12 +138,12 @@ var BuildParamsConfig = map[string]common.Parameter{
 		TypeKind:   reflect.Slice,
 		Usage:      "Arguments to pass to the build using buildah's --build-arg option.",
 	},
-	"build-args-file": {
-		Name:       "build-args-file",
+	"build-args-files": {
+		Name:       "build-args-files",
 		ShortName:  "",
-		EnvVarName: "KBC_BUILD_BUILD_ARGS_FILE",
-		TypeKind:   reflect.String,
-		Usage:      "Path to a file with build arguments, see https://www.mankier.com/1/buildah-build#--build-arg-file",
+		EnvVarName: "KBC_BUILD_BUILD_ARGS_FILES",
+		TypeKind:   reflect.Slice,
+		Usage:      "Paths to files with build arguments, see https://www.mankier.com/1/buildah-build#--build-arg-file",
 	},
 	"envs": {
 		Name:       "envs",
@@ -171,7 +171,7 @@ var BuildParamsConfig = map[string]common.Parameter{
 		ShortName:  "",
 		EnvVarName: "KBC_BUILD_ANNOTATIONS_FILE",
 		TypeKind:   reflect.String,
-		Usage:      "Path to a file with annotations, same file format as --build-args-file.",
+		Usage:      "Path to a file with annotations, same file format as --build-args-files.",
 	},
 	"image-source": {
 		Name:       "image-source",
@@ -515,7 +515,7 @@ type BuildParams struct {
 	SecretDirs                 []string `paramName:"secret-dirs"`
 	WorkdirMount               string   `paramName:"workdir-mount"`
 	BuildArgs                  []string `paramName:"build-args"`
-	BuildArgsFile              string   `paramName:"build-args-file"`
+	BuildArgsFiles             []string `paramName:"build-args-files"`
 	Envs                       []string `paramName:"envs"`
 	Labels                     []string `paramName:"labels"`
 	Annotations                []string `paramName:"annotations"`
@@ -1918,9 +1918,9 @@ func (c *Build) createBuildArgExpander() (dockerfile.SingleWordExpander, error) 
 		"BUILDVARIANT":   platform.Variant,
 	}
 
-	// Load from --build-args-file, can override built-in args
-	if c.Params.BuildArgsFile != "" {
-		fileArgs, err := buildargs.ParseBuildArgFile(c.Params.BuildArgsFile)
+	// Load from --build-args-files, can override built-in args
+	for _, file := range c.Params.BuildArgsFiles {
+		fileArgs, err := buildargs.ParseBuildArgFile(file)
 		if err != nil {
 			return nil, fmt.Errorf("failed to read build args file: %w", err)
 		}
@@ -2715,7 +2715,7 @@ func (c *Build) buildImage() (err error) {
 		Mounts:           c.buildahMounts,
 		Volumes:          c.buildahVolumes,
 		BuildArgs:        c.Params.BuildArgs,
-		BuildArgsFile:    c.Params.BuildArgsFile,
+		BuildArgsFiles:   c.Params.BuildArgsFiles,
 		Envs:             c.Params.Envs,
 		Labels:           c.mergedLabels,
 		Annotations:      c.mergedAnnotations,
@@ -3129,11 +3129,7 @@ func (c *Build) parseAndMergeBuildArgs() (buildArgs map[string]string, err error
 			err = fmt.Errorf("panicked parsing build args for builder content: %v", r)
 		}
 	}()
-	var buildArgFiles []string
-	if c.Params.BuildArgsFile != "" {
-		buildArgFiles = []string{c.Params.BuildArgsFile}
-	}
-	return capoBuildvars.ParseAndMerge(buildArgFiles, c.Params.BuildArgs)
+	return capoBuildvars.ParseAndMerge(c.Params.BuildArgsFiles, c.Params.BuildArgs)
 }
 
 func (c *Build) runBuildprobe(outputPath string, buildArgs map[string]string) (err error) {
