@@ -31,6 +31,17 @@ var BuildImageIndexParamsConfig = map[string]common.Parameter{
 		Usage:      "List of Image Manifests to be referenced by the Image Index.",
 		Required:   true,
 	},
+	"images-platforms": {
+		Name:       "images-platforms",
+		ShortName:  "",
+		EnvVarName: "KBC_BUILD_IMAGE_INDEX_IMAGES_PLATFORMS",
+		TypeKind:   reflect.Slice,
+		Usage: "Optional per-image platform mapping as 'imageRef=os/arch' entries " +
+			"(e.g. 'quay.io/org/repo@sha256:aaa=linux/amd64'). Used to set the " +
+			"platform on each index entry explicitly, which is required for OCI " +
+			"artifacts whose empty config carries no platform information. When " +
+			"omitted, platforms are left to buildah's inference (unchanged behaviour).",
+	},
 	"tls-verify": {
 		Name:         "tls-verify",
 		ShortName:    "",
@@ -102,6 +113,7 @@ var BuildImageIndexParamsConfig = map[string]common.Parameter{
 type BuildImageIndexParams struct {
 	Image                 string   `paramName:"image"`
 	Images                []string `paramName:"images"`
+	ImagesPlatforms       []string `paramName:"images-platforms"`
 	TLSVerify             bool     `paramName:"tls-verify"`
 	BuildahFormat         string   `paramName:"buildah-format"`
 	AlwaysBuildIndex      bool     `paramName:"always-build-index"`
@@ -138,6 +150,45 @@ type BuildImageIndex struct {
 	imageDigest string
 	imageURL    string
 	images      []string
+	// imagesPlatforms maps an --images entry to its OCI platform. Empty when
+	// no --images-platforms mapping was provided.
+	imagesPlatforms map[string]ociPlatform
+}
+
+// ociPlatform is a parsed "os/arch" platform.
+type ociPlatform struct {
+	OS   string
+	Arch string
+}
+
+// parseImagesPlatforms parses "imageRef=os/arch" entries into a map keyed by
+// image reference. Keying by reference (rather than position) makes the mapping
+// immune to matrix result ordering, which Tekton does not guarantee across
+// matrix legs. An empty input yields a nil map and no error.
+func parseImagesPlatforms(entries []string) (map[string]ociPlatform, error) {
+	if len(entries) == 0 {
+		return nil, nil
+	}
+
+	platforms := make(map[string]ociPlatform, len(entries))
+	for _, entry := range entries {
+		ref, platform, ok := strings.Cut(entry, "=")
+		if !ok || ref == "" {
+			return nil, fmt.Errorf("entry %q is not in 'imageRef=os/arch' form", entry)
+		}
+
+		os, arch, ok := strings.Cut(platform, "/")
+		if !ok || os == "" || arch == "" {
+			return nil, fmt.Errorf("platform %q in entry %q is not in 'os/arch' form", platform, entry)
+		}
+
+		if _, dup := platforms[ref]; dup {
+			return nil, fmt.Errorf("duplicate platform mapping for image %q", ref)
+		}
+		platforms[ref] = ociPlatform{OS: os, Arch: arch}
+	}
+
+	return platforms, nil
 }
 
 func NewBuildImageIndex(cmd *cobra.Command) (*BuildImageIndex, error) {
@@ -179,6 +230,12 @@ func (c *BuildImageIndex) Run() error {
 
 	c.imageName = common.GetImageName(c.Params.Image)
 	c.imageURL = c.Params.Image
+
+	platforms, err := parseImagesPlatforms(c.Params.ImagesPlatforms)
+	if err != nil {
+		return fmt.Errorf("invalid --images-platforms: %w", err)
+	}
+	c.imagesPlatforms = platforms
 
 	if err := c.buildManifestIndex(); err != nil {
 		return fmt.Errorf("failed to build image index: %w", err)
@@ -246,12 +303,20 @@ func (c *BuildImageIndex) buildManifestIndex() error {
 			return nil
 		}
 
-		l.Logger.Infof("Adding image to manifest: %s", normalizedRef)
-		err = c.CliWrappers.BuildahCli.ManifestAdd(&cliwrappers.BuildahManifestAddArgs{
+		addArgs := &cliwrappers.BuildahManifestAddArgs{
 			ManifestName: c.Params.Image,
 			ImageRef:     "docker://" + normalizedRef,
 			All:          true,
-		})
+		}
+		if platform, ok := c.imagesPlatforms[imageRef]; ok {
+			addArgs.OS = platform.OS
+			addArgs.Arch = platform.Arch
+			l.Logger.Infof("Adding image to manifest: %s (platform %s/%s)", normalizedRef, platform.OS, platform.Arch)
+		} else {
+			l.Logger.Infof("Adding image to manifest: %s", normalizedRef)
+		}
+
+		err = c.CliWrappers.BuildahCli.ManifestAdd(addArgs)
 		if err != nil {
 			return fmt.Errorf("failed to add image %s: %w", normalizedRef, err)
 		}
@@ -360,6 +425,19 @@ func (c *BuildImageIndex) validateParams() error {
 	validFormats := map[string]bool{"oci": true, "docker": true}
 	if !validFormats[c.Params.BuildahFormat] {
 		return fmt.Errorf("format must be 'oci' or 'docker', got '%s'", c.Params.BuildahFormat)
+	}
+
+	// Every platform mapping must reference an image passed via --images, so a
+	// typo'd or stale ref fails fast rather than silently leaving an entry's
+	// platform null.
+	platforms, err := parseImagesPlatforms(c.Params.ImagesPlatforms)
+	if err != nil {
+		return fmt.Errorf("invalid --images-platforms: %w", err)
+	}
+	for ref := range platforms {
+		if !seenImages[ref] {
+			return fmt.Errorf("--images-platforms references %q which is not in --images", ref)
+		}
 	}
 
 	return nil

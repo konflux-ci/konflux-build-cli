@@ -1360,6 +1360,53 @@ func TestBuildahCli_ManifestAdd(t *testing.T) {
 		g.Expect(capturedArgs).To(Equal([]string{"manifest", "add", manifestName, imageRef}))
 	})
 
+	t.Run("should pass --arch and --os when platform is set", func(t *testing.T) {
+		buildahCli, executor := setupBuildahCli()
+		var capturedArgs []string
+		executor.executeFunc = func(cmd cliwrappers.Cmd) (string, string, int, error) {
+			g.Expect(cmd.Name).To(Equal("buildah"))
+			g.Expect(cmd.LogOutput).To(BeTrue())
+			capturedArgs = cmd.Args
+			return "", "", 0, nil
+		}
+
+		args := &cliwrappers.BuildahManifestAddArgs{
+			ManifestName: manifestName,
+			ImageRef:     imageRef,
+			All:          true,
+			Arch:         "amd64",
+			OS:           "linux",
+		}
+
+		err := buildahCli.ManifestAdd(args)
+
+		g.Expect(err).ToNot(HaveOccurred())
+		g.Expect(capturedArgs).To(Equal([]string{
+			"manifest", "add", manifestName, imageRef, "--all", "--arch", "amd64", "--os", "linux",
+		}))
+	})
+
+	t.Run("should omit platform flags when arch and os are empty", func(t *testing.T) {
+		buildahCli, executor := setupBuildahCli()
+		var capturedArgs []string
+		executor.executeFunc = func(cmd cliwrappers.Cmd) (string, string, int, error) {
+			capturedArgs = cmd.Args
+			return "", "", 0, nil
+		}
+
+		args := &cliwrappers.BuildahManifestAddArgs{
+			ManifestName: manifestName,
+			ImageRef:     imageRef,
+			All:          true,
+		}
+
+		err := buildahCli.ManifestAdd(args)
+
+		g.Expect(err).ToNot(HaveOccurred())
+		g.Expect(capturedArgs).ToNot(ContainElement("--arch"))
+		g.Expect(capturedArgs).ToNot(ContainElement("--os"))
+	})
+
 	t.Run("should error if manifest name is empty", func(t *testing.T) {
 		buildahCli, _ := setupBuildahCli()
 		args := &cliwrappers.BuildahManifestAddArgs{

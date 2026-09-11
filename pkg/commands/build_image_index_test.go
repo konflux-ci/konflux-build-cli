@@ -153,6 +153,47 @@ func Test_BuildImageIndex_validateParams(t *testing.T) {
 			errExpected:  true,
 			errSubstring: "duplicate image reference",
 		},
+		{
+			name: "should allow platform mapping that matches images",
+			params: BuildImageIndexParams{
+				Image: "quay.io/org/myapp:latest",
+				Images: []string{
+					"quay.io/org/myapp@" + validDigest1,
+					"quay.io/org/myapp@" + validDigest2,
+				},
+				ImagesPlatforms: []string{
+					"quay.io/org/myapp@" + validDigest1 + "=linux/amd64",
+					"quay.io/org/myapp@" + validDigest2 + "=linux/arm64",
+				},
+				BuildahFormat:    "oci",
+				AlwaysBuildIndex: true,
+			},
+			errExpected: false,
+		},
+		{
+			name: "should fail on malformed platform mapping",
+			params: BuildImageIndexParams{
+				Image:            "quay.io/org/myapp:latest",
+				Images:           []string{"quay.io/org/myapp@" + validDigest1},
+				ImagesPlatforms:  []string{"quay.io/org/myapp@" + validDigest1 + "=amd64"},
+				BuildahFormat:    "oci",
+				AlwaysBuildIndex: true,
+			},
+			errExpected:  true,
+			errSubstring: "not in 'os/arch' form",
+		},
+		{
+			name: "should fail when platform mapping references unknown image",
+			params: BuildImageIndexParams{
+				Image:            "quay.io/org/myapp:latest",
+				Images:           []string{"quay.io/org/myapp@" + validDigest1},
+				ImagesPlatforms:  []string{"quay.io/org/myapp@" + validDigest2 + "=linux/arm64"},
+				BuildahFormat:    "oci",
+				AlwaysBuildIndex: true,
+			},
+			errExpected:  true,
+			errSubstring: "not in --images",
+		},
 	}
 
 	for _, tc := range tests {
@@ -337,6 +378,82 @@ func Test_BuildImageIndex_extractPlatformImages(t *testing.T) {
 			} else {
 				g.Expect(err).ToNot(HaveOccurred())
 				g.Expect(platformImages).To(Equal(tc.expected))
+			}
+		})
+	}
+}
+
+func Test_parseImagesPlatforms(t *testing.T) {
+	g := NewWithT(t)
+
+	tests := []struct {
+		name         string
+		entries      []string
+		expected     map[string]ociPlatform
+		errExpected  bool
+		errSubstring string
+	}{
+		{
+			name:     "empty input yields nil map",
+			entries:  nil,
+			expected: nil,
+		},
+		{
+			name: "parses valid entries keyed by ref",
+			entries: []string{
+				"quay.io/org/repo@sha256:aaa=linux/amd64",
+				"quay.io/org/repo@sha256:bbb=linux/arm64",
+			},
+			expected: map[string]ociPlatform{
+				"quay.io/org/repo@sha256:aaa": {OS: "linux", Arch: "amd64"},
+				"quay.io/org/repo@sha256:bbb": {OS: "linux", Arch: "arm64"},
+			},
+		},
+		{
+			name:         "missing '=' separator errors",
+			entries:      []string{"quay.io/org/repo@sha256:aaa"},
+			errExpected:  true,
+			errSubstring: "imageRef=os/arch",
+		},
+		{
+			name:         "empty ref errors",
+			entries:      []string{"=linux/amd64"},
+			errExpected:  true,
+			errSubstring: "imageRef=os/arch",
+		},
+		{
+			name:         "platform without arch errors",
+			entries:      []string{"quay.io/org/repo@sha256:aaa=linux"},
+			errExpected:  true,
+			errSubstring: "os/arch",
+		},
+		{
+			name:         "platform with empty os errors",
+			entries:      []string{"quay.io/org/repo@sha256:aaa=/amd64"},
+			errExpected:  true,
+			errSubstring: "os/arch",
+		},
+		{
+			name: "duplicate ref errors",
+			entries: []string{
+				"quay.io/org/repo@sha256:aaa=linux/amd64",
+				"quay.io/org/repo@sha256:aaa=linux/arm64",
+			},
+			errExpected:  true,
+			errSubstring: "duplicate platform mapping",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := parseImagesPlatforms(tc.entries)
+
+			if tc.errExpected {
+				g.Expect(err).To(HaveOccurred())
+				g.Expect(err.Error()).To(ContainSubstring(tc.errSubstring))
+			} else {
+				g.Expect(err).ToNot(HaveOccurred())
+				g.Expect(got).To(Equal(tc.expected))
 			}
 		})
 	}
