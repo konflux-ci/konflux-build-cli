@@ -792,6 +792,9 @@ func (c *Build) run() error {
 
 	defer c.cleanup()
 
+	c.resolveBuildArgsFiles()
+	c.resolveAnnotationsFile()
+
 	if err := c.validateParams(); err != nil {
 		return err
 	}
@@ -978,6 +981,25 @@ func (c *Build) validateParams() error {
 		if !resolvedContext.IsRelativeTo(resolvedSource) {
 			return fmt.Errorf("context directory '%s' is outside source directory '%s'", c.Params.Context, c.Params.Source)
 		}
+		if c.Params.AnnotationsFile != "" {
+			resolvedAnnotationsFile, err := common.ResolvePath(c.Params.AnnotationsFile)
+			if err != nil {
+				return fmt.Errorf("resolving annotations file: %w", err)
+			}
+			if !resolvedAnnotationsFile.IsRelativeTo(resolvedSource) {
+				return fmt.Errorf("annotations file '%s' is outside source directory '%s'", c.Params.AnnotationsFile, c.Params.Source)
+			}
+		}
+
+		for _, file := range c.Params.BuildArgsFiles {
+			resolvedBuildArgsFile, err := common.ResolvePath(file)
+			if err != nil {
+				return fmt.Errorf("resolving build args file: %w", err)
+			}
+			if !resolvedBuildArgsFile.IsRelativeTo(resolvedSource) {
+				return fmt.Errorf("build args file '%s' is outside source directory '%s'", file, c.Params.Source)
+			}
+		}
 	}
 
 	if c.Params.LegacyBuildTimestamp != "" && c.Params.SourceDateEpoch != "" {
@@ -1040,6 +1062,23 @@ func (c *Build) validateParams() error {
 	}
 
 	return nil
+}
+
+func (c *Build) resolveAgainstSource(path string) string {
+	if path == "" || filepath.IsAbs(path) {
+		return path
+	}
+	return filepath.Join(c.Params.Source, path)
+}
+
+func (c *Build) resolveAnnotationsFile() {
+	c.Params.AnnotationsFile = c.resolveAgainstSource(c.Params.AnnotationsFile)
+}
+
+func (c *Build) resolveBuildArgsFiles() {
+	for i, file := range c.Params.BuildArgsFiles {
+		c.Params.BuildArgsFiles[i] = c.resolveAgainstSource(file)
+	}
 }
 
 func (c *Build) detectBuildahVersion() error {
