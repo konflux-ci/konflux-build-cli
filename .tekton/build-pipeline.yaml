@@ -249,6 +249,30 @@ spec:
       - name: kind
         value: task
       resolver: bundles
+
+  - name: build-image-platform-map
+    params:
+      - name: IMAGES
+        value:
+          - $(tasks.build-images.results.IMAGE_REF[*])
+    taskSpec:
+      params:
+        - name: IMAGES
+          type: array
+      results:
+        - name: IMAGE_PLATFORM_MAP
+          type: array
+      steps:
+        - name: do-stuff
+          image: quay.io/konflux-ci/task-runner:3.2.0@sha256:ba5789d2bc04146431e492083c67b86de26d5b17891dc27f67db850a397b66d3
+          args:
+            - $(params.IMAGES[*])
+          script: |
+            #!/bin/bash
+            set -euo pipefail
+
+            printf '%s\n' "$1=linux/s390x" "$2=linux/ppc64le" | jq --raw-input | jq -sc | tee "$(results.IMAGE_PLATFORM_MAP.path)"
+
   - name: build-image-index
     params:
     - name: IMAGE
@@ -258,6 +282,9 @@ spec:
     - name: IMAGES
       value:
       - $(tasks.build-images.results.IMAGE_REF[*])
+    - name: IMAGE_PLATFORM_MAP
+      value:
+      - $(tasks.build-image-platform-map.results.IMAGE_PLATFORM_MAP[*])
     - name: BUILDAH_FORMAT
       value: $(params.buildah-format)
     runAfter:
@@ -267,7 +294,7 @@ spec:
       - name: name
         value: build-image-index
       - name: bundle
-        value: quay.io/konflux-ci/tekton-catalog/task-build-image-index:0.3.1@sha256:c2cda69e681c976dd5b39caf6682d1c8f8c5e5a53a67a22a5b06d4cde773bd10
+        value: quay.io/acmiel-test/tekton-catalog/task-build-image-index:image-platform-map
       - name: kind
         value: task
       resolver: bundles
