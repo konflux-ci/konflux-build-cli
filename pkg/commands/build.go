@@ -1137,9 +1137,9 @@ func parseSecretDirs(secretDirArgs []string) ([]secretDir, error) {
 
 	for _, arg := range secretDirArgs {
 		secretDir := secretDir{}
-		keyValues := strings.Split(arg, ",")
+		keyValues := strings.SplitSeq(arg, ",")
 
-		for _, kv := range keyValues {
+		for kv := range keyValues {
 			key, value, hasSep := strings.Cut(kv, "=")
 			key = strings.TrimSpace(key)
 			value = strings.TrimSpace(value)
@@ -3298,7 +3298,7 @@ func (c *Build) scanBuilderContent(buildArgs map[string]string) (err error) {
 	// https://github.com/anchore/syft/blob/2805655ab04603446a5422905d32cb953b560556/cmd/syft/internal/commands/cataloger_info.go#L107
 	// https://github.com/anchore/syft/blob/2805655ab04603446a5422905d32cb953b560556/cmd/syft/internal/options/catalog.go#L288
 	var selectCatalogers []string
-	for _, s := range strings.Split(c.Params.SyftSelectCatalogers, ",") {
+	for s := range strings.SplitSeq(c.Params.SyftSelectCatalogers, ",") {
 		s = strings.TrimSpace(s)
 		if s == "" {
 			continue

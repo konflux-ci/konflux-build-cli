@@ -1269,7 +1269,7 @@ RUN echo "test"
 		// verify valid yaml
 		data, err := os.ReadFile(outputPath)
 		g.Expect(err).ToNot(HaveOccurred())
-		var metadata interface{}
+		var metadata any
 		err = yaml.Unmarshal(data, &metadata)
 		g.Expect(err).ToNot(HaveOccurred(), "output should be valid YAML")
 	})
@@ -1941,7 +1941,7 @@ func Test_Build_Run(t *testing.T) {
 	t.Run("should use unique temporary refs for each dual build", func(t *testing.T) {
 		var manifestNames []string
 		var tempDests []string
-		for i := 0; i < 2; i++ {
+		for range 2 {
 			beforeEach()
 			c.Params.CompressionFormat = "dual"
 

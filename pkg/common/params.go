@@ -98,7 +98,7 @@ func RegisterParameters(cmd *cobra.Command, paramsConfig map[string]Parameter) {
 }
 
 // ParseParameters populates parameters structure with provided values based on parameters configuration
-func ParseParameters(cmd *cobra.Command, paramsConfig map[string]Parameter, params interface{}) error {
+func ParseParameters(cmd *cobra.Command, paramsConfig map[string]Parameter, params any) error {
 	getMessageRequiredParameterMissing := func(p Parameter) string {
 		return fmt.Sprintf("required parameter '%s' is not set", p.Name)
 	}

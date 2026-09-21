@@ -84,7 +84,7 @@ func findAuth(registryAuths *RegistryAuths, imageRepo string) string {
 		authKey = authKey[:index]
 	}
 	// When log into dockerhub, oras-login writes https://index.docker.io/v1/ as registry into authfile.
-	registry := strings.Split(imageRepo, "/")[0]
+	registry, _, _ := strings.Cut(imageRepo, "/")
 	if registry == registryDockerIO {
 		if authEntry, exists := registryAuths.Auths[registryIndexDockerIO]; exists {
 			return authEntry.Auth
