@@ -1614,6 +1614,130 @@ func Test_Build_createBuildArgExpander(t *testing.T) {
 	})
 }
 
+func Test_Build_resolveAnnotationsFile(t *testing.T) {
+	tempDir := t.TempDir()
+	sourceDir := filepath.Join(tempDir, "src")
+	testutil.WriteFileTree(t, sourceDir, map[string]string{"annotations.txt": "a=1\n"})
+
+	underSource := filepath.Join(sourceDir, "annotations.txt")
+
+	tests := []struct {
+		name   string
+		source string
+		file   string
+		chdir  string
+		want   string
+	}{
+		{
+			name:   "joins relative paths to --source",
+			source: sourceDir,
+			file:   "annotations.txt",
+			want:   underSource,
+		},
+		{
+			name:  "leaves relative paths unchanged when --source is unset",
+			file:  "annotations.txt",
+			chdir: sourceDir,
+			want:  "annotations.txt",
+		},
+		{
+			name:   "leaves absolute paths unchanged",
+			source: sourceDir,
+			file:   underSource,
+			want:   underSource,
+		},
+		{
+			name: "leaves absolute paths unchanged when --source is unset",
+			file: "/workspace/annotations.cfg",
+			want: "/workspace/annotations.cfg",
+		},
+		{
+			name:   "leaves empty paths unchanged",
+			source: sourceDir,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			g := NewWithT(t)
+			if tt.chdir != "" {
+				t.Chdir(tt.chdir)
+			}
+			c := &Build{
+				Params: &BuildParams{
+					Source:          tt.source,
+					AnnotationsFile: tt.file,
+				},
+			}
+			c.resolveAnnotationsFile()
+			g.Expect(c.Params.AnnotationsFile).To(Equal(tt.want))
+		})
+	}
+}
+
+func Test_Build_resolveBuildArgsFiles(t *testing.T) {
+	tempDir := t.TempDir()
+	sourceDir := filepath.Join(tempDir, "src")
+	testutil.WriteFileTree(t, sourceDir, map[string]string{"args.txt": "BANANA=from-one\n"})
+
+	underSource := filepath.Join(sourceDir, "args.txt")
+
+	tests := []struct {
+		name   string
+		source string
+		files  []string
+		chdir  string
+		want   []string
+	}{
+		{
+			name:   "joins relative paths to --source",
+			source: sourceDir,
+			files:  []string{"args.txt"},
+			want:   []string{underSource},
+		},
+		{
+			name:  "leaves relative paths unchanged when --source is unset",
+			files: []string{"args.txt"},
+			chdir: sourceDir,
+			want:  []string{"args.txt"},
+		},
+		{
+			name:   "leaves absolute paths unchanged",
+			source: sourceDir,
+			files:  []string{underSource},
+			want:   []string{underSource},
+		},
+		{
+			name:  "leaves absolute paths unchanged when --source is unset",
+			files: []string{"/workspace/build-args-file-1"},
+			want:  []string{"/workspace/build-args-file-1"},
+		},
+		{
+			name:   "resolves each path independently",
+			source: sourceDir,
+			files:  []string{"args.txt", "/workspace/build-args-file-1"},
+			want:   []string{underSource, "/workspace/build-args-file-1"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			g := NewWithT(t)
+			if tt.chdir != "" {
+				t.Chdir(tt.chdir)
+			}
+			c := &Build{
+				Params: &BuildParams{
+					Source:         tt.source,
+					BuildArgsFiles: append([]string(nil), tt.files...),
+				},
+			}
+			c.resolveBuildArgsFiles()
+			g.Expect(c.Params.BuildArgsFiles).To(Equal(tt.want))
+		})
+	}
+}
+
 func Test_Build_Run(t *testing.T) {
 	g := NewWithT(t)
 
