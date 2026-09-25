@@ -165,6 +165,49 @@ func Test_Build_validateParams(t *testing.T) {
 			errSubstring: "are mutually exclusive",
 		},
 		{
+			name: "should allow source-date-epoch from commit timestamp",
+			params: BuildParams{
+				OutputRef:       "quay.io/org/image:tag",
+				Context:         tempDir,
+				SourceDateEpoch: sourceDateEpochFromCommitTimestamp,
+				CommitTimestamp: "1779309030",
+				SBOMFormat:      "spdx",
+			},
+			errExpected: false,
+		},
+		{
+			name: "should fail when source-date-epoch wants the commit timestamp but it is not set",
+			params: BuildParams{
+				OutputRef:       "quay.io/org/image:tag",
+				Context:         tempDir,
+				SourceDateEpoch: sourceDateEpochFromCommitTimestamp,
+			},
+			errExpected:  true,
+			errSubstring: "commit-timestamp is not set",
+		},
+		{
+			name: "should allow commit-timestamp without the source-date-epoch sentinel",
+			params: BuildParams{
+				OutputRef:       "quay.io/org/image:tag",
+				Context:         tempDir,
+				CommitTimestamp: "1779309030",
+				SBOMFormat:      "spdx",
+			},
+			errExpected: false,
+		},
+		{
+			name: "should fail when legacy-build-timestamp is combined with the sentinel",
+			params: BuildParams{
+				OutputRef:            "quay.io/org/image:tag",
+				Context:              tempDir,
+				LegacyBuildTimestamp: "1",
+				SourceDateEpoch:      sourceDateEpochFromCommitTimestamp,
+				CommitTimestamp:      "1779309030",
+			},
+			errExpected:  true,
+			errSubstring: "are mutually exclusive",
+		},
+		{
 			name: "should fail when yum-repos-d-target is a relative path",
 			params: BuildParams{
 				OutputRef:       "quay.io/org/image:tag",
@@ -552,6 +595,37 @@ func Test_Build_validateParams(t *testing.T) {
 			}
 		})
 	}
+}
+
+func Test_Build_effectiveSourceDateEpoch(t *testing.T) {
+	g := NewWithT(t)
+
+	t.Run("should use the commit timestamp for the sentinel", func(t *testing.T) {
+		c := &Build{Params: &BuildParams{
+			SourceDateEpoch: sourceDateEpochFromCommitTimestamp,
+			CommitTimestamp: "1779309030",
+		}}
+
+		g.Expect(c.effectiveSourceDateEpoch()).To(Equal("1779309030"))
+		g.Expect(c.Params.SourceDateEpoch).To(Equal(sourceDateEpochFromCommitTimestamp))
+	})
+
+	t.Run("should leave an explicit source-date-epoch alone", func(t *testing.T) {
+		c := &Build{Params: &BuildParams{
+			SourceDateEpoch: "1234567890",
+			CommitTimestamp: "1779309030",
+		}}
+
+		g.Expect(c.effectiveSourceDateEpoch()).To(Equal("1234567890"))
+	})
+
+	t.Run("should leave an empty source-date-epoch empty", func(t *testing.T) {
+		c := &Build{Params: &BuildParams{
+			CommitTimestamp: "1779309030",
+		}}
+
+		g.Expect(c.effectiveSourceDateEpoch()).To(BeEmpty())
+	})
 }
 
 func Test_Build_detectBuildahVersion(t *testing.T) {
@@ -1681,6 +1755,36 @@ func Test_Build_Run(t *testing.T) {
 		g.Expect(isBuildCalled).To(BeTrue())
 		g.Expect(isPushCalled).To(BeTrue())
 		g.Expect(isCreateResultJsonCalled).To(BeTrue())
+	})
+
+	t.Run("should use commit timestamp for buildah and image metadata", func(t *testing.T) {
+		beforeEach()
+		c.Params.Push = false
+		c.Params.SourceDateEpoch = sourceDateEpochFromCommitTimestamp
+		c.Params.CommitTimestamp = "1767225600" // 2026-01-01
+
+		buildCalled := false
+		_mockBuildahCli.BuildFunc = func(args *cliwrappers.BuildahBuildArgs) error {
+			buildCalled = true
+			g.Expect(args.SourceDateEpoch).To(Equal("1767225600"))
+			g.Expect(args.Labels).To(ContainElement("org.opencontainers.image.created=2026-01-01T00:00:00Z"))
+			g.Expect(args.Annotations).To(ContainElement("org.opencontainers.image.created=2026-01-01T00:00:00Z"))
+			return nil
+		}
+
+		g.Expect(c.run()).To(Succeed())
+		g.Expect(buildCalled).To(BeTrue())
+		g.Expect(c.Params.SourceDateEpoch).To(Equal(sourceDateEpochFromCommitTimestamp))
+	})
+
+	t.Run("should reject a non-numeric commit timestamp", func(t *testing.T) {
+		beforeEach()
+		c.Params.SourceDateEpoch = sourceDateEpochFromCommitTimestamp
+		c.Params.CommitTimestamp = "not-a-timestamp"
+
+		err := c.run()
+		g.Expect(err).To(HaveOccurred())
+		g.Expect(err.Error()).To(ContainSubstring("determining build timestamp: parsing source-date-epoch:"))
 	})
 
 	t.Run("should successfully build without pushing", func(t *testing.T) {

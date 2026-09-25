@@ -46,6 +46,8 @@ const (
 	defaultPrefetchEnvMount    = "/tmp/.prefetch.env"
 
 	envVarInUserNamespace = "_KBC_IN_USER_NAMESPACE"
+
+	sourceDateEpochFromCommitTimestamp = ":from-commit-timestamp:"
 )
 
 var BuildParamsConfig = map[string]common.Parameter{
@@ -200,7 +202,14 @@ var BuildParamsConfig = map[string]common.Parameter{
 		// Note: intentionally omits the KBC_BUILD_ prefix. SOURCE_DATE_EPOCH is a standard variable.
 		EnvVarName: "SOURCE_DATE_EPOCH",
 		TypeKind:   reflect.String,
-		Usage:      "See https://www.mankier.com/1/buildah-build#--source-date-epoch.\nThe timestamp will also be used for the org.opencontainers.image.created annotation and label.\nConflicts with --legacy-build-timestamp.",
+		Usage:      "See https://www.mankier.com/1/buildah-build#--source-date-epoch.\nThe timestamp will also be used for the org.opencontainers.image.created annotation and label.\nSet to " + sourceDateEpochFromCommitTimestamp + " to use the value of --commit-timestamp.\nConflicts with --legacy-build-timestamp.",
+	},
+	"commit-timestamp": {
+		Name:       "commit-timestamp",
+		ShortName:  "",
+		EnvVarName: "KBC_BUILD_COMMIT_TIMESTAMP",
+		TypeKind:   reflect.String,
+		Usage:      "Committer timestamp of the commit being built, in seconds since the Unix epoch, as reported by the git clone step.\nOnly used when --source-date-epoch is " + sourceDateEpochFromCommitTimestamp + ".",
 	},
 	"rewrite-timestamp": {
 		Name:       "rewrite-timestamp",
@@ -524,6 +533,7 @@ type BuildParams struct {
 	ImageRevision              string   `paramName:"image-revision"`
 	LegacyBuildTimestamp       string   `paramName:"legacy-build-timestamp"`
 	SourceDateEpoch            string   `paramName:"source-date-epoch"`
+	CommitTimestamp            string   `paramName:"commit-timestamp"`
 	RewriteTimestamp           bool     `paramName:"rewrite-timestamp"`
 	QuayImageExpiresAfter      string   `paramName:"quay-image-expires-after"`
 	AddLegacyLabels            bool     `paramName:"add-legacy-labels"`
@@ -657,6 +667,13 @@ func (c *Build) effectiveContextDir() string {
 	} else {
 		return c.Params.Context
 	}
+}
+
+func (c *Build) effectiveSourceDateEpoch() string {
+	if c.Params.SourceDateEpoch == sourceDateEpochFromCommitTimestamp {
+		return c.Params.CommitTimestamp
+	}
+	return c.Params.SourceDateEpoch
 }
 
 func (c *Build) cleanup() {
@@ -978,6 +995,10 @@ func (c *Build) validateParams() error {
 		if !resolvedContext.IsRelativeTo(resolvedSource) {
 			return fmt.Errorf("context directory '%s' is outside source directory '%s'", c.Params.Context, c.Params.Source)
 		}
+	}
+
+	if c.Params.SourceDateEpoch == sourceDateEpochFromCommitTimestamp && c.Params.CommitTimestamp == "" {
+		return fmt.Errorf("source-date-epoch is %s but commit-timestamp is not set", sourceDateEpochFromCommitTimestamp)
 	}
 
 	if c.Params.LegacyBuildTimestamp != "" && c.Params.SourceDateEpoch != "" {
@@ -2042,8 +2063,8 @@ func (c *Build) processLabelsAndAnnotations() error {
 
 func (c *Build) getBuildTimeRFC3339() (string, error) {
 	var buildTime time.Time
-	if c.Params.SourceDateEpoch != "" {
-		timestamp, err := strconv.ParseInt(c.Params.SourceDateEpoch, 10, 64)
+	if sourceDateEpoch := c.effectiveSourceDateEpoch(); sourceDateEpoch != "" {
+		timestamp, err := strconv.ParseInt(sourceDateEpoch, 10, 64)
 		if err != nil {
 			return "", fmt.Errorf("parsing source-date-epoch: %w", err)
 		}
@@ -2719,7 +2740,7 @@ func (c *Build) buildImage() (err error) {
 		Envs:             c.Params.Envs,
 		Labels:           c.mergedLabels,
 		Annotations:      c.mergedAnnotations,
-		SourceDateEpoch:  c.Params.SourceDateEpoch,
+		SourceDateEpoch:  c.effectiveSourceDateEpoch(),
 		RewriteTimestamp: c.Params.RewriteTimestamp,
 		ExtraArgs:        c.Params.ExtraArgs,
 		InheritLabels:    &c.Params.InheritLabels,
