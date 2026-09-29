@@ -25,6 +25,36 @@ Run these commands before submitting changes:
 - `make lint` — run golangci-lint (installs automatically)
 - `make fmt` — format code
 
+## Code Conventions
+
+### `validateParams()` is pure validation
+
+Every command's `validateParams()` method checks invariants and returns
+errors but never mutates `Params` fields or performs side effects.
+Parameter derivation belongs in `effective*()` methods or in `run()`
+steps after validation.
+
+### `effective*()` pattern for computed values
+
+When a parameter's runtime value differs from the user-supplied value
+(e.g., combining source + context into a full path, or resolving a
+sentinel to a concrete value), expose it through a trivial
+`effective*()` method. See `effectiveContextDir()` and
+`effectiveSourceDateEpoch()` in `pkg/commands/build.go`.
+
+### Test placement
+
+End-to-end behavior (parameter combinations that affect the build
+outcome) should be tested in `Test_<Command>_Run`. Unit tests for
+individual helpers go in dedicated test functions. Use
+`Test_<Command>_validateParams` only for pure validation logic.
+
+### Validation ordering
+
+In `validateParams()`, check the most general and important parameters
+first (output-ref, context, source) before command-specific or
+feature-specific checks.
+
 ## Integration Test Conventions
 
 When asserting on build stderr in `image build` integration tests, call
