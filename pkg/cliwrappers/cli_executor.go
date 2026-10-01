@@ -123,8 +123,7 @@ func getExitCodeFromError(cmdErr error) int {
 		return 0
 	}
 
-	var exitErr *exec.ExitError
-	if errors.As(cmdErr, &exitErr) {
+	if exitErr, ok := errors.AsType[*exec.ExitError](cmdErr); ok {
 		if status, ok := exitErr.Sys().(syscall.WaitStatus); ok {
 			return status.ExitStatus()
 		}

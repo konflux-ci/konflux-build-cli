@@ -256,8 +256,8 @@ func dropGoProxyFrom(configFile string) error {
 	var modifiedConfigFileContent []string
 
 	inGomodBlock := false
-	lines := strings.Split(string(configFileContent), "\n")
-	for _, line := range lines {
+	lines := strings.SplitSeq(string(configFileContent), "\n")
+	for line := range lines {
 		trimmed := strings.TrimSpace(line)
 
 		// Remove the deprecated top-level goproxy_url.

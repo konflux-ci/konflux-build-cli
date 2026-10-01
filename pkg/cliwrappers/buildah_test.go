@@ -19,8 +19,6 @@ func setupBuildahCli() (*cliwrappers.BuildahCli, *mockExecutor) {
 	return buildahCli, executor
 }
 
-func boolPtr(b bool) *bool { return &b }
-
 func ensureRetryerDisabled(t *testing.T) {
 	retryerDisabled := cliwrappers.DisableRetryer
 	if !retryerDisabled {
@@ -356,7 +354,7 @@ func TestBuildahCli_Build(t *testing.T) {
 
 		err := buildahCli.Build(&cliwrappers.BuildahBuildArgs{
 			Containerfile: containerfile, ContextDir: contextDir, Tags: []string{outputRef},
-			TLSVerify: boolPtr(true),
+			TLSVerify: new(true),
 		})
 		g.Expect(err).ToNot(HaveOccurred())
 		g.Expect(capturedArgs).To(ContainElement("--tls-verify=true"))
@@ -637,7 +635,7 @@ func TestBuildahCli_Push(t *testing.T) {
 		executor.executeFunc = mockSuccessfulPush(&capturedArgs)
 
 		_, err := buildahCli.Push(&cliwrappers.BuildahPushArgs{
-			Image: image, TLSVerify: boolPtr(true),
+			Image: image, TLSVerify: new(true),
 		})
 		g.Expect(err).ToNot(HaveOccurred())
 		g.Expect(capturedArgs).To(ContainElement("--tls-verify=true"))
@@ -754,7 +752,7 @@ func TestBuildahCli_Pull(t *testing.T) {
 		}
 
 		err := buildahCli.Pull(&cliwrappers.BuildahPullArgs{
-			Image: image, TLSVerify: boolPtr(true),
+			Image: image, TLSVerify: new(true),
 		})
 		g.Expect(err).ToNot(HaveOccurred())
 		g.Expect(capturedArgs).To(ContainElement("--tls-verify=true"))

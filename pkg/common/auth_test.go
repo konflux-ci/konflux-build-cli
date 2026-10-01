@@ -30,7 +30,7 @@ func generateDigest() string {
 	return string(digest)
 }
 
-func createAuthFile(auths map[string]interface{}) (string, error) {
+func createAuthFile(auths map[string]any) (string, error) {
 	tmpDir := os.TempDir()
 	configPath := filepath.Join(tmpDir, "config.json")
 
@@ -48,8 +48,8 @@ func createAuthFile(auths map[string]interface{}) (string, error) {
 }
 
 func TestSelectAuth(t *testing.T) {
-	auths := map[string]interface{}{
-		"auths": map[string]interface{}{
+	auths := map[string]any{
+		"auths": map[string]any{
 			"docker.io":                   map[string]string{"auth": dockerIOToken},
 			"https://index.docker.io/v1/": map[string]string{"auth": indexDockerIOToken},
 			"quay.io/konflux-ci/foo":      map[string]string{"auth": quayIOKonfluxToken},
@@ -109,8 +109,8 @@ func TestSelectAuth(t *testing.T) {
 }
 
 func TestFallbackSelectionForDockerIO(t *testing.T) {
-	auths := map[string]interface{}{
-		"auths": map[string]interface{}{
+	auths := map[string]any{
+		"auths": map[string]any{
 			"https://index.docker.io/v1/": map[string]string{"auth": indexDockerIOToken},
 			"quay.io/konflux-ci/foo":      map[string]string{"auth": quayIOKonfluxToken},
 			"quay.io":                     map[string]string{"auth": quayIOToken},

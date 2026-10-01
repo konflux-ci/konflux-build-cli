@@ -236,27 +236,28 @@ func (c *GitClone) setupSSH() error {
 		}
 	}
 
-	sshCmd := "ssh"
+	var sshCmd strings.Builder
+	sshCmd.WriteString("ssh")
 
 	configPath := filepath.Join(destSSHDir, "config")
 	if fileExists(configPath) {
-		sshCmd += fmt.Sprintf(` -F "%s"`, configPath)
+		sshCmd.WriteString(fmt.Sprintf(` -F "%s"`, configPath))
 	} else {
-		sshCmd += " -F /dev/null"
+		sshCmd.WriteString(" -F /dev/null")
 	}
 
 	for _, keyPath := range keyPaths {
-		sshCmd += fmt.Sprintf(` -i "%s"`, keyPath)
+		sshCmd.WriteString(fmt.Sprintf(` -i "%s"`, keyPath))
 	}
 
 	knownHostsPath := filepath.Join(destSSHDir, "known_hosts")
 	if fileExists(knownHostsPath) {
-		sshCmd += fmt.Sprintf(` -o UserKnownHostsFile="%s"`, knownHostsPath)
+		sshCmd.WriteString(fmt.Sprintf(` -o UserKnownHostsFile="%s"`, knownHostsPath))
 	}
 
-	c.CliWrappers.GitCli.SetEnv(envGitSSHCommand, sshCmd)
+	c.CliWrappers.GitCli.SetEnv(envGitSSHCommand, sshCmd.String())
 
-	l.Logger.Debugf("SSH keys configured (GIT_SSH_COMMAND=%s)", sshCmd)
+	l.Logger.Debugf("SSH keys configured (GIT_SSH_COMMAND=%s)", sshCmd.String())
 	return nil
 }
 
