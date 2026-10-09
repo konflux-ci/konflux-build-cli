@@ -2904,6 +2904,10 @@ func (c *Build) runSyftScans() (err error) {
 			return fmt.Errorf("syft image scan: %w", err)
 		}
 		l.Logger.Infof("Image SBOM written to %s", c.Params.SyftImageOutput)
+
+		// Stamp RPM PGP Key IDs onto the SBOM while the image filesystem is still mounted.
+		// This is best-effort: failures are logged but do not fail the build.
+		stampRPMPgpKeyIDs(mountPoint, syftImageOutput)
 	}
 
 	return nil
