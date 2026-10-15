@@ -358,6 +358,12 @@ var BuildParamsConfig = map[string]common.Parameter{
 		TypeKind:   reflect.String,
 		Usage:      "Take the set of images that the containerfile depends on and write them to the file at the specified path.\nEach line in the file is \"<ref-from-containerfile> <canonical-ref>\",\nwhere canonical-ref includes the fully qualified name, digest and optionaly tag (if ref-from-containerfile has a tag).",
 	},
+	"resolved-base-images-json-output": {
+		Name:       "resolved-base-images-json-output",
+		EnvVarName: "KBC_BUILD_RESOLVED_BASE_IMAGES_JSON_OUTPUT",
+		TypeKind:   reflect.String,
+		Usage:      "Write resolved base images as a Tekton artifacts JSON file with inputs named base-images.",
+	},
 	"builder-metadata-output": {
 		Name:       "builder-metadata-output",
 		EnvVarName: "KBC_BUILD_BUILDER_METADATA_OUTPUT",
@@ -554,6 +560,7 @@ type BuildParams struct {
 	PrefetchOutputMount        string   `paramName:"prefetch-output-mount"`
 	PrefetchEnvMount           string   `paramName:"prefetch-env-mount"`
 	ResolvedBaseImagesOutput   string   `paramName:"resolved-base-images-output"`
+	BaseImagesJSONOutput       string   `paramName:"resolved-base-images-json-output"`
 	BuilderMetadataOutput      string   `paramName:"builder-metadata-output"`
 	IndexManifestOutput        string   `paramName:"index-manifest-output"`
 	RHSMEntitlements           string   `paramName:"rhsm-entitlements"`
@@ -917,10 +924,8 @@ func (c *Build) run() error {
 			return err
 		}
 	}
-	if c.Params.ResolvedBaseImagesOutput != "" {
-		if err := c.writeResolvedBaseImages(pulledImages, c.Params.ResolvedBaseImagesOutput); err != nil {
-			return err
-		}
+	if err := c.writeBaseImageOutputs(pulledImages); err != nil {
+		return err
 	}
 
 	if resultJson, err := c.ResultsWriter.CreateResultJson(c.Results); err == nil {
@@ -934,6 +939,10 @@ func (c *Build) run() error {
 }
 
 func (c *Build) validateParams() error {
+	if err := c.validateBaseImageOutputPaths(); err != nil {
+		return err
+	}
+
 	if !common.IsImageNameValid(common.GetImageName(c.Params.OutputRef)) {
 		return fmt.Errorf("output-ref '%s' is invalid", c.Params.OutputRef)
 	}
@@ -3273,35 +3282,6 @@ func (c *Build) writeContainerfileJson(containerfile *dockerfile.Dockerfile, out
 	return nil
 }
 
-// Resolve the pulled images (the input refs from the containerfile) to their canonical forms
-// (fully-qualified-name[:tag]@digest) and write the results to the specified path.
-//
-// The file format is one pair of space-separated "input-ref canonical-ref" per line.
-func (c *Build) writeResolvedBaseImages(pulledImages []BaseImage, outputPath string) error {
-	l.Logger.Infof("Writing resolved base images to: %s", outputPath)
-
-	resolvedImages, err := c.resolveBaseImages(pulledImages)
-	if err != nil {
-		return fmt.Errorf("determining resolved base images: %w", err)
-	}
-
-	var s strings.Builder
-
-	for i := range pulledImages {
-		s.WriteString(pulledImages[i].Ref)
-		s.WriteByte(' ')
-		s.WriteString(resolvedImages[i].Ref)
-		s.WriteByte('\n')
-	}
-
-	err = os.WriteFile(outputPath, []byte(s.String()), 0644)
-	if err != nil {
-		return fmt.Errorf("writing resolved base images: %w", err)
-	}
-	l.Logger.Info("Resolved base images written successfully")
-	return nil
-}
-
 // scanBuilderContent uses capo (https://github.com/konflux-ci/capo) to identify
 // content copied from builder stages to the final image in multi-stage builds.
 // The output is consumed by mobster (in a separate Tekton step) for Contextual
@@ -3419,8 +3399,8 @@ func (c *Build) resolveBaseImages(pulledImages []BaseImage) ([]BaseImage, error)
 		if err != nil {
 			return nil, fmt.Errorf("buildah images %s: %w", bareImage, err)
 		}
-		if len(entries) == 0 {
-			return nil, fmt.Errorf("'buildah images %s' succeeded but returned 0 entries", bareImage)
+		if len(entries) != 1 || len(entries[0].Names) == 0 {
+			return nil, fmt.Errorf("'buildah images %s' must return exactly one named image", bareImage)
 		}
 
 		var resolvedRef reference.Named
@@ -3438,6 +3418,12 @@ func (c *Build) resolveBaseImages(pulledImages []BaseImage) ([]BaseImage, error)
 			// tag than the one in the input ref. This technically doesn't matter, since tags have no
 			// authoritative informational value, but it would make the resolution hard to understand.
 			resolvedRef = reference.TrimNamed(namedRef)
+		}
+
+		// A stored image can have aliases in other repositories. Preserve an
+		// already qualified input name rather than taking its first alias.
+		if named, ok := inputRef.(reference.Named); ok && common.IsNormalizedRef(bareImage) {
+			resolvedRef = reference.TrimNamed(named)
 		}
 
 		// Tag: take from input image or leave empty

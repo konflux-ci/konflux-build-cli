@@ -4187,7 +4187,7 @@ func Test_Build_resolveBaseImages(t *testing.T) {
 	})
 }
 
-func Test_Build_writeResolvedBaseImages(t *testing.T) {
+func Test_Build_writeBaseImageTextOutput(t *testing.T) {
 	g := NewWithT(t)
 
 	const digestA = "sha256:586ab46b9d6d906b2df3dad12751e807bd0f0632d5a2ab3991bdac78bdccd59a"
@@ -4205,10 +4205,10 @@ func Test_Build_writeResolvedBaseImages(t *testing.T) {
 		}
 		c := &Build{
 			CliWrappers: BuildCliWrappers{BuildahCli: mock},
-			Params:      &BuildParams{},
+			Params:      &BuildParams{ResolvedBaseImagesOutput: outputPath},
 		}
 
-		err := c.writeResolvedBaseImages([]BaseImage{{Ref: "namespace/image:tag"}}, outputPath)
+		err := c.writeBaseImageOutputs([]BaseImage{{Ref: "namespace/image:tag"}})
 
 		g.Expect(err).ToNot(HaveOccurred())
 		content, readErr := os.ReadFile(outputPath)
@@ -4224,10 +4224,10 @@ func Test_Build_writeResolvedBaseImages(t *testing.T) {
 
 		c := &Build{
 			CliWrappers: BuildCliWrappers{BuildahCli: &mockBuildahCli{}},
-			Params:      &BuildParams{},
+			Params:      &BuildParams{ResolvedBaseImagesOutput: outputPath},
 		}
 
-		err := c.writeResolvedBaseImages(nil, outputPath)
+		err := c.writeBaseImageOutputs(nil)
 
 		g.Expect(err).ToNot(HaveOccurred())
 		content, readErr := os.ReadFile(outputPath)
@@ -4243,10 +4243,10 @@ func Test_Build_writeResolvedBaseImages(t *testing.T) {
 		}
 		c := &Build{
 			CliWrappers: BuildCliWrappers{BuildahCli: mock},
-			Params:      &BuildParams{},
+			Params:      &BuildParams{ResolvedBaseImagesOutput: filepath.Join(t.TempDir(), "out.txt")},
 		}
 
-		err := c.writeResolvedBaseImages([]BaseImage{{Ref: "namespace/image:tag"}}, "/tmp/out.txt")
+		err := c.writeBaseImageOutputs([]BaseImage{{Ref: "namespace/image:tag"}})
 
 		g.Expect(err).To(HaveOccurred())
 		g.Expect(err.Error()).To(ContainSubstring("determining resolved base images"))
@@ -4262,13 +4262,13 @@ func Test_Build_writeResolvedBaseImages(t *testing.T) {
 		}
 		c := &Build{
 			CliWrappers: BuildCliWrappers{BuildahCli: mock},
-			Params:      &BuildParams{},
+			Params:      &BuildParams{ResolvedBaseImagesOutput: "/nonexistent/directory/output.txt"},
 		}
 
-		err := c.writeResolvedBaseImages([]BaseImage{{Ref: "namespace/image:tag"}}, "/nonexistent/directory/output.txt")
+		err := c.writeBaseImageOutputs([]BaseImage{{Ref: "namespace/image:tag"}})
 
 		g.Expect(err).To(HaveOccurred())
-		g.Expect(err.Error()).To(ContainSubstring("writing resolved base images"))
+		g.Expect(err.Error()).To(ContainSubstring("base image output directory"))
 	})
 }
 
