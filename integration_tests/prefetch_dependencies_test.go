@@ -14,8 +14,8 @@ import (
 )
 
 const (
-	hermetoLatestImage             = "quay.io/konflux-ci/hermeto:latest"
-	hermetoIntegrationTestsRepoURL = "https://github.com/hermetoproject/hermeto.git"
+	hermetoLatestImage = "quay.io/konflux-ci/hermeto:latest"
+	testFixtureOrigin  = "file:///workspace"
 )
 
 type prefetchDependenciesTestParams struct {
@@ -24,12 +24,6 @@ type prefetchDependenciesTestParams struct {
 	OutputDir           string
 	OutputDirMountPoint string
 	EnvFiles            []string
-}
-
-func cloneGitRepo(url, output string) error {
-	executor := cliwrappers.NewCliExecutor()
-	_, _, _, err := executor.Execute(cliwrappers.Command("git", "clone", url, output, "--depth=1"))
-	return err
 }
 
 func parseSBOM(path string) (map[string]any, error) {
@@ -55,6 +49,36 @@ func setupContext(t *testing.T) string {
 	}
 	t.Cleanup(func() { os.RemoveAll(tempDir) })
 	return tempDir
+}
+
+func setupTestFixtureRepo(t *testing.T, fixtureName, fixturePath string) string {
+	t.Helper()
+
+	repoPath := filepath.Join(setupContext(t), "repo")
+	sourcePath := filepath.Join(FindRepoRoot(), "integration_tests", "sample-projects", fixturePath)
+	if err := os.MkdirAll(filepath.Join(repoPath, fixtureName), 0o755); err != nil {
+		t.Fatalf("Failed to create fixture repository: %v", err)
+	}
+	if err := os.CopyFS(filepath.Join(repoPath, fixtureName), os.DirFS(sourcePath)); err != nil {
+		t.Fatalf("Failed to copy %s fixture: %v", fixtureName, err)
+	}
+
+	executor := cliwrappers.NewCliExecutor()
+	runGitCmd := func(args ...string) {
+		gitArgs := append([]string{"-C", repoPath}, args...)
+		if _, _, _, err := executor.Execute(cliwrappers.Command("git", gitArgs...)); err != nil {
+			t.Fatalf("Failed to run git %v: %v", args, err)
+		}
+	}
+
+	runGitCmd("init")
+	runGitCmd("config", "user.name", "Integration Test")
+	runGitCmd("config", "user.email", "integration-test@example.com")
+	runGitCmd("remote", "add", "origin", testFixtureOrigin)
+	runGitCmd("add", fixtureName)
+	runGitCmd("commit", "-m", "Add integration test fixture")
+
+	return repoPath
 }
 
 func runPrefetchDependencies(params prefetchDependenciesTestParams) error {
@@ -104,14 +128,11 @@ func TestPrefetchDependencies(t *testing.T) {
 	})
 
 	t.Run("should prefetch dependencies with RPM input", func(t *testing.T) {
-		tempDir := setupContext(t)
-
-		repoPath := filepath.Join(tempDir, "repo")
-		Expect(cloneGitRepo(hermetoIntegrationTestsRepoURL, repoPath)).To(Succeed())
+		repoPath := setupTestFixtureRepo(t, "rpm", "prefetch-rpm")
 
 		params := prefetchDependenciesTestParams{
 			SourceDir: repoPath,
-			Input:     `{"packages": [{"type": "rpm", "path": "tests/integration/rpm/scenarios/rpm_e2e/in"}]}`,
+			Input:     `{"packages": [{"type": "rpm", "path": "rpm"}]}`,
 		}
 		Expect(runPrefetchDependencies(params)).To(Succeed())
 
@@ -154,14 +175,11 @@ func TestPrefetchDependencies(t *testing.T) {
 	})
 
 	t.Run("should generate environment files with specified formats", func(t *testing.T) {
-		tempDir := setupContext(t)
-
-		repoPath := filepath.Join(tempDir, "repo")
-		Expect(cloneGitRepo(hermetoIntegrationTestsRepoURL, repoPath)).To(Succeed())
+		repoPath := setupTestFixtureRepo(t, "gomod", "prefetch-gomod")
 
 		params := prefetchDependenciesTestParams{
 			SourceDir:           repoPath,
-			Input:               `{"packages": [{"type": "gomod", "path": "tests/integration/gomod/scenarios/gomod_without_deps/in"}]}`,
+			Input:               `{"packages": [{"type": "gomod", "path": "gomod"}]}`,
 			OutputDirMountPoint: "/tmp",
 			EnvFiles:            []string{"hermeto.env", "prefetch.env", "prefetch-env.json"},
 		}
@@ -189,5 +207,10 @@ func TestPrefetchDependencies(t *testing.T) {
 		var jsonEnvData []envVar
 		Expect(json.Unmarshal(jsonContent, &jsonEnvData)).To(Succeed())
 		Expect(jsonEnvData).To(ContainElement(envVar{"GOMODCACHE", "/tmp/deps/gomod/pkg/mod"}))
+
+		dependencyArchive := filepath.Join(repoPath, "prefetch-output", "deps", "gomod", "pkg", "mod", "cache", "download", "github.com", "pkg", "errors", "@v", "v0.9.1.zip")
+		info, err := os.Stat(dependencyArchive)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(info.Mode().IsRegular()).To(BeTrue())
 	})
 }
