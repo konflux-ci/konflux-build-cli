@@ -84,3 +84,28 @@ func TestCosignCliSign(t *testing.T) {
 		g.Expect(cosignCli.Sign(&args, "")).To(Succeed())
 	})
 }
+
+func TestCosignCliInitialize(t *testing.T) {
+	baseArgs := cliwrappers.CosignInitializeArgs{
+		Root:   "/tmp/cosign-root",
+		Mirror: "https://mirror.sigstore.dev",
+	}
+	expectedCmdArgs := []string{
+		"initialize",
+		"--root", baseArgs.Root,
+		"--mirror", baseArgs.Mirror,
+	}
+
+	t.Run("with root and mirror", func(t *testing.T) {
+		g := NewWithT(t)
+		cosignCli, executor := mockCosignCli()
+
+		executor.executeFunc = func(cmd cliwrappers.Cmd) (string, string, int, error) {
+			g.Expect(cmd.Name).To(Equal("cosign"))
+			g.Expect(cmd.Args).To(Equal(expectedCmdArgs))
+			return "", "", 0, nil
+		}
+
+		g.Expect(cosignCli.Initialize(&baseArgs)).To(Succeed())
+	})
+}

@@ -83,3 +83,35 @@ func (cc *CosignCli) Sign(args *CosignSignArgs, dockerConfigDir string) error {
 	}
 	return nil
 }
+
+type CosignInitializeArgs struct {
+	Root   string
+	Mirror string
+}
+
+func (cc *CosignCli) Initialize(args *CosignInitializeArgs) error {
+	cmdArgs := []string{"initialize"}
+
+	if args.Root != "" {
+		cmdArgs = append(cmdArgs, "--root", args.Root)
+	}
+	if args.Mirror != "" {
+		cmdArgs = append(cmdArgs, "--mirror", args.Mirror)
+	}
+
+	cmd := Cmd{Name: "cosign", Args: cmdArgs, LogOutput: true}
+	cosignLog.Debugf("Running command:\n%s", shellJoin(cmd.Name, cmd.Args...))
+	retryer := NewRetryer(func() (string, string, int, error) {
+		return cc.Executor.Execute(cmd)
+	})
+
+	_, stderr, _, err := retryer.Run()
+	if err != nil {
+		cosignLog.Errorf("cosign initialize failed: %s", err.Error())
+		if stderr != "" {
+			cosignLog.Errorf("[stderr]\n%s", stderr)
+		}
+		return err
+	}
+	return nil
+}
