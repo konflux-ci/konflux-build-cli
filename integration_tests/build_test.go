@@ -1783,7 +1783,7 @@ LABEL test.label="platform-build-args-test"
       "OrigCmd": "FROM",
       "BaseName": "scratch",
       "Platform": "",
-      "Comment": "",
+      "DocComment": "",
       "SourceCode": "FROM scratch",
       "Location": [
         {
@@ -1797,6 +1797,7 @@ LABEL test.label="platform-build-args-test"
           }
         }
       ],
+      "Comments": null,
       "From": {
         "Scratch": true
       },
