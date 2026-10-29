@@ -100,6 +100,18 @@ spec:
               [[ -z "$git_url" || "$git_url" == "null" ]] && echo 'ERROR: git_url not found in SNAPSHOT' && exit 1
               [[ -z "$git_revision" || "$git_revision" == "null" ]] && echo 'ERROR: git_revision not found in SNAPSHOT' && exit 1
 
+              # SNAPSHOT is normally written by trusted controllers, but anyone able to create
+              # or override a Snapshot in the tenant namespace can set this URL, and it ends up
+              # on a remote shell's command line. Validate it as strictly as the revision:
+              # an https GitHub owner/repo URL and nothing else. The character classes exclude
+              # every shell metacharacter.
+              if [[ $git_url =~ ^https://github\.com/[A-Za-z0-9._-]+/[A-Za-z0-9._-]+(\.git)?$ ]]; then
+                echo "Valid Git URL."
+              else
+                echo "Error: Invalid Git URL format." >&2
+                exit 1
+              fi
+
               if [[ $git_revision =~ ^[0-9a-f]{40}$ ]]; then
                 echo "Valid Git SHA."
               else
@@ -111,9 +123,21 @@ spec:
               # Send "heartbeat" packets every 60 seconds to prevent the connection from dropping.
               ssh_opts=(-o ServerAliveInterval=60)
 
-              # Login and execute the script remotely
+              # Login and execute the script remotely.
+              # The heredoc delimiter is quoted, so the script below is sent verbatim and is
+              # never expanded on this side. The two snapshot-derived values are base64-encoded
+              # before they are placed on the remote command line: the base64 alphabet contains
+              # no shell metacharacters, so the remote shell cannot reinterpret them as code.
               echo "Connecting to ${HOST} as ${USERNAME} ..."
-              ssh -i ~/.ssh/id_rsa "${ssh_opts[@]}" "${USERNAME}@${HOST}" << EOF
+              git_url_b64=$(printf '%s' "$git_url" | base64 -w0)
+              git_revision_b64=$(printf '%s' "$git_revision" | base64 -w0)
+              ssh -i ~/.ssh/id_rsa "${ssh_opts[@]}" "${USERNAME}@${HOST}" \
+                "GIT_URL_B64=${git_url_b64} GIT_REVISION_B64=${git_revision_b64} bash -s" << 'EOF'
+                set -e
+
+                git_url=$(printf '%s' "$GIT_URL_B64" | base64 -d)
+                git_revision=$(printf '%s' "$GIT_REVISION_B64" | base64 -d)
+
                 # install the tools needed for running the tests
                 sudo dnf install git golang httpd-tools -y
 
