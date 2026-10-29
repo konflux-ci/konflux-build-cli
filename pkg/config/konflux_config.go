@@ -4,7 +4,6 @@ import (
 	"fmt"
 
 	l "github.com/konflux-ci/konflux-build-cli/pkg/logger"
-	"github.com/sirupsen/logrus"
 )
 
 var configLog = l.Logger.WithField("logger", "KonfluxConfig")
@@ -82,11 +81,4 @@ func (c *KonfluxConfig) DeepCopy() *KonfluxConfig {
 	}
 
 	return copy
-}
-
-func (c *KonfluxConfig) LogConfig(logLevel logrus.Level) {
-	configLog.Logf(logLevel, "cache proxy config: %s", c.CacheProxy.ToString())
-	configLog.Logf(logLevel, "hermeto proxy config: %s", c.HermetoProxy.ToString())
-
-	configLog.Logf(logLevel, "Raw config: %+v", c.RawConfig)
 }

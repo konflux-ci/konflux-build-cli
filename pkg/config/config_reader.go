@@ -6,10 +6,13 @@ import (
 	"os"
 
 	"github.com/konflux-ci/konflux-build-cli/pkg/clients"
+	"github.com/konflux-ci/konflux-build-cli/pkg/logger"
 	"gopkg.in/ini.v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 )
+
+var rawConfigLogger = logger.Logger.WithField("logger", "KonfluxConfig")
 
 var NewConfigReader func() (ConfigReader, error) = ConfigReaderFactory
 
@@ -30,6 +33,20 @@ type KonfluxRawConfig struct {
 	HermetoYarnProxy    string
 	// Global setting allowing of forbidding usage of package registry proxies on the cluster level.
 	HermetoPackageRegistryProxyAllowed string
+}
+
+func (k *KonfluxRawConfig) LogData() {
+	rawConfigLogger.Infof("allow-cache-proxy: %s", k.AllowCacheProxy)
+	rawConfigLogger.Infof("http-proxy: %s", k.HttpProxy)
+	rawConfigLogger.Infof("no-proxy: %s", k.NoProxy)
+	rawConfigLogger.Infof("package-registry-proxy-bundler-url: %s", k.HermetoBundlerProxy)
+	rawConfigLogger.Infof("package-registry-proxy-cargo-url: %s", k.HermetoCargoProxy)
+	rawConfigLogger.Infof("package-registry-proxy-gomod-url: %s", k.HermetoGomodProxy)
+	rawConfigLogger.Infof("package-registry-proxy-npm-url: %s", k.HermetoNpmProxy)
+	rawConfigLogger.Infof("package-registry-proxy-pip-url: %s", k.HermetoPipProxy)
+	rawConfigLogger.Infof("package-registry-proxy-pnpm-url: %s", k.HermetoPnpmProxy)
+	rawConfigLogger.Infof("package-registry-proxy-yarn-url: %s", k.HermetoYarnProxy)
+	rawConfigLogger.Infof("allow-package-registry-proxy: %s", k.HermetoPackageRegistryProxyAllowed)
 }
 
 // ConfigReader defines the interface for reading config data.

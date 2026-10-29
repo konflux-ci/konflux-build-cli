@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"github.com/konflux-ci/konflux-build-cli/pkg/config"
-	"github.com/sirupsen/logrus"
 
 	. "github.com/onsi/gomega"
 )
@@ -87,7 +86,7 @@ func TestKonfluxConfig(t *testing.T) {
 		g.Expect(kofluxConfig.HermetoProxy.YarnProxy).To(Equal(testYarnProxy))
 
 		// Test that it can log config without errors
-		kofluxConfig.LogConfig(logrus.InfoLevel)
+		kofluxConfig.RawConfig.LogData()
 
 		// Read config second time, should return cached value
 		ReadConfigDataFunc = func() (*config.KonfluxRawConfig, error) {
