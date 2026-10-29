@@ -55,4 +55,5 @@ func init() {
 	rootCmd.AddCommand(configCmd)
 	rootCmd.AddCommand(internalCmdGroup)
 	rootCmd.AddCommand(gitCloneCmd)
+	rootCmd.AddCommand(tektonBundleGroup)
 }
