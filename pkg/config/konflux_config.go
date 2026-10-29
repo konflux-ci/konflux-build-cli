@@ -13,10 +13,10 @@ var configLog = l.Logger.WithField("logger", "KonfluxConfig")
 var GetKonfluxConfig func() (*KonfluxConfig, error) = getKonfluxConfig
 
 type KonfluxConfig struct {
-	CacheProxy   *CacheProxyConfig
-	HermetoProxy *HermetoProxyConfig
-	// Raw config as it was read from config source
-	RawConfig KonfluxRawConfig
+	CacheProxy     *CacheProxyConfig
+	HermetoProxy   *HermetoProxyConfig
+	KeylessSigning *KeylessSigningConfig
+	RawConfig      KonfluxRawConfig
 }
 
 // Interface for all sub structs included into KonfluxConfig (except RawConfig)
@@ -67,6 +67,8 @@ func newKonfluxConfig(rawConfig *KonfluxRawConfig) *KonfluxConfig {
 	}
 	konfluxConfig.HermetoProxy = hermetoProxy
 
+	konfluxConfig.KeylessSigning = NewKeylessSigningConfig(*rawConfig)
+
 	return konfluxConfig
 }
 
@@ -78,6 +80,9 @@ func (c *KonfluxConfig) DeepCopy() *KonfluxConfig {
 	}
 	if c.HermetoProxy != nil {
 		copy.HermetoProxy = c.HermetoProxy.DeepCopy()
+	}
+	if c.KeylessSigning != nil {
+		copy.KeylessSigning = c.KeylessSigning.DeepCopy()
 	}
 
 	return copy

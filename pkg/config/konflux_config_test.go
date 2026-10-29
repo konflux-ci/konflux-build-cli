@@ -67,6 +67,11 @@ func TestKonfluxConfig(t *testing.T) {
 				HermetoPackageRegistryProxyAllowed: "true",
 				HermetoNpmProxy:                    testNpmProxy,
 				HermetoYarnProxy:                   testYarnProxy,
+
+				DefaultOIDCIssuer: "https://oidc.example.com",
+				RekorInternalURL:  "https://rekor-internal.example.com",
+				FulcioInternalURL: "https://fulcio-internal.example.com",
+				TufInternalURL:    "https://tuf-internal.example.com",
 			}, nil
 		}
 		config.NewConfigReader = NewMockConfigReader
@@ -85,6 +90,16 @@ func TestKonfluxConfig(t *testing.T) {
 		g.Expect(kofluxConfig.HermetoProxy.NpmProxy).To(Equal(testNpmProxy))
 		g.Expect(kofluxConfig.HermetoProxy.YarnProxy).To(Equal(testYarnProxy))
 
+		g.Expect(kofluxConfig.KeylessSigning).ToNot(BeNil())
+		g.Expect(kofluxConfig.KeylessSigning.IsValid()).To(BeTrue())
+		g.Expect(kofluxConfig.KeylessSigning.OIDCIssuer).To(Equal("https://oidc.example.com"))
+		g.Expect(kofluxConfig.KeylessSigning.RekorInternalURL).To(Equal("https://rekor-internal.example.com"))
+		g.Expect(kofluxConfig.KeylessSigning.RekorExternalURL).To(Equal(""))
+		g.Expect(kofluxConfig.KeylessSigning.FulcioInternalURL).To(Equal("https://fulcio-internal.example.com"))
+		g.Expect(kofluxConfig.KeylessSigning.FulcioExternalURL).To(Equal(""))
+		g.Expect(kofluxConfig.KeylessSigning.TufInternalURL).To(Equal("https://tuf-internal.example.com"))
+		g.Expect(kofluxConfig.KeylessSigning.TufExternalURL).To(Equal(""))
+
 		// Test that it can log config without errors
 		kofluxConfig.RawConfig.LogData()
 
@@ -98,6 +113,7 @@ func TestKonfluxConfig(t *testing.T) {
 		g.Expect(err).ToNot(HaveOccurred())
 		g.Expect(kofluxConfig.CacheProxy).ToNot(BeNil())
 		g.Expect(kofluxConfig.HermetoProxy).ToNot(BeNil())
+		g.Expect(kofluxConfig.KeylessSigning).ToNot(BeNil())
 	})
 
 	t.Run("should create config reader even if sub config errors", func(t *testing.T) {
