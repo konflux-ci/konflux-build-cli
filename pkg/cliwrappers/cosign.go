@@ -10,6 +10,13 @@ import (
 
 var cosignLog = logger.Logger.WithField("logger", "CosignCli")
 
+type CosignCliInterface interface {
+	Sign(args *CosignSignArgs, dockerConfigDir string) error
+	Initialize(args *CosignInitializeArgs) error
+}
+
+var _ CosignCliInterface = &CosignCli{}
+
 type CosignCli struct {
 	Executor CliExecutorInterface
 }
