@@ -13,10 +13,6 @@ spec:
         - name: SNAPSHOT
           value: "$(params.SNAPSHOT)"
       taskSpec:
-        # Every step handles data derived from the SNAPSHOT and run-tests compiles
-        # and executes the cloned source, so keep all of them unprivileged.
-        # runAsUser is deliberately left unset: the images default to a non-root
-        # user, and clusters that allocate UIDs per namespace assign their own.
         stepTemplate:
           securityContext:
             runAsNonRoot: true
@@ -54,11 +50,8 @@ spec:
             - name: source
               mountPath: /source
           - name: stage-go-toolchain
-            # The tests need both a Go toolchain and the CLI tools they exercise
-            # (skopeo, buildah, ...). The task-runner image has the tools but no Go,
-            # and installing one with microdnf would mean running the tests as root.
-            # Copy the toolchain out of the image the Dockerfile builds with instead,
-            # and keep that image reference in sync with the Dockerfile.
+            # The task-runner image has the all the tools except Go and installing one with microdnf
+            # would mean running the tests as root. Copy the go toolchain from the go-toolset image
             image: registry.access.redhat.com/ubi10/go-toolset:1.26.10@sha256:557f358c83892a8b94fb72649a99e1c303a625d240547fb97a9cbc1620e808c0
             script: |
               #!/bin/bash
@@ -67,11 +60,7 @@ spec:
               # while the cluster assigns the step a UID of its own. Point HOME at a
               # writable directory, otherwise 'go' fails to create its module cache.
               export HOME=/tmp
-              # Assign first: a failing command substitution only aborts the step
-              # under 'set -e' when it is the whole right-hand side of an assignment.
               goroot=$(go env GOROOT)
-              # Copy into a sub-directory: the mount point itself is owned by root,
-              # so 'cp -a' must not try to apply the source attributes to it.
               cp -a "$goroot" /toolchain/go
             volumeMounts:
             - name: go-toolchain
