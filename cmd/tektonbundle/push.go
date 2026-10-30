@@ -1,7 +1,7 @@
-package tektonbundle
+package tknbundle
 
 import (
-	tektonbundlecmd "github.com/konflux-ci/konflux-build-cli/pkg/commands/tektonbundle"
+	tektonbundlecmd "github.com/konflux-ci/konflux-build-cli/pkg/commands/tknbundle"
 	"github.com/konflux-ci/konflux-build-cli/pkg/common"
 	l "github.com/konflux-ci/konflux-build-cli/pkg/logger"
 	"github.com/spf13/cobra"

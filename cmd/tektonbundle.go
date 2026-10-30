@@ -1,9 +1,8 @@
 package cmd
 
 import (
+	tknbundle "github.com/konflux-ci/konflux-build-cli/cmd/tektonbundle"
 	"github.com/spf13/cobra"
-
-	"github.com/konflux-ci/konflux-build-cli/cmd/tektonbundle"
 )
 
 var tektonBundleGroup = &cobra.Command{
@@ -13,5 +12,5 @@ var tektonBundleGroup = &cobra.Command{
 }
 
 func init() {
-	tektonBundleGroup.AddCommand(tektonbundle.TektonBundlePushCmd)
+	tektonBundleGroup.AddCommand(tknbundle.TektonBundlePushCmd)
 }
