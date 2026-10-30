@@ -132,7 +132,9 @@ func (c *GitClone) setupBasicAuth() error {
 
 		parsedURL, err := url.Parse(c.Params.URL)
 		if err != nil {
-			return fmt.Errorf("failed to parse repository URL: %w", err)
+			// The parse error embeds the raw URL, which may carry credentials.
+			return fmt.Errorf("failed to parse repository URL: %s", common.SanitizeURL(c.Params.URL))
+
 		}
 		if parsedURL.Scheme == "" || parsedURL.Host == "" {
 			return fmt.Errorf("basic-auth requires an HTTP(S) URL with scheme and host, got: %s", common.SanitizeURL(c.Params.URL))

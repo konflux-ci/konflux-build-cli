@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/konflux-ci/konflux-build-cli/pkg/cliwrappers"
+	"github.com/konflux-ci/konflux-build-cli/pkg/common"
 )
 
 const readOnlyFileMode = os.FileMode(0444)
@@ -233,9 +234,11 @@ func getHostnameFromRemoteOriginURL(sourceDir string) (string, error) {
 		return "", err
 	}
 
-	parsedURL, err := url.Parse(strings.TrimSpace(stdout))
+	remoteURL := strings.TrimSpace(stdout)
+	parsedURL, err := url.Parse(remoteURL)
 	if err != nil {
-		return "", err
+		// The parse error embeds the raw URL, which may carry credentials.
+		return "", fmt.Errorf("failed to parse git remote origin URL: %s", common.SanitizeURL(remoteURL))
 	}
 
 	return parsedURL.Hostname(), nil

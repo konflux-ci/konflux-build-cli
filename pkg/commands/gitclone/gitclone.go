@@ -374,7 +374,7 @@ func (c *GitClone) mergeTargetBranch() error {
 		if normalizedOrigin == normalizedMerge {
 			l.Logger.Debug("Merge source URL is the same as origin. Using existing 'origin' remote.")
 		} else {
-			l.Logger.Debugf("Merging from different repository: '%s'", c.Params.MergeSourceRepoURL)
+			l.Logger.Debugf("Merging from different repository: '%s'", common.SanitizeURL(c.Params.MergeSourceRepoURL))
 			mergeRemote = "merge-source"
 			if _, err := c.CliWrappers.GitCli.RemoteAdd(mergeRemote, c.Params.MergeSourceRepoURL); err != nil {
 				return err
