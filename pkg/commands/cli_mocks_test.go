@@ -203,6 +203,27 @@ func (m *mockSyftCli) Scan(args *cliwrappers.SyftScanArgs) (string, error) {
 	return "", nil
 }
 
+var _ cliwrappers.CosignCliInterface = &mockCosignCli{}
+
+type mockCosignCli struct {
+	SignFunc       func(args *cliwrappers.CosignSignArgs, dockerConfigDir string) error
+	InitializeFunc func(args *cliwrappers.CosignInitializeArgs) error
+}
+
+func (m *mockCosignCli) Sign(args *cliwrappers.CosignSignArgs, dockerConfigDir string) error {
+	if m.SignFunc != nil {
+		return m.SignFunc(args, dockerConfigDir)
+	}
+	return nil
+}
+
+func (m *mockCosignCli) Initialize(args *cliwrappers.CosignInitializeArgs) error {
+	if m.InitializeFunc != nil {
+		return m.InitializeFunc(args)
+	}
+	return nil
+}
+
 var _ cliwrappers.OrasCliInterface = &mockOrasCli{}
 
 type mockOrasCli struct {

@@ -13,4 +13,5 @@ var configCmd = &cobra.Command{
 
 func init() {
 	configCmd.AddCommand(config.ConfigCacheProxyCmd)
+	configCmd.AddCommand(config.KeylessSigningCmd)
 }

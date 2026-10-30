@@ -4,7 +4,6 @@ import (
 	"fmt"
 
 	l "github.com/konflux-ci/konflux-build-cli/pkg/logger"
-	"github.com/sirupsen/logrus"
 )
 
 var configLog = l.Logger.WithField("logger", "KonfluxConfig")
@@ -14,10 +13,10 @@ var configLog = l.Logger.WithField("logger", "KonfluxConfig")
 var GetKonfluxConfig func() (*KonfluxConfig, error) = getKonfluxConfig
 
 type KonfluxConfig struct {
-	CacheProxy   *CacheProxyConfig
-	HermetoProxy *HermetoProxyConfig
-	// Raw config as it was read from config source
-	RawConfig KonfluxRawConfig
+	CacheProxy     *CacheProxyConfig
+	HermetoProxy   *HermetoProxyConfig
+	KeylessSigning *KeylessSigningConfig
+	RawConfig      KonfluxRawConfig
 }
 
 // Interface for all sub structs included into KonfluxConfig (except RawConfig)
@@ -68,6 +67,8 @@ func newKonfluxConfig(rawConfig *KonfluxRawConfig) *KonfluxConfig {
 	}
 	konfluxConfig.HermetoProxy = hermetoProxy
 
+	konfluxConfig.KeylessSigning = NewKeylessSigningConfig(*rawConfig)
+
 	return konfluxConfig
 }
 
@@ -80,13 +81,9 @@ func (c *KonfluxConfig) DeepCopy() *KonfluxConfig {
 	if c.HermetoProxy != nil {
 		copy.HermetoProxy = c.HermetoProxy.DeepCopy()
 	}
+	if c.KeylessSigning != nil {
+		copy.KeylessSigning = c.KeylessSigning.DeepCopy()
+	}
 
 	return copy
-}
-
-func (c *KonfluxConfig) LogConfig(logLevel logrus.Level) {
-	configLog.Logf(logLevel, "cache proxy config: %s", c.CacheProxy.ToString())
-	configLog.Logf(logLevel, "hermeto proxy config: %s", c.HermetoProxy.ToString())
-
-	configLog.Logf(logLevel, "Raw config: %+v", c.RawConfig)
 }

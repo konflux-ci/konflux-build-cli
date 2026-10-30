@@ -10,6 +10,13 @@ import (
 
 var cosignLog = logger.Logger.WithField("logger", "CosignCli")
 
+type CosignCliInterface interface {
+	Sign(args *CosignSignArgs, dockerConfigDir string) error
+	Initialize(args *CosignInitializeArgs) error
+}
+
+var _ CosignCliInterface = &CosignCli{}
+
 type CosignCli struct {
 	Executor CliExecutorInterface
 }
@@ -76,6 +83,38 @@ func (cc *CosignCli) Sign(args *CosignSignArgs, dockerConfigDir string) error {
 	_, stderr, _, err := retryer.Run()
 	if err != nil {
 		cosignLog.Errorf("cosign sign failed: %s", err.Error())
+		if stderr != "" {
+			cosignLog.Errorf("[stderr]\n%s", stderr)
+		}
+		return err
+	}
+	return nil
+}
+
+type CosignInitializeArgs struct {
+	Root   string
+	Mirror string
+}
+
+func (cc *CosignCli) Initialize(args *CosignInitializeArgs) error {
+	cmdArgs := []string{"initialize"}
+
+	if args.Root != "" {
+		cmdArgs = append(cmdArgs, "--root", args.Root)
+	}
+	if args.Mirror != "" {
+		cmdArgs = append(cmdArgs, "--mirror", args.Mirror)
+	}
+
+	cmd := Cmd{Name: "cosign", Args: cmdArgs, LogOutput: true}
+	cosignLog.Debugf("Running command:\n%s", shellJoin(cmd.Name, cmd.Args...))
+	retryer := NewRetryer(func() (string, string, int, error) {
+		return cc.Executor.Execute(cmd)
+	})
+
+	_, stderr, _, err := retryer.Run()
+	if err != nil {
+		cosignLog.Errorf("cosign initialize failed: %s", err.Error())
 		if stderr != "" {
 			cosignLog.Errorf("[stderr]\n%s", stderr)
 		}
