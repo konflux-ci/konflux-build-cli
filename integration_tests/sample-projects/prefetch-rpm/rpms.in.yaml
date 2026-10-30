@@ -1,0 +1,9 @@
+contentOrigin:
+  repos:
+    - repoid: appstream
+      baseurl: https://cdn-ubi.redhat.com/content/public/ubi/dist/ubi9/9/x86_64/appstream/os
+    - repoid: baseos
+      baseurl: https://cdn-ubi.redhat.com/content/public/ubi/dist/ubi9/9/x86_64/baseos/os
+packages:
+    - name: vim
+installWeakDeps: false

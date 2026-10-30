@@ -1,0 +1,162 @@
+---
+lockfileVersion: 1
+lockfileVendor: redhat
+arches:
+- arch: x86_64
+  packages:
+  - url: https://cdn-ubi.redhat.com/content/public/ubi/dist/ubi9/9/x86_64/appstream/os/Packages/g/gpm-libs-1.20.7-29.el9.x86_64.rpm
+    repoid: appstream
+    size: 23036
+    checksum: sha256:fc3455407e79462bfd944eea5d11d19186ad741be5a83e7ac1720fc181e3cc90
+    name: gpm-libs
+    evr: 1.20.7-29.el9
+    sourcerpm: gpm-1.20.7-29.el9.src.rpm
+  - url: https://cdn-ubi.redhat.com/content/public/ubi/dist/ubi9/9/x86_64/appstream/os/Packages/v/vim-common-8.2.2637-26.el9_8.23.x86_64.rpm
+    repoid: appstream
+    size: 7356176
+    checksum: sha256:c95cf34e22ffd1d8ef410f75ac770d8852f1d381309758d41284e314cf754b25
+    name: vim-common
+    evr: 2:8.2.2637-26.el9_8.23
+    sourcerpm: vim-8.2.2637-26.el9_8.23.src.rpm
+  - url: https://cdn-ubi.redhat.com/content/public/ubi/dist/ubi9/9/x86_64/appstream/os/Packages/v/vim-enhanced-8.2.2637-26.el9_8.23.x86_64.rpm
+    repoid: appstream
+    size: 1841374
+    checksum: sha256:c7c281374dab48f6080e47695ad06cba0a7613bdfc30814b56f86ab40162fdb1
+    name: vim-enhanced
+    evr: 2:8.2.2637-26.el9_8.23
+    sourcerpm: vim-8.2.2637-26.el9_8.23.src.rpm
+  - url: https://cdn-ubi.redhat.com/content/public/ubi/dist/ubi9/9/x86_64/baseos/os/Packages/b/basesystem-11-13.el9.noarch.rpm
+    repoid: baseos
+    size: 8229
+    checksum: sha256:f498b0813fa1a825d550e8e3a9e42255eabfa18e6fc96adfc6cc8fa7e16dd513
+    name: basesystem
+    evr: 11-13.el9
+    sourcerpm: basesystem-11-13.el9.src.rpm
+  - url: https://cdn-ubi.redhat.com/content/public/ubi/dist/ubi9/9/x86_64/baseos/os/Packages/b/bash-5.1.8-9.el9.x86_64.rpm
+    repoid: baseos
+    size: 1769540
+    checksum: sha256:d3adf8b09aa0bf935c67aa12444e0ee02f70a82c2682bfb2b02bda0a989bb806
+    name: bash
+    evr: 5.1.8-9.el9
+    sourcerpm: bash-5.1.8-9.el9.src.rpm
+  - url: https://cdn-ubi.redhat.com/content/public/ubi/dist/ubi9/9/x86_64/baseos/os/Packages/f/filesystem-3.16-5.el9.x86_64.rpm
+    repoid: baseos
+    size: 5003807
+    checksum: sha256:9567592e6e32a9ebd45584cc4feb5d00812f143fcb2d8cd8b1d95108f4f66a2d
+    name: filesystem
+    evr: 3.16-5.el9
+    sourcerpm: filesystem-3.16-5.el9.src.rpm
+  - url: https://cdn-ubi.redhat.com/content/public/ubi/dist/ubi9/9/x86_64/baseos/os/Packages/g/glibc-2.34-283.el9_8.x86_64.rpm
+    repoid: baseos
+    size: 2083811
+    checksum: sha256:ac0a85530d147cc35d56422d2f6eab14800eec63c6d5318f2bef576252426939
+    name: glibc
+    evr: 2.34-283.el9_8
+    sourcerpm: glibc-2.34-283.el9_8.src.rpm
+  - url: https://cdn-ubi.redhat.com/content/public/ubi/dist/ubi9/9/x86_64/baseos/os/Packages/g/glibc-common-2.34-283.el9_8.x86_64.rpm
+    repoid: baseos
+    size: 321942
+    checksum: sha256:87a1528415c5a1680faf8a816bf4a79e423f1b13c9a7d1aac387a5080ea48738
+    name: glibc-common
+    evr: 2.34-283.el9_8
+    sourcerpm: glibc-2.34-283.el9_8.src.rpm
+  - url: https://cdn-ubi.redhat.com/content/public/ubi/dist/ubi9/9/x86_64/baseos/os/Packages/g/glibc-minimal-langpack-2.34-283.el9_8.x86_64.rpm
+    repoid: baseos
+    size: 31065
+    checksum: sha256:4031293a63d3851b03969172779a9b0f6669e00a544c80425c9eae74e08c70b0
+    name: glibc-minimal-langpack
+    evr: 2.34-283.el9_8
+    sourcerpm: glibc-2.34-283.el9_8.src.rpm
+  - url: https://cdn-ubi.redhat.com/content/public/ubi/dist/ubi9/9/x86_64/baseos/os/Packages/l/libacl-2.4.0-1.el9_8.x86_64.rpm
+    repoid: baseos
+    size: 31657
+    checksum: sha256:a81fb7a4d7c946e9bd886ee3c471a4b5040dedbb8ffb2a388120b2094be93cc8
+    name: libacl
+    evr: 2.4.0-1.el9_8
+    sourcerpm: acl-2.4.0-1.el9_8.src.rpm
+  - url: https://cdn-ubi.redhat.com/content/public/ubi/dist/ubi9/9/x86_64/baseos/os/Packages/l/libgcc-11.5.0-14.el9.x86_64.rpm
+    repoid: baseos
+    size: 87280
+    checksum: sha256:77c66827ffc14df2f43612b26128b1fd58d5c9597d4d4e564aa239b161272872
+    name: libgcc
+    evr: 11.5.0-14.el9
+    sourcerpm: gcc-11.5.0-14.el9.src.rpm
+  - url: https://cdn-ubi.redhat.com/content/public/ubi/dist/ubi9/9/x86_64/baseos/os/Packages/l/libselinux-3.6-3.el9.x86_64.rpm
+    repoid: baseos
+    size: 89722
+    checksum: sha256:ce1cc63a7212c39f5f2a35f719ee38d6418cf081ea78c9317f388d9f41e4a627
+    name: libselinux
+    evr: 3.6-3.el9
+    sourcerpm: libselinux-3.6-3.el9.src.rpm
+  - url: https://cdn-ubi.redhat.com/content/public/ubi/dist/ubi9/9/x86_64/baseos/os/Packages/l/libsepol-3.6-3.el9.x86_64.rpm
+    repoid: baseos
+    size: 338766
+    checksum: sha256:b98984b2bf42203964cc979ac157df090c63b89a0f5c6560ede01965531c8ffd
+    name: libsepol
+    evr: 3.6-3.el9
+    sourcerpm: libsepol-3.6-3.el9.src.rpm
+  - url: https://cdn-ubi.redhat.com/content/public/ubi/dist/ubi9/9/x86_64/baseos/os/Packages/n/ncurses-base-6.2-12.20210508.el9.noarch.rpm
+    repoid: baseos
+    size: 97840
+    checksum: sha256:d62dfd41f9688efa2cf1ceedb96084c63e297fbdcfd1e72bc6757c730092b60c
+    name: ncurses-base
+    evr: 6.2-12.20210508.el9
+    sourcerpm: ncurses-6.2-12.20210508.el9.src.rpm
+  - url: https://cdn-ubi.redhat.com/content/public/ubi/dist/ubi9/9/x86_64/baseos/os/Packages/n/ncurses-libs-6.2-12.20210508.el9.x86_64.rpm
+    repoid: baseos
+    size: 336270
+    checksum: sha256:f3e1f8e59c7116278aa19b6705a1443f6307d4d6fbdde75a23d2f5d60636cb16
+    name: ncurses-libs
+    evr: 6.2-12.20210508.el9
+    sourcerpm: ncurses-6.2-12.20210508.el9.src.rpm
+  - url: https://cdn-ubi.redhat.com/content/public/ubi/dist/ubi9/9/x86_64/baseos/os/Packages/p/pcre2-10.40-7.el9_8.x86_64.rpm
+    repoid: baseos
+    size: 244785
+    checksum: sha256:ef2c65a463e1ef1bfbf3d9ee66986e14cca0fbae88343f099dd5b16619276f1f
+    name: pcre2
+    evr: 10.40-7.el9_8
+    sourcerpm: pcre2-10.40-7.el9_8.src.rpm
+  - url: https://cdn-ubi.redhat.com/content/public/ubi/dist/ubi9/9/x86_64/baseos/os/Packages/p/pcre2-syntax-10.40-7.el9_8.noarch.rpm
+    repoid: baseos
+    size: 150069
+    checksum: sha256:e7466a43ef2bfda2b1dc07e855b0db743d48b11c0bdc1402e1d2ea6fb23d33a3
+    name: pcre2-syntax
+    evr: 10.40-7.el9_8
+    sourcerpm: pcre2-10.40-7.el9_8.src.rpm
+  - url: https://cdn-ubi.redhat.com/content/public/ubi/dist/ubi9/9/x86_64/baseos/os/Packages/r/redhat-release-9.8-1.0.el9.x86_64.rpm
+    repoid: baseos
+    size: 61742
+    checksum: sha256:8157ed988fc34dcfeb6429272959471edd5bde4ac212f26611fd54c180391758
+    name: redhat-release
+    evr: 9.8-1.0.el9
+    sourcerpm: redhat-release-9.8-1.0.el9.src.rpm
+  - url: https://cdn-ubi.redhat.com/content/public/ubi/dist/ubi9/9/x86_64/baseos/os/Packages/s/setup-2.13.7-10.el9.noarch.rpm
+    repoid: baseos
+    size: 153791
+    checksum: sha256:0891d395ce067121c28932534237ad1ce231f2bfa987411ad62e73a12d11eb6a
+    name: setup
+    evr: 2.13.7-10.el9
+    sourcerpm: setup-2.13.7-10.el9.src.rpm
+  - url: https://cdn-ubi.redhat.com/content/public/ubi/dist/ubi9/9/x86_64/baseos/os/Packages/t/tzdata-2026e-1.el9_8.noarch.rpm
+    repoid: baseos
+    size: 936099
+    checksum: sha256:c105d92f6cacb9bb8337b77041cedd9c9c906a72c4b5233909b9b69b78f4369f
+    name: tzdata
+    evr: 2026e-1.el9_8
+    sourcerpm: tzdata-2026e-1.el9_8.src.rpm
+  - url: https://cdn-ubi.redhat.com/content/public/ubi/dist/ubi9/9/x86_64/baseos/os/Packages/v/vim-filesystem-8.2.2637-26.el9_8.23.noarch.rpm
+    repoid: baseos
+    size: 24487
+    checksum: sha256:4018dd580ce61bf3628d682e6966dd214e95ef704971ad02020651648cc9cb9f
+    name: vim-filesystem
+    evr: 2:8.2.2637-26.el9_8.23
+    sourcerpm: vim-8.2.2637-26.el9_8.23.src.rpm
+  - url: https://cdn-ubi.redhat.com/content/public/ubi/dist/ubi9/9/x86_64/baseos/os/Packages/w/which-2.21-30.el9_6.x86_64.rpm
+    repoid: baseos
+    size: 42038
+    checksum: sha256:9c09bae3141499ad4d197a563d2a2170768d67b32bdc571221baa059eb97553b
+    name: which
+    evr: 2.21-30.el9_6
+    sourcerpm: which-2.21-30.el9_6.src.rpm
+  source: []
+  module_metadata: []
