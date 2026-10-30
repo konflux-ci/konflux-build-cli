@@ -9,7 +9,8 @@ func SanitizeURL(rawURL string) string {
 	}
 	parsed, err := url.Parse(rawURL)
 	if err != nil {
-		return rawURL
+		// Unparseable, so reveal nothing.
+		return "<invalid URL>"
 	}
 	if parsed.User != nil {
 		// User contains username and password information.
