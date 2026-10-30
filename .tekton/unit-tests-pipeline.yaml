@@ -13,6 +13,19 @@ spec:
         - name: SNAPSHOT
           value: "$(params.SNAPSHOT)"
       taskSpec:
+        # Every step handles data derived from the SNAPSHOT and run-tests compiles
+        # and executes the cloned source, so keep all of them unprivileged.
+        # runAsUser is deliberately left unset: the images default to a non-root
+        # user, and clusters that allocate UIDs per namespace assign their own.
+        stepTemplate:
+          securityContext:
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            seccompProfile:
+              type: RuntimeDefault
         steps:
           - name: clone
             image: quay.io/konflux-ci/task-runner:3.3.0@sha256:0428af436f6942544009e38ef452a6b747e9ec79ab22fd402a3d59585984cf81
@@ -40,10 +53,31 @@ spec:
             volumeMounts:
             - name: source
               mountPath: /source
+          - name: stage-go-toolchain
+            # The tests need both a Go toolchain and the CLI tools they exercise
+            # (skopeo, buildah, ...). The task-runner image has the tools but no Go,
+            # and installing one with microdnf would mean running the tests as root.
+            # Copy the toolchain out of the image the Dockerfile builds with instead,
+            # and keep that image reference in sync with the Dockerfile.
+            image: registry.access.redhat.com/ubi10/go-toolset:1.26.10@sha256:557f358c83892a8b94fb72649a99e1c303a625d240547fb97a9cbc1620e808c0
+            script: |
+              #!/bin/bash
+              set -ex
+              # The image's HOME (/opt/app-root/src) is only writable by uid 1001,
+              # while the cluster assigns the step a UID of its own. Point HOME at a
+              # writable directory, otherwise 'go' fails to create its module cache.
+              export HOME=/tmp
+              # Assign first: a failing command substitution only aborts the step
+              # under 'set -e' when it is the whole right-hand side of an assignment.
+              goroot=$(go env GOROOT)
+              # Copy into a sub-directory: the mount point itself is owned by root,
+              # so 'cp -a' must not try to apply the source attributes to it.
+              cp -a "$goroot" /toolchain/go
+            volumeMounts:
+            - name: go-toolchain
+              mountPath: /toolchain
           - name: run-tests
             image: quay.io/konflux-ci/task-runner:3.3.0@sha256:0428af436f6942544009e38ef452a6b747e9ec79ab22fd402a3d59585984cf81
-            securityContext:
-              runAsUser: 0
             computeResources:
               requests:
                 memory: 4Gi
@@ -52,12 +86,14 @@ spec:
             script: |
               #!/bin/bash
               set -ex
-              microdnf install -y go
+              export PATH="/toolchain/go/bin:$PATH"
               cd /source
               go test -tags exclude_graphdriver_btrfs -coverprofile=coverage.out -covermode=atomic ./pkg/...
             volumeMounts:
             - name: source
               mountPath: /source
+            - name: go-toolchain
+              mountPath: /toolchain
           - name: upload-coverage
             image: quay.io/konflux-ci/task-runner:3.3.0@sha256:0428af436f6942544009e38ef452a6b747e9ec79ab22fd402a3d59585984cf81
             onError: continue
@@ -93,4 +129,6 @@ spec:
               mountPath: /source
         volumes:
         - name: source
+          emptyDir: {}
+        - name: go-toolchain
           emptyDir: {}
