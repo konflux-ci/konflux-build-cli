@@ -86,15 +86,15 @@ spec:
           - name: upload-coverage
             image: quay.io/konflux-ci/task-runner:3.3.0@sha256:0428af436f6942544009e38ef452a6b747e9ec79ab22fd402a3d59585984cf81
             onError: continue
-            env:
-              - name: CODECOV_TOKEN
-                valueFrom:
-                  secretKeyRef:
-                    name: codecov-token
-                    key: CODECOV_TOKEN
             script: |
               #!/bin/bash
               cd /source
+
+              if ! token=$(cat /secrets/codecov/CODECOV_TOKEN); then
+                echo "WARNING: Codecov token not available, skipping upload"
+                exit 1
+              fi
+              export CODECOV_TOKEN="$token"
 
               curl -Os https://cli.codecov.io/v11.2.8/linux/codecov
               if ! echo "8930c4bb30254a42f3d8c340706b1be340885e20c0df5160a24efa2e030e662b  codecov" | sha256sum -c -; then
@@ -106,7 +106,6 @@ spec:
               BRANCH=$(sed -n '2p' /source/.git-metadata)
               SLUG=$(sed -n '3p' /source/.git-metadata)
               ./codecov upload-process \
-                --token "${CODECOV_TOKEN}" \
                 --flag unit-tests \
                 --file coverage.out \
                 --commit-sha "${COMMIT_SHA}" \
@@ -116,8 +115,15 @@ spec:
             volumeMounts:
             - name: source
               mountPath: /source
+            - name: codecov-token
+              mountPath: /secrets/codecov
+              readOnly: true
         volumes:
         - name: source
           emptyDir: {}
         - name: go-toolchain
           emptyDir: {}
+        - name: codecov-token
+          secret:
+            secretName: codecov-token
+            defaultMode: 0444
