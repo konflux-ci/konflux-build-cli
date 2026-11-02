@@ -20,9 +20,9 @@ spec:
             value: https://github.com/konflux-ci/tekton-integration-catalog.git
           # using a stable version of fedora-vm-provision task, need to be updated when next stable version of the task is available
           - name: revision
-            value: 1eb7c59d5530fd1f37d64ace8eea25f2649e887d
+            value: af63e976717a238fb98c973f27a660b2652b0f09
           - name: pathInRepo
-            value: tasks/mapt-oci/fedora-virtual-machine/provision/0.1/fedora-vm-provision.yaml
+            value: tasks/mapt-oci/fedora-virtual-machine/provision/0.2/fedora-vm-provision.yaml
       params:
         - name: secret-aws-credentials
           value: mapt-kind-secret
@@ -75,8 +75,15 @@ spec:
               mkdir -p ~/.ssh
               chmod 700 ~/.ssh
 
-              # Disable strict host checking
-              echo "StrictHostKeyChecking accept-new" >> ~/.ssh/config
+
+              if [[ ! -s /secrets/ssh/host-public-key ]]; then
+                echo 'ERROR: host public key is empty — provision could not scan the VM host key' >&2
+                exit 1
+              fi
+              # add host-public-key to the known_hosts file, instead of blindly trusting the host
+              printf '%s\n' "$(cat /secrets/ssh/host-public-key)" > ~/.ssh/known_hosts
+              chmod 600 ~/.ssh/known_hosts
+              echo "StrictHostKeyChecking yes" >> ~/.ssh/config
 
               # Extract git_url and git_revision from snapshot
               jq -c '.components[0]' >/tmp/component.json <<< "${PARAM_SNAPSHOT}"
