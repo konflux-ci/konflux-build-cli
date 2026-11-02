@@ -58,35 +58,22 @@ spec:
           - name: clone-repo-and-run-tests
             image: quay.io/konflux-ci/task-runner:3.3.0@sha256:0428af436f6942544009e38ef452a6b747e9ec79ab22fd402a3d59585984cf81
             env:
-            - name: USERNAME
-              valueFrom:
-                secretKeyRef:
-                  name: $(params.host-access-secret-name)
-                  key: username
-            - name: HOST
-              valueFrom:
-                secretKeyRef:
-                  name: $(params.host-access-secret-name)
-                  key: host
-            - name: ID_RSA
-              valueFrom:
-                secretKeyRef:
-                  name: $(params.host-access-secret-name)
-                  key: id_rsa
             - name: PARAM_SNAPSHOT
               value: "$(params.SNAPSHOT)"
+            volumeMounts:
+            - name: host-access
+              mountPath: /secrets/ssh
+              readOnly: true
             script: |
               #!/bin/bash
               set -e
 
-              # Setup local SSH configuration directory
+              USERNAME=$(cat /secrets/ssh/username)
+              HOST=$(cat /secrets/ssh/host)
+
+              # Setup local SSH configuration directory (client config only, no key material)
               mkdir -p ~/.ssh
               chmod 700 ~/.ssh
-
-              # create the id_rsa and adjust permission
-              echo -n "${ID_RSA}" > ~/.ssh/id_rsa
-              trap 'rm -f ~/.ssh/id_rsa' EXIT
-              chmod 600 ~/.ssh/id_rsa
 
               # Disable strict host checking
               echo "StrictHostKeyChecking accept-new" >> ~/.ssh/config
@@ -131,7 +118,7 @@ spec:
               echo "Connecting to ${HOST} as ${USERNAME} ..."
               git_url_b64=$(printf '%s' "$git_url" | base64 -w0)
               git_revision_b64=$(printf '%s' "$git_revision" | base64 -w0)
-              ssh -i ~/.ssh/id_rsa "${ssh_opts[@]}" "${USERNAME}@${HOST}" \
+              ssh -i /secrets/ssh/id_rsa "${ssh_opts[@]}" "${USERNAME}@${HOST}" \
                 "GIT_URL_B64=${git_url_b64} GIT_REVISION_B64=${git_revision_b64} bash -s" << 'EOF'
                 set -e
 
@@ -151,6 +138,11 @@ spec:
                 # Run the integration tests
                 GOTOOLCHAIN=auto go test -tags exclude_graphdriver_btrfs -timeout 20m ./integration_tests
               EOF
+        volumes:
+        - name: host-access
+          secret:
+            secretName: $(params.host-access-secret-name)
+            defaultMode: 0444
   finally:
     - name: deprovision-virtual-machine
       taskRef:
