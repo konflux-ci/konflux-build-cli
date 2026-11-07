@@ -8,7 +8,7 @@ require (
 	github.com/cyphar/filepath-securejoin v0.7.0
 	github.com/konflux-ci/capo v0.5.1
 	github.com/konflux-ci/dockerfile-json v1.3.0
-	github.com/moby/buildkit v0.34.1
+	github.com/moby/buildkit v0.34.2
 	github.com/onsi/gomega v1.44.0
 	github.com/opencontainers/go-digest v1.0.0
 	github.com/opencontainers/image-spec v1.1.1
@@ -111,7 +111,7 @@ require (
 	github.com/cncf/xds/go v0.0.0-20260202195803-dba9d589def2 // indirect
 	github.com/containerd/cgroups/v3 v3.1.3 // indirect
 	github.com/containerd/containerd/api v1.12.0 // indirect
-	github.com/containerd/containerd/v2 v2.4.1 // indirect
+	github.com/containerd/containerd/v2 v2.4.2 // indirect
 	github.com/containerd/continuity v0.5.0 // indirect
 	github.com/containerd/errdefs v1.0.0 // indirect
 	github.com/containerd/errdefs/pkg v0.3.0 // indirect
