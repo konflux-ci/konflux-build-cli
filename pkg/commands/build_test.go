@@ -17,7 +17,7 @@ import (
 	"github.com/konflux-ci/konflux-build-cli/testutil"
 	"github.com/moby/buildkit/frontend/dockerfile/instructions"
 	. "github.com/onsi/gomega"
-	"go.yaml.in/yaml/v3"
+	"go.yaml.in/yaml/v4"
 )
 
 func parseDockerfile(t *testing.T, g Gomega, content string) *dockerfile.Dockerfile {

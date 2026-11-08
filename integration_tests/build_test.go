@@ -30,7 +30,7 @@ import (
 	"github.com/konflux-ci/konflux-build-cli/testutil"
 
 	capoProbe "github.com/konflux-ci/capo/pkg/probe"
-	"go.yaml.in/yaml/v3"
+	"go.yaml.in/yaml/v4"
 )
 
 const (

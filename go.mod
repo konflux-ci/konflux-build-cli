@@ -17,7 +17,7 @@ require (
 	github.com/sirupsen/logrus v1.10.2
 	github.com/spf13/cobra v1.10.2
 	github.com/vishvananda/netlink v1.3.1
-	go.yaml.in/yaml/v3 v3.0.6
+	go.yaml.in/yaml/v4 v4.0.0
 	golang.org/x/sys v0.49.0
 	gopkg.in/ini.v1 v1.67.3
 	k8s.io/api v0.37.2
@@ -306,6 +306,7 @@ require (
 	go.podman.io/image/v5 v5.38.0 // indirect
 	go.podman.io/storage v1.63.1-0.20260710152621-629dae593a5b // indirect
 	go.yaml.in/yaml/v2 v2.4.4 // indirect
+	go.yaml.in/yaml/v3 v3.0.5 // indirect
 	go4.org v0.0.0-20230225012048-214862532bf5 // indirect
 	golang.org/x/crypto v0.58.0 // indirect
 	golang.org/x/exp v0.0.0-20260603202125-055de637280b // indirect
