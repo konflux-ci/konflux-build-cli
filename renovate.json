@@ -13,6 +13,13 @@
       "depNameTemplate": "quay.io/konflux-ci/task-runner",
       "datasourceTemplate": "docker",
       "autoReplaceStringTemplate": "\"quay.io/konflux-ci/task-runner:{{{newValue}}}{{#if newDigest}}@{{{newDigest}}}{{/if}}\""
+    },
+    {
+      "customType": "regex",
+      "managerFilePatterns": ["Makefile"],
+      "matchStrings": ["GOLANGCI_LINT_VERSION \\?= (?<currentValue>v[\\d.]+)"],
+      "depNameTemplate": "golangci/golangci-lint",
+      "datasourceTemplate": "github-releases"
     }
   ],
   "gomod": {
@@ -35,6 +42,11 @@
       "description": "Group GitHub Actions updates",
       "matchManagers": ["github-actions"],
       "groupName": "github-actions"
+    },
+    {
+      "description": "Group golangci-lint updates (CI + Makefile)",
+      "matchPackageNames": ["golangci/golangci-lint", "golangci/golangci-lint-action"],
+      "groupName": "golangci-lint"
     },
     {
       "description": "Group task-runner updates",
