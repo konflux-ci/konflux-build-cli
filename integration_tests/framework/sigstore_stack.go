@@ -15,7 +15,7 @@ import (
 	"time"
 
 	"github.com/sirupsen/logrus"
-	"go.yaml.in/yaml/v3"
+	"go.yaml.in/yaml/v4"
 
 	cliWrappers "github.com/konflux-ci/konflux-build-cli/pkg/cliwrappers"
 	l "github.com/konflux-ci/konflux-build-cli/pkg/logger"
