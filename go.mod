@@ -18,7 +18,7 @@ require (
 	github.com/spf13/cobra v1.10.2
 	github.com/vishvananda/netlink v1.3.1
 	go.yaml.in/yaml/v3 v3.0.6
-	golang.org/x/sys v0.49.0
+	golang.org/x/sys v0.50.0
 	gopkg.in/ini.v1 v1.67.3
 	k8s.io/api v0.37.2
 	k8s.io/apimachinery v0.37.2
