@@ -206,8 +206,9 @@ func (m *mockSyftCli) Scan(args *cliwrappers.SyftScanArgs) (string, error) {
 var _ cliwrappers.CosignCliInterface = &mockCosignCli{}
 
 type mockCosignCli struct {
-	SignFunc       func(args *cliwrappers.CosignSignArgs, dockerConfigDir string) error
-	InitializeFunc func(args *cliwrappers.CosignInitializeArgs) error
+	SignFunc         func(args *cliwrappers.CosignSignArgs, dockerConfigDir string) error
+	InitializeFunc   func(args *cliwrappers.CosignInitializeArgs) error
+	DownloadSBOMFunc func(args *cliwrappers.CosignDownloadSBOMArgs, dockerConfigDir string) (string, error)
 }
 
 func (m *mockCosignCli) Sign(args *cliwrappers.CosignSignArgs, dockerConfigDir string) error {
@@ -222,6 +223,15 @@ func (m *mockCosignCli) Initialize(args *cliwrappers.CosignInitializeArgs) error
 		return m.InitializeFunc(args)
 	}
 	return nil
+}
+
+func (m *mockCosignCli) DownloadSBOM(
+	args *cliwrappers.CosignDownloadSBOMArgs, dockerConfigDir string,
+) (string, error) {
+	if m.DownloadSBOMFunc != nil {
+		return m.DownloadSBOMFunc(args, dockerConfigDir)
+	}
+	return "", nil
 }
 
 var _ cliwrappers.OrasCliInterface = &mockOrasCli{}

@@ -2,6 +2,7 @@ package cliwrappers
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"strings"
 
@@ -13,6 +14,7 @@ var cosignLog = logger.Logger.WithField("logger", "CosignCli")
 type CosignCliInterface interface {
 	Sign(args *CosignSignArgs, dockerConfigDir string) error
 	Initialize(args *CosignInitializeArgs) error
+	DownloadSBOM(args *CosignDownloadSBOMArgs, dockerConfigDir string) (string, error)
 }
 
 var _ CosignCliInterface = &CosignCli{}
@@ -31,6 +33,47 @@ func NewCosignCli(executor CliExecutorInterface) (*CosignCli, error) {
 	}
 
 	return &CosignCli{Executor: executor}, nil
+}
+
+type CosignDownloadSBOMArgs struct {
+	Image       string
+	MaxAttempts int
+}
+
+// DownloadSBOM returns the SBOM attached to an image, as it is published.
+func (cc *CosignCli) DownloadSBOM(args *CosignDownloadSBOMArgs, dockerConfigDir string) (string, error) {
+	if args.Image == "" {
+		return "", errors.New("no image to download the SBOM of")
+	}
+
+	cmdArgs := []string{"download", "sbom", args.Image}
+
+	cmdEnv := os.Environ()
+	if dockerConfigDir != "" {
+		cmdEnv = append(cmdEnv, "DOCKER_CONFIG="+dockerConfigDir)
+	}
+
+	// An SBOM is far too large to log.
+	cmd := Cmd{Name: "cosign", Args: cmdArgs, Env: cmdEnv, LogOutput: false}
+
+	cosignLog.Debugf("Running command:\n%s", shellJoin(cmd.Name, cmd.Args...))
+	retryer := NewRetryer(func() (string, string, int, error) {
+		return cc.Executor.Execute(cmd)
+	})
+	if args.MaxAttempts > 0 {
+		retryer.MaxAttempts = args.MaxAttempts
+	}
+
+	stdout, stderr, _, err := retryer.Run()
+	if err != nil {
+		cosignLog.Errorf("cosign download sbom failed: %s", err.Error())
+		if stderr != "" {
+			cosignLog.Errorf("[stderr]\n%s", stderr)
+		}
+		return "", fmt.Errorf("%w: %s", err, stderr)
+	}
+
+	return stdout, nil
 }
 
 type CosignSignArgs struct {

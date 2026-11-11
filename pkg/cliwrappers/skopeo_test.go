@@ -152,6 +152,106 @@ func TestSkopeoCli_Copy(t *testing.T) {
 		err := skopeoCli.Copy(copyArgs)
 		g.Expect(err).To(HaveOccurred())
 	})
+
+	t.Run("should copy from a registry into an OCI layout", func(t *testing.T) {
+		skopeoCli, executor := setupSkopeoCli()
+		var capturedArgs []string
+		executor.executeFunc = func(cmd cliwrappers.Cmd) (string, string, int, error) {
+			capturedArgs = cmd.Args
+			return "", "", 0, nil
+		}
+
+		copyArgs := &cliwrappers.SkopeoCopyArgs{
+			SourceImage:          sourceImage,
+			DestinationImage:     "/work/parent_image_sources",
+			DestinationTransport: cliwrappers.SkopeoTransportOCI,
+			RemoveSignatures:     true,
+		}
+
+		err := skopeoCli.Copy(copyArgs)
+
+		g.Expect(err).ToNot(HaveOccurred())
+		g.Expect(capturedArgs).To(Equal([]string{
+			"copy",
+			"--remove-signatures",
+			"docker://" + sourceImage,
+			"oci:/work/parent_image_sources",
+		}))
+	})
+
+	t.Run("should copy from an OCI layout into a registry and record the digest", func(t *testing.T) {
+		skopeoCli, executor := setupSkopeoCli()
+		var capturedArgs []string
+		executor.executeFunc = func(cmd cliwrappers.Cmd) (string, string, int, error) {
+			capturedArgs = cmd.Args
+			return "", "", 0, nil
+		}
+
+		copyArgs := &cliwrappers.SkopeoCopyArgs{
+			SourceImage:      "/work/source_image_output:latest-source",
+			SourceTransport:  cliwrappers.SkopeoTransportOCI,
+			DestinationImage: destinationImage,
+			DigestFile:       "/tmp/digestfile",
+			RetryTimes:       retryTimes,
+		}
+
+		err := skopeoCli.Copy(copyArgs)
+
+		g.Expect(err).ToNot(HaveOccurred())
+		g.Expect(capturedArgs).To(Equal([]string{
+			"copy",
+			"--retry-times", strconv.Itoa(retryTimes),
+			"--digestfile", "/tmp/digestfile",
+			"oci:/work/source_image_output:latest-source",
+			"docker://" + destinationImage,
+		}))
+	})
+
+	t.Run("should pass the trust policy before the subcommand", func(t *testing.T) {
+		skopeoCli, executor := setupSkopeoCli()
+		var capturedArgs []string
+		executor.executeFunc = func(cmd cliwrappers.Cmd) (string, string, int, error) {
+			capturedArgs = cmd.Args
+			return "", "", 0, nil
+		}
+
+		copyArgs := &cliwrappers.SkopeoCopyArgs{
+			SourceImage:          sourceImage,
+			DestinationImage:     "/work/parent_image_sources",
+			DestinationTransport: cliwrappers.SkopeoTransportOCI,
+			PolicyPath:           "/etc/scb/policy.json",
+			RegistriesDirPath:    "/etc/scb/registries.d",
+			RemoveSignatures:     true,
+		}
+
+		err := skopeoCli.Copy(copyArgs)
+
+		g.Expect(err).ToNot(HaveOccurred())
+		// --policy and --registries.d are global skopeo options, so they are
+		// only honoured ahead of the subcommand.
+		g.Expect(capturedArgs).To(Equal([]string{
+			"--policy", "/etc/scb/policy.json",
+			"--registries.d", "/etc/scb/registries.d",
+			"copy",
+			"--remove-signatures",
+			"docker://" + sourceImage,
+			"oci:/work/parent_image_sources",
+		}))
+	})
+
+	t.Run("should include stderr in the error so callers can classify the failure", func(t *testing.T) {
+		skopeoCli, executor := setupSkopeoCli()
+		executor.executeFunc = func(cmd cliwrappers.Cmd) (string, string, int, error) {
+			return "", "FATA[0000] " + cliwrappers.MissingSignatureMessage, 1, errors.New("exit status 1")
+		}
+
+		err := skopeoCli.Copy(&cliwrappers.SkopeoCopyArgs{
+			SourceImage:      sourceImage,
+			DestinationImage: destinationImage,
+		})
+
+		g.Expect(err).To(MatchError(ContainSubstring(cliwrappers.MissingSignatureMessage)))
+	})
 }
 
 func TestSkopeoCli_Inspect(t *testing.T) {
@@ -213,6 +313,32 @@ func TestSkopeoCli_Inspect(t *testing.T) {
 		expectArgAndValue(g, capturedArgs, "--format", format)
 		g.Expect(capturedArgs).To(ContainElement("--raw"))
 		g.Expect(capturedArgs).To(ContainElement("--no-tags"))
+		g.Expect(stdout).To(Equal(output))
+	})
+
+	t.Run("should inspect the image config", func(t *testing.T) {
+		skopeoCli, executor := setupSkopeoCli()
+		var capturedArgs []string
+		executor.executeFunc = func(cmd cliwrappers.Cmd) (string, string, int, error) {
+			capturedArgs = cmd.Args
+			return output, "", 0, nil
+		}
+
+		inspectArgs := &cliwrappers.SkopeoInspectArgs{
+			ImageRef:   imageRef,
+			Config:     true,
+			RetryTimes: retryTimes,
+		}
+
+		stdout, err := skopeoCli.Inspect(inspectArgs)
+
+		g.Expect(err).ToNot(HaveOccurred())
+		g.Expect(capturedArgs).To(Equal([]string{
+			"inspect",
+			"--retry-times", strconv.Itoa(retryTimes),
+			"--config",
+			"docker://" + imageRef,
+		}))
 		g.Expect(stdout).To(Equal(output))
 	})
 
