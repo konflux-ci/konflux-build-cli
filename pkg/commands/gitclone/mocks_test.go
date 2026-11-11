@@ -21,9 +21,14 @@ type mockGitCli struct {
 	RevParseFunc           func(ref string, short bool, length int) (string, error)
 	LogFunc                func(format string, count int) (string, error)
 	ConfigLocalFunc        func(key, value string) error
+	ConfigGetFunc          func(key string) (string, error)
 	CommitFunc             func(message string) (string, error)
 	MergeFunc              func(ref, message string) (string, error)
 	FetchTagsFunc          func() ([]string, error)
+	StashFunc              func() error
+	StashPopFunc           func() error
+	ShowFunc               func(format string) (string, error)
+	LsFilesFunc            func(recurseSubmodules bool) ([]string, error)
 }
 
 func (m *mockGitCli) SetEnv(key, value string) {
@@ -51,6 +56,41 @@ func (m *mockGitCli) ConfigLocal(key, value string) error {
 		return m.ConfigLocalFunc(key, value)
 	}
 	return nil
+}
+
+func (m *mockGitCli) ConfigGet(key string) (string, error) {
+	if m.ConfigGetFunc != nil {
+		return m.ConfigGetFunc(key)
+	}
+	return "", nil
+}
+
+func (m *mockGitCli) Stash() error {
+	if m.StashFunc != nil {
+		return m.StashFunc()
+	}
+	return nil
+}
+
+func (m *mockGitCli) StashPop() error {
+	if m.StashPopFunc != nil {
+		return m.StashPopFunc()
+	}
+	return nil
+}
+
+func (m *mockGitCli) Show(format string) (string, error) {
+	if m.ShowFunc != nil {
+		return m.ShowFunc(format)
+	}
+	return "", nil
+}
+
+func (m *mockGitCli) LsFiles(recurseSubmodules bool) ([]string, error) {
+	if m.LsFilesFunc != nil {
+		return m.LsFilesFunc(recurseSubmodules)
+	}
+	return nil, nil
 }
 
 func (m *mockGitCli) Commit(message string) (string, error) {

@@ -23,6 +23,18 @@ type GitCliInterface interface {
 	Init() error
 	// ConfigLocal sets a local git config value. Runs: git config --local <key> <value>
 	ConfigLocal(key, value string) error
+	// ConfigGet reads a git config value. Runs: git config --get <key>
+	ConfigGet(key string) (string, error)
+	// Stash stashes any changes in the working tree. Runs: git stash
+	Stash() error
+	// StashPop restores the most recently stashed changes. Runs: git stash pop
+	StashPop() error
+	// Show returns information about the commit at HEAD in the given format.
+	// Runs: git show -s --format=<format>
+	Show(format string) (string, error)
+	// LsFiles lists the files tracked in the repository.
+	// Runs: git ls-files [--recurse-submodules] -z
+	LsFiles(recurseSubmodules bool) ([]string, error)
 	// RevParse resolves a git ref to its SHA. Runs: git rev-parse [--short[=N]] <ref>
 	RevParse(ref string, short bool, length int) (string, error)
 	// RemoteAdd adds a new remote. Runs: git remote add <name> <url>
@@ -202,6 +214,65 @@ func (g *GitCli) ConfigLocal(key, value string) error {
 	gitLog.Debugf("Running command:\n%s", fullCmd)
 	_, _, _, err := g.Executor.Execute(g.buildCmd(gitArgs))
 	if err != nil {
+		return fmt.Errorf("%s: %w", fullCmd, err)
+	}
+
+	return nil
+}
+
+// ConfigGet reads a git config value.
+// Runs: git config --get <key>
+func (g *GitCli) ConfigGet(key string) (string, error) {
+	if key == "" {
+		return "", errors.New("config key must not be empty")
+	}
+
+	gitArgs := []string{"config", "--get", key}
+	fullCmd := shellJoin("git", gitArgs...)
+
+	gitLog.Debugf("Running command:\n%s", fullCmd)
+
+	// Do not log stdout/stderr, a config value may hold credentials.
+	stdout, _, _, err := g.Executor.Execute(g.buildCmd(gitArgs))
+	if err != nil {
+		return "", fmt.Errorf("%s: %w", fullCmd, err)
+	}
+
+	return strings.TrimSpace(stdout), nil
+}
+
+// Stash stashes any changes in the working tree, leaving it clean.
+// Runs: git stash
+func (g *GitCli) Stash() error {
+	gitArgs := []string{"stash"}
+	fullCmd := shellJoin("git", gitArgs...)
+
+	gitLog.Debugf("Running command:\n%s", fullCmd)
+
+	_, stderr, _, err := g.Executor.Execute(g.buildCmd(gitArgs))
+	if err != nil {
+		gitLog.Infof("[stderr]\n%s", stderr)
+		return fmt.Errorf("%s: %w", fullCmd, err)
+	}
+
+	return nil
+}
+
+// StashPop restores the most recently stashed changes.
+// Runs: git stash pop
+//
+// This fails when there is no stash entry to pop, which is the normal outcome
+// of [GitCli.Stash] on a clean working tree. Callers that stash unconditionally
+// should treat the error as informational.
+func (g *GitCli) StashPop() error {
+	gitArgs := []string{"stash", "pop"}
+	fullCmd := shellJoin("git", gitArgs...)
+
+	gitLog.Debugf("Running command:\n%s", fullCmd)
+
+	_, stderr, _, err := g.Executor.Execute(g.buildCmd(gitArgs))
+	if err != nil {
+		gitLog.Infof("[stderr]\n%s", stderr)
 		return fmt.Errorf("%s: %w", fullCmd, err)
 	}
 
@@ -463,6 +534,59 @@ func (g *GitCli) RevParse(ref string, short bool, length int) (string, error) {
 	}
 
 	return strings.TrimSpace(stdout), nil
+}
+
+// Show returns information about the commit at HEAD in the given format,
+// without the diff.
+// Runs: git show -s --format=<format>
+func (g *GitCli) Show(format string) (string, error) {
+	if format == "" {
+		return "", errors.New("format must not be empty")
+	}
+
+	gitArgs := []string{"show", "-s", "--format=" + format}
+	fullCmd := shellJoin("git", gitArgs...)
+
+	gitLog.Debugf("Running command:\n%s", fullCmd)
+
+	stdout, stderr, _, err := g.Executor.Execute(g.buildCmd(gitArgs))
+	if err != nil {
+		gitLog.Infof("[stderr]\n%s", stderr)
+		return "", fmt.Errorf("%s: %w", fullCmd, err)
+	}
+
+	return strings.TrimSpace(stdout), nil
+}
+
+// LsFiles lists the files tracked in the repository, relative to the working
+// directory. Paths are requested NUL-separated: without -z, git quotes and
+// escapes any name holding a newline, quote, backslash or non-ASCII byte, so
+// the name it prints is not the name on disk.
+// Runs: git ls-files [--recurse-submodules] -z
+func (g *GitCli) LsFiles(recurseSubmodules bool) ([]string, error) {
+	gitArgs := []string{"ls-files"}
+	if recurseSubmodules {
+		gitArgs = append(gitArgs, "--recurse-submodules")
+	}
+	gitArgs = append(gitArgs, "-z")
+
+	fullCmd := shellJoin("git", gitArgs...)
+
+	gitLog.Debugf("Running command:\n%s", fullCmd)
+
+	stdout, stderr, _, err := g.Executor.Execute(g.buildCmd(gitArgs))
+	if err != nil {
+		gitLog.Infof("[stderr]\n%s", stderr)
+		return nil, fmt.Errorf("%s: %w", fullCmd, err)
+	}
+
+	files := []string{}
+	for file := range strings.SplitSeq(stdout, "\x00") {
+		if file != "" {
+			files = append(files, file)
+		}
+	}
+	return files, nil
 }
 
 // Log runs git log with the specified format and count, returning the output.
