@@ -6,7 +6,7 @@ require (
 	github.com/containerd/platforms v1.0.0-rc.5
 	github.com/containers/image/v5 v5.36.2
 	github.com/cyphar/filepath-securejoin v0.7.0
-	github.com/konflux-ci/capo v0.5.1
+	github.com/konflux-ci/capo v0.5.2
 	github.com/konflux-ci/dockerfile-json v1.3.0
 	github.com/moby/buildkit v0.34.2
 	github.com/onsi/gomega v1.44.0
@@ -179,7 +179,7 @@ require (
 	github.com/google/pprof v0.0.0-20260402051712-545e8a4df936 // indirect
 	github.com/google/s2a-go v0.1.9 // indirect
 	github.com/google/uuid v1.6.0 // indirect
-	github.com/googleapis/enterprise-certificate-proxy v0.3.15 // indirect
+	github.com/googleapis/enterprise-certificate-proxy v0.3.24 // indirect
 	github.com/googleapis/gax-go/v2 v2.22.0 // indirect
 	github.com/gookit/color v1.6.1 // indirect
 	github.com/gpustack/gguf-parser-go v0.24.1 // indirect
