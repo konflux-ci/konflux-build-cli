@@ -52,7 +52,7 @@ spec:
           - name: stage-go-toolchain
             # The task-runner image has the all the tools except Go and installing one with microdnf
             # would mean running the tests as root. Copy the go toolchain from the go-toolset image
-            image: registry.access.redhat.com/ubi10/go-toolset:1.26.10@sha256:557f358c83892a8b94fb72649a99e1c303a625d240547fb97a9cbc1620e808c0
+            image: registry.access.redhat.com/ubi10/go-toolset:1.26.10@sha256:e94c38ff4a099b755af60c73ac87198c613f369eb7f818d45c96fbc3f21047de
             script: |
               #!/bin/bash
               set -ex
