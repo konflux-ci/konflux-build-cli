@@ -23,6 +23,8 @@ import (
 const (
 	// Name of the CLI binary
 	KonfluxBuildCli = "konflux-build-cli"
+	// Name of the gobsi binary, which the CLI calls to build source images
+	Gobsi = "gobsi"
 	// Keep task-runner image reference in one place, so it's consistent across tests.
 	TaskRunnerImageRef = "quay.io/konflux-ci/task-runner:3.3.0@sha256:0428af436f6942544009e38ef452a6b747e9ec79ab22fd402a3d59585984cf81"
 )
@@ -30,11 +32,13 @@ const (
 var (
 	containerTool string
 	cliBinPath    string
+	gobsiBinPath  string
 )
 
 func init() {
 	compileDir := os.TempDir()
 	cliBinPath = filepath.Join(compileDir, KonfluxBuildCli)
+	gobsiBinPath = filepath.Join(compileDir, Gobsi)
 
 	// Init logger
 	logLevel := "info"
@@ -62,6 +66,11 @@ func init() {
 	if err := CompileKonfluxCli(); err != nil {
 		l.Logger.Fatal(err)
 	}
+
+	// The same for gobsi, which the source container build calls out to
+	if err := CompileGobsi(); err != nil {
+		l.Logger.Fatal(err)
+	}
 }
 
 // RequirePodman skips the test unless the tests run with podman.
@@ -80,6 +89,10 @@ func NewImageRegistry() ImageRegistry {
 
 func GetCliBinPath() string {
 	return cliBinPath
+}
+
+func GetGobsiBinPath() string {
+	return gobsiBinPath
 }
 
 func IsKonfluxCliCompiled() bool {
@@ -110,6 +123,24 @@ func CompileKonfluxCli() error {
 	stdout, stderr, _, err := executor.Execute(cliWrappers.Command("go", compileArgs...))
 	if err != nil {
 		fmt.Printf("failed to build CLI: %s\n[stdout]:\n%s\n[stderr]:\n%s\n", err.Error(), stdout, stderr)
+	}
+	return err
+}
+
+// CompileGobsi builds gobsi from the same tool module the image builds it from,
+// so that the tests run against the pinned version.
+func CompileGobsi() error {
+	executor := cliWrappers.NewCliExecutor()
+
+	os.Setenv("CGO_ENABLED", "0")
+	os.Setenv("GOOS", "linux")
+
+	cmd := cliWrappers.Command("go", "build", "-o", gobsiBinPath, "github.com/konflux-ci/gobsi/cmd/gobsi")
+	cmd.Dir = path.Join(FindRepoRoot(), "deps", "gobsi")
+
+	stdout, stderr, _, err := executor.Execute(cmd)
+	if err != nil {
+		fmt.Printf("failed to build gobsi: %s\n[stdout]:\n%s\n[stderr]:\n%s\n", err.Error(), stdout, stderr)
 	}
 	return err
 }

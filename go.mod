@@ -6,6 +6,7 @@ require (
 	github.com/containerd/platforms v1.0.0-rc.5
 	github.com/containers/image/v5 v5.36.2
 	github.com/cyphar/filepath-securejoin v0.7.0
+	github.com/gabriel-vasile/mimetype v1.4.13
 	github.com/konflux-ci/capo v0.5.1
 	github.com/konflux-ci/dockerfile-json v1.3.0
 	github.com/moby/buildkit v0.25.1
@@ -145,7 +146,6 @@ require (
 	github.com/fsnotify/fsnotify v1.9.0 // indirect
 	github.com/fsouza/go-dockerclient v1.12.2 // indirect
 	github.com/fxamacker/cbor/v2 v2.9.0 // indirect
-	github.com/gabriel-vasile/mimetype v1.4.13 // indirect
 	github.com/github/go-spdx/v2 v2.7.0 // indirect
 	github.com/go-git/gcfg v1.5.1-0.20230307220236-3a3c6141e376 // indirect
 	github.com/go-git/go-billy/v5 v5.9.0 // indirect
