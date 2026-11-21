@@ -2,7 +2,7 @@ module url-preview.samples.konflux-ci.dev
 
 go 1.26.10
 
-require github.com/PuerkitoBio/goquery v1.13.0
+require github.com/PuerkitoBio/goquery v1.14.0
 
 require (
 	github.com/andybalholm/cascadia v1.3.5 // indirect
