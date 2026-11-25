@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Added
+
+- image source-container-build: New subcommand that builds the source container
+  image accompanying a binary image, replacing the Python `source-build` task.
+
 ## 1.0.1 - 2026-10-20
 
 ### Changed

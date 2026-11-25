@@ -735,3 +735,188 @@ func Test_SetEnv(t *testing.T) {
 		g.Expect(capturedEnv).To(BeNil())
 	})
 }
+
+func Test_ConfigGet(t *testing.T) {
+	g := NewWithT(t)
+
+	t.Run("should run git config --get", func(t *testing.T) {
+		cli := newTestGitCli(func(workdir, command string, args ...string) (string, string, int, error) {
+			g.Expect(args).To(Equal([]string{"config", "--get", "remote.origin.url"}))
+			return "https://github.com/namespace/app.git\n", "", 0, nil
+		})
+
+		result, err := cli.ConfigGet("remote.origin.url")
+
+		g.Expect(err).ToNot(HaveOccurred())
+		g.Expect(result).To(Equal("https://github.com/namespace/app.git"))
+	})
+
+	t.Run("should reject empty key", func(t *testing.T) {
+		cli := newTestGitCli(nil)
+
+		_, err := cli.ConfigGet("")
+
+		g.Expect(err).To(HaveOccurred())
+		g.Expect(err.Error()).To(ContainSubstring("config key must not be empty"))
+	})
+
+	t.Run("should return error when the key is not set", func(t *testing.T) {
+		cli := newTestGitCli(func(workdir, command string, args ...string) (string, string, int, error) {
+			return "", "", 1, errors.New("exit status 1")
+		})
+
+		_, err := cli.ConfigGet("remote.origin.url")
+
+		g.Expect(err).To(HaveOccurred())
+		g.Expect(err.Error()).To(ContainSubstring("git config --get remote.origin.url"))
+	})
+}
+
+func Test_Stash(t *testing.T) {
+	g := NewWithT(t)
+
+	t.Run("should run git stash", func(t *testing.T) {
+		cli := newTestGitCli(func(workdir, command string, args ...string) (string, string, int, error) {
+			g.Expect(args).To(Equal([]string{"stash"}))
+			return "Saved working directory", "", 0, nil
+		})
+
+		err := cli.Stash()
+
+		g.Expect(err).ToNot(HaveOccurred())
+	})
+
+	t.Run("should return error on failure", func(t *testing.T) {
+		cli := newTestGitCli(func(workdir, command string, args ...string) (string, string, int, error) {
+			return "", "fatal: not a git repository", 128, errors.New("exit status 128")
+		})
+
+		err := cli.Stash()
+
+		g.Expect(err).To(HaveOccurred())
+		g.Expect(err.Error()).To(ContainSubstring("git stash"))
+	})
+}
+
+func Test_StashPop(t *testing.T) {
+	g := NewWithT(t)
+
+	t.Run("should run git stash pop", func(t *testing.T) {
+		cli := newTestGitCli(func(workdir, command string, args ...string) (string, string, int, error) {
+			g.Expect(args).To(Equal([]string{"stash", "pop"}))
+			return "", "", 0, nil
+		})
+
+		err := cli.StashPop()
+
+		g.Expect(err).ToNot(HaveOccurred())
+	})
+
+	t.Run("should return error when there is no stash entry", func(t *testing.T) {
+		cli := newTestGitCli(func(workdir, command string, args ...string) (string, string, int, error) {
+			return "", "No stash entries found.", 1, errors.New("exit status 1")
+		})
+
+		err := cli.StashPop()
+
+		g.Expect(err).To(HaveOccurred())
+		g.Expect(err.Error()).To(ContainSubstring("git stash pop"))
+	})
+}
+
+func Test_Show(t *testing.T) {
+	g := NewWithT(t)
+
+	t.Run("should run git show with the given format", func(t *testing.T) {
+		cli := newTestGitCli(func(workdir, command string, args ...string) (string, string, int, error) {
+			g.Expect(args).To(Equal([]string{"show", "-s", "--format=%cI"}))
+			return "2026-10-27T09:15:00+01:00\n", "", 0, nil
+		})
+
+		result, err := cli.Show("%cI")
+
+		g.Expect(err).ToNot(HaveOccurred())
+		g.Expect(result).To(Equal("2026-10-27T09:15:00+01:00"))
+	})
+
+	t.Run("should reject empty format", func(t *testing.T) {
+		cli := newTestGitCli(nil)
+
+		_, err := cli.Show("")
+
+		g.Expect(err).To(HaveOccurred())
+		g.Expect(err.Error()).To(ContainSubstring("format must not be empty"))
+	})
+
+	t.Run("should return error on failure", func(t *testing.T) {
+		cli := newTestGitCli(func(workdir, command string, args ...string) (string, string, int, error) {
+			return "", "fatal: bad revision", 128, errors.New("exit status 128")
+		})
+
+		_, err := cli.Show("%cI")
+
+		g.Expect(err).To(HaveOccurred())
+		g.Expect(err.Error()).To(ContainSubstring("git show -s"))
+	})
+}
+
+func Test_LsFiles(t *testing.T) {
+	g := NewWithT(t)
+
+	t.Run("should run git ls-files and split the output on NUL", func(t *testing.T) {
+		cli := newTestGitCli(func(workdir, command string, args ...string) (string, string, int, error) {
+			g.Expect(args).To(Equal([]string{"ls-files", "-z"}))
+			return "README.md\x00cmd/main.go\x00", "", 0, nil
+		})
+
+		files, err := cli.LsFiles(false)
+
+		g.Expect(err).ToNot(HaveOccurred())
+		g.Expect(files).To(Equal([]string{"README.md", "cmd/main.go"}))
+	})
+
+	t.Run("should recurse into submodules", func(t *testing.T) {
+		cli := newTestGitCli(func(workdir, command string, args ...string) (string, string, int, error) {
+			g.Expect(args).To(Equal([]string{"ls-files", "--recurse-submodules", "-z"}))
+			return "sub/file.txt\x00", "", 0, nil
+		})
+
+		files, err := cli.LsFiles(true)
+
+		g.Expect(err).ToNot(HaveOccurred())
+		g.Expect(files).To(Equal([]string{"sub/file.txt"}))
+	})
+
+	t.Run("should keep file names containing newlines intact", func(t *testing.T) {
+		cli := newTestGitCli(func(workdir, command string, args ...string) (string, string, int, error) {
+			return "we\nird.txt\x00plain.txt\x00", "", 0, nil
+		})
+
+		files, err := cli.LsFiles(false)
+
+		g.Expect(err).ToNot(HaveOccurred())
+		g.Expect(files).To(Equal([]string{"we\nird.txt", "plain.txt"}))
+	})
+
+	t.Run("should return no files for an empty repository", func(t *testing.T) {
+		cli := newTestGitCli(func(workdir, command string, args ...string) (string, string, int, error) {
+			return "", "", 0, nil
+		})
+
+		files, err := cli.LsFiles(false)
+
+		g.Expect(err).ToNot(HaveOccurred())
+		g.Expect(files).To(BeEmpty())
+	})
+
+	t.Run("should return error on failure", func(t *testing.T) {
+		cli := newTestGitCli(func(workdir, command string, args ...string) (string, string, int, error) {
+			return "", "fatal: not a git repository", 128, errors.New("exit status 128")
+		})
+
+		_, err := cli.LsFiles(false)
+
+		g.Expect(err).To(HaveOccurred())
+		g.Expect(err.Error()).To(ContainSubstring("git ls-files"))
+	})
+}

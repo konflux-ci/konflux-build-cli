@@ -14,6 +14,7 @@ import (
 const (
 	ResultsPathInContainer = "/tmp/"
 	kbcPathInContainer     = "/usr/bin/" + KonfluxBuildCli
+	gobsiPathInContainer   = "/usr/bin/" + Gobsi
 )
 
 type ContainerStatus int
@@ -150,6 +151,15 @@ func (c *TestRunnerContainer) AddVolumeWithOptions(hostPath, containerPath, moun
 func WithVolumeWithOptions(hostPath, containerPath, mountOptions string) ContainerOption {
 	return func(c *TestRunnerContainer) {
 		c.AddVolumeWithOptions(hostPath, containerPath, mountOptions)
+	}
+}
+
+// WithGobsi makes the gobsi binary available in the container, for the commands
+// that call out to it. The task-runner image does not carry gobsi, the released
+// Build CLI image does.
+func WithGobsi() ContainerOption {
+	return func(c *TestRunnerContainer) {
+		c.AddVolumeWithOptions(GetGobsiBinPath(), gobsiPathInContainer, "z")
 	}
 }
 

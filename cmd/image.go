@@ -17,4 +17,5 @@ func init() {
 	imageCmd.AddCommand(image.BuildImageIndexCmd)
 	imageCmd.AddCommand(image.PushContainerfileCmd)
 	imageCmd.AddCommand(image.SignCmd)
+	imageCmd.AddCommand(image.SourceContainerBuildCmd)
 }

@@ -25,10 +25,16 @@ COPY --chown=1001:0 . .
 # by leaving it empty we can ensure that the container and binary shipped on it will have the same platform.
 RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -o konflux-build-cli main.go
 
+# Build gobsi for the 'image source-container-build' command
+WORKDIR /workspace/deps/gobsi
+RUN CGO_ENABLED=0 GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} \
+    go build -o /workspace/gobsi github.com/konflux-ci/gobsi/cmd/gobsi
+
 # Use the Konflux task-runner image as base for the Konflux Build CLI.
 # For more details and updates, refer to https://quay.io/konflux-ci/task-runner
 FROM quay.io/konflux-ci/task-runner:4.0.0@sha256:ab7440e1101af1ff0418e16badede2f1590664d3189099030bf3f782371bd9da
 COPY --from=builder /workspace/konflux-build-cli /usr/local/bin/konflux-build-cli
+COPY --from=builder /workspace/gobsi /usr/local/bin/gobsi
 USER 65532:65532
 
 # Required for ecosystem-cert-preflight-checks

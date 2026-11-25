@@ -1,6 +1,7 @@
 package cliwrappers_test
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -107,5 +108,65 @@ func TestCosignCliInitialize(t *testing.T) {
 		}
 
 		g.Expect(cosignCli.Initialize(&baseArgs)).To(Succeed())
+	})
+}
+
+func TestCosignCliDownloadSBOM(t *testing.T) {
+	const sbom = `{"bomFormat": "CycloneDX"}`
+	const image = "quay.io/org/image@sha256:abc"
+
+	t.Run("should return the SBOM of an image", func(t *testing.T) {
+		g := NewWithT(t)
+		cosignCli, executor := mockCosignCli()
+
+		executor.executeFunc = func(cmd cliwrappers.Cmd) (string, string, int, error) {
+			g.Expect(cmd.Name).To(Equal("cosign"))
+			g.Expect(cmd.Args).To(Equal([]string{"download", "sbom", image}))
+			// An SBOM is far too large to log.
+			g.Expect(cmd.LogOutput).To(BeFalse())
+			return sbom, "", 0, nil
+		}
+
+		got, err := cosignCli.DownloadSBOM(&cliwrappers.CosignDownloadSBOMArgs{Image: image}, "")
+
+		g.Expect(err).ToNot(HaveOccurred())
+		g.Expect(got).To(Equal(sbom))
+	})
+
+	t.Run("should point cosign at the given authentication", func(t *testing.T) {
+		g := NewWithT(t)
+		cosignCli, executor := mockCosignCli()
+
+		dockerConfigDir := t.TempDir()
+		executor.executeFunc = func(cmd cliwrappers.Cmd) (string, string, int, error) {
+			g.Expect(cmd.Env).To(ContainElement("DOCKER_CONFIG=" + dockerConfigDir))
+			return sbom, "", 0, nil
+		}
+
+		_, err := cosignCli.DownloadSBOM(&cliwrappers.CosignDownloadSBOMArgs{Image: image}, dockerConfigDir)
+
+		g.Expect(err).ToNot(HaveOccurred())
+	})
+
+	t.Run("should report an image without an SBOM", func(t *testing.T) {
+		g := NewWithT(t)
+		cosignCli, executor := mockCosignCli()
+
+		executor.executeFunc = func(cmd cliwrappers.Cmd) (string, string, int, error) {
+			return "", "no sbom attached", 1, errors.New("exit status 1")
+		}
+
+		_, err := cosignCli.DownloadSBOM(&cliwrappers.CosignDownloadSBOMArgs{Image: image}, "")
+
+		g.Expect(err).To(MatchError(ContainSubstring("no sbom attached")))
+	})
+
+	t.Run("should refuse an empty image", func(t *testing.T) {
+		g := NewWithT(t)
+		cosignCli, _ := mockCosignCli()
+
+		_, err := cosignCli.DownloadSBOM(&cliwrappers.CosignDownloadSBOMArgs{}, "")
+
+		g.Expect(err).To(MatchError(ContainSubstring("no image")))
 	})
 }
